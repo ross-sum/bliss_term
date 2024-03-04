@@ -1,0 +1,93 @@
+   -----------------------------------------------------------------------
+   --                                                                   --
+   --                          B L I S S _ T E R M                      --
+   --                                                                   --
+   --                             P r o j e c t                         --
+   --                                                                   --
+   --                           $Revision: 1.0 $                        --
+   --                                                                   --
+   --  Copyright (C) 2024 Hyper Quantum Pty Ltd,                        --
+   --  Written by Ross Summerfield.                                     --
+   --                                                                   --
+   --  Bliss  Term is a terminal built to handle  combining  character  --
+   --  Unicode  fonts.  It was written because there is little  to  no  --
+   --  support  for  combining characters in terminals,  even  amongst  --
+   --  those that support UTF-8 Unicode.  The primary purpose of  this  --
+   --  particular terminal is to support Blissymbolics, includin g for  --
+   --  date and time display and for file name display.                 --
+   --                                                                   --
+   --  Version History:                                                 --
+   --  $Log$
+   --                                                                   --
+   --  Bliss Term  is free software; you can  redistribute  it  and/or  --
+   --  modify  it under terms of the GNU  General  Public  Licence  as  --
+   --  published by the Free Software Foundation; either version 2, or  --
+   --  (at your option) any later version.  Bliss Term is  distributed  --
+   --  in  hope  that  it will be useful, but  WITHOUT  ANY  WARRANTY;  --
+   --  without even the implied warranty of MERCHANTABILITY or FITNESS  --
+   --  FOR  A PARTICULAR PURPOSE. See the GNU General  Public  Licence  --
+   --  for  more details.  You should have received a copy of the  GNU  --
+   --  General Public Licence distributed with  Cell Writer.            --
+   --  If  not,  write to the Free Software  Foundation,  51  Franklin  --
+   --  Street, Fifth Floor, Boston, MA 02110-1301, USA.                 --
+   --                                                                   --
+   -----------------------------------------------------------------------
+with "gtkada";
+with "adasockets";  -- required by some of the library packages
+with "../dynamic-strings/dstrings";
+with "../tools/tools.gpr";
+project Bliss_Term is
+
+   type Hware_Option is ("sparc", "amd64", "x86", "pi", "pi64");
+   Hware : Hware_Option := external ("hware", "amd64");
+
+   for Languages use ("ada");
+   case Hware is
+   when "pi" =>
+      for Source_Dirs use ("src/", "src/pi/", "../tools/", "src/xdotool-c");
+   when "pi64" =>
+      for Source_Dirs use ("src/", "src/pi/", "../tools/", "src/xdotool-c");
+   when others =>
+      for Source_Dirs use ("src/", "src/non_pi/", "../tools/");
+   end case;
+   for Main use ("bliss_term.adb");
+   --  Using "hware" variable for obj directory
+   for Object_Dir use "obj_" & hware & "/";
+
+   package Ide is
+      for Documentation_Dir use "doc/";
+   end Ide;
+
+   for Source_Files use (--"error_log.adb",
+      --"blobs.ads", "blobs-base_64.ads", "blobs-base_64.adb",
+      --"gnatcoll-sql_blob.ads", "gnatcoll-sql_blob.adb",
+      --"gnatcoll-sql_date_and_time.ads", "gnatcoll-sql_date_and_time.adb",
+      --"database_names.ads", "database.ads", "database.adb",
+      --"error_log.ads", "general_storage_pool.adb", "general_storage_pool.ads",
+      --"host_functions.ads", "host_functions.adb", "host_functions_thin.ads", 
+      --"generic_command_parameters.ads", "generic_command_parameters.adb", 
+      --"interlocks.ads", "interlocks.adb",
+      --"calendar_extensions.ads", "calendar_extensions.adb", 
+      --"dynamic_lists.adb", "dynamic_lists.ads", 
+      --"generic_binary_trees_with_data.ads", "generic_binary_trees_with_data.adb",
+      --"generic_binary_trees_with_data-locate.ads", "generic_binary_trees_with_data-locate.adb",
+      --"generic_stack.ads", "generic_stack.adb",
+      --"string_functions.ads", "string_functions.adb",
+      --"string_conversions.ads", "string_conversions.adb",
+      --"set_of.ads", "set_of.adb",
+      --"vectors.ads", "vectors.adb",
+      "vte.ads", "vte-terminal.ads", "vte-terminal.adb", 
+      "vte-enums.ads", "vte-globals.ads",
+      "vte-regex.ads", "vte-pty.ads", "glib-gio.ads",  -- "vte-deprecated.ads",
+      -- "generic_versions.ads", "generic_versions.adb", 
+      "bliss_term_version.ads",
+      --"report_processor.ads", "report_processor.adb",
+      --"error_log_display.ads", "error_log_display.adb",
+      --"combining_characters.ads", "combining_characters.adb",
+      --"macro_interpreter.ads", "macro_interpreter.adb",
+      "help_about.ads", "help_about.adb", "setup.ads", "setup.adb",
+      "terminal.ads", "terminal.adb",
+      -- "css_management.ads", "css_management.adb",
+      "bliss_term.adb");
+
+end Bliss_Term;

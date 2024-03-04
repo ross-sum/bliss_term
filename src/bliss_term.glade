@@ -1,0 +1,849 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated with glade 3.40.0 
+
+Copyright (C) 
+
+This file is part of Bliss_Term.
+
+Bliss_Term is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Bliss_Term is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Bliss_Term.  If not, see <http://www.gnu.org/licenses/>.
+
+Author: Ross Summerfield
+
+-->
+<interface>
+  <requires lib="gtk+" version="3.24"/>
+  <requires lib="vte-2.91" version="0.70"/>
+  <!-- interface-license-type gplv3 -->
+  <!-- interface-name Bliss_Term -->
+  <!-- interface-description Terminal supporting Unicode combining characters languages such as Blissymbolics. -->
+  <!-- interface-authors Ross Summerfield -->
+  <object class="GtkAdjustment" id="adjustment_columns">
+    <property name="lower">5</property>
+    <property name="upper">300</property>
+    <property name="step-increment">1</property>
+    <property name="page-increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment_rows">
+    <property name="lower">2</property>
+    <property name="upper">100</property>
+    <property name="step-increment">1</property>
+    <property name="page-increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment_scrollback">
+    <property name="upper">10000</property>
+    <property name="step-increment">1</property>
+    <property name="page-increment">10</property>
+  </object>
+  <object class="GtkWindow" id="dialogue_setup">
+    <property name="can-focus">False</property>
+    <property name="icon">bliss_term.xpm</property>
+    <property name="type-hint">dialog</property>
+    <signal name="delete-event" handler="dialogue_setup_delete_event_cb" object="box_setup_colours" swapped="no"/>
+    <signal name="destroy" handler="dialogue_setup_destroy_cb" swapped="no"/>
+    <child>
+      <object class="GtkBox" id="box_setup_colours">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkCheckButton" id="checkbtn_theme_colours_default">
+            <property name="label" translatable="yes">Use default theme colours</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">False</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="setup_label_custom_colours_title">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="tooltip-text" translatable="yes">Custom Colours:</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes">Custom Colours:</property>
+            <attributes>
+              <attribute name="font-desc" value="Blissymbolics Bold 30"/>
+              <attribute name="weight" value="bold"/>
+            </attributes>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <!-- n-columns=2 n-rows=5 -->
+          <object class="GtkGrid">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkLabel" id="setup_label_text">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Text</property>
+                <property name="label" translatable="yes">Text</property>
+                <attributes>
+                  <attribute name="font-desc" value="Blissymbolics 30"/>
+                </attributes>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="setup_label_background">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Background</property>
+                <property name="label" translatable="yes">Background</property>
+                <attributes>
+                  <attribute name="font-desc" value="Blissymbolics 30"/>
+                </attributes>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="setup_label_highlight">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Highlight</property>
+                <property name="label" translatable="yes">Highlight</property>
+                <attributes>
+                  <attribute name="font-desc" value="Blissymbolics 30"/>
+                </attributes>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="setup_label_bold">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Bold</property>
+                <property name="label" translatable="yes">Bold</property>
+                <attributes>
+                  <attribute name="font-desc" value="Blissymbolics 30"/>
+                </attributes>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkColorButton" id="colour_text">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="color">#ffffffffffff</property>
+                <property name="rgba">rgb(255,255,255)</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkColorButton" id="colour_background">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="color">#000000000000</property>
+                <property name="rgba">rgb(0,0,0)</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkColorButton" id="colour_highlight">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="color">#f9f9f0f06b6b</property>
+                <property name="rgba">rgb(249,240,107)</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkColorButton" id="colour_bold">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="color">#8f8ff0f0a4a4</property>
+                <property name="rgba">rgb(143,240,164)</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="setup_label_font">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Font</property>
+                <property name="label" translatable="yes">Font</property>
+                <attributes>
+                  <attribute name="font-desc" value="Blissymbolics 30"/>
+                </attributes>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">4</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkFontButton" id="terminal_font">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Pick a font</property>
+                <property name="font">Sans 12</property>
+                <property name="language">en-au</property>
+                <property name="preview-text"/>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">4</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="box_setup_terminal_dimensions">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkLabel" id="setup_label_cols">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="margin-left">10</property>
+                <property name="margin-start">10</property>
+                <property name="label" translatable="yes">Columns:     </property>
+                <property name="width-chars">6</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="setup_dimension_columns">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="width-chars">3</property>
+                <property name="text" translatable="yes">80</property>
+                <property name="caps-lock-warning">False</property>
+                <property name="adjustment">adjustment_columns</property>
+                <property name="climb-rate">1</property>
+                <property name="snap-to-ticks">True</property>
+                <property name="numeric">True</property>
+                <property name="value">80</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="setup_label_by_rows">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes"> by </property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="setup_dimension_rows">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="width-chars">4</property>
+                <property name="text" translatable="yes">25</property>
+                <property name="caps-lock-warning">False</property>
+                <property name="adjustment">adjustment_rows</property>
+                <property name="climb-rate">1</property>
+                <property name="snap-to-ticks">True</property>
+                <property name="numeric">True</property>
+                <property name="value">25</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="setup_label_rows">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">rows</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">4</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="box_setup_dimension_cells">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkLabel" id="setup_label_cell">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Scroll Back:</property>
+                <property name="margin-left">10</property>
+                <property name="margin-start">10</property>
+                <property name="label" translatable="yes">Scroll Back: </property>
+                <property name="width-chars">6</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="setup_scrollback">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="width-chars">6</property>
+                <property name="text" translatable="yes">0</property>
+                <property name="caps-lock-warning">False</property>
+                <property name="adjustment">adjustment_scrollback</property>
+                <property name="climb-rate">1</property>
+                <property name="snap-to-ticks">True</property>
+                <property name="numeric">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="setup_label_by_cells">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">lines</property>
+                <property name="label" translatable="yes"> lines</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">4</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="checkbtn_save_terminals">
+            <property name="label" translatable="yes">Save Terminals</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">False</property>
+            <property name="tooltip-text" translatable="yes">Save Terminals</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">5</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButtonBox" id="buttonbox_help_and_close">
+            <property name="can-focus">False</property>
+            <property name="layout-style">end</property>
+            <child>
+              <object class="GtkButton" id="btn_setup_help">
+                <property name="label">gtk-help</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="use-stock">True</property>
+                <property name="always-show-image">True</property>
+                <signal name="clicked" handler="setup_help_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="btn_setup_cancel">
+                <property name="label">gtk-cancel</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="use-stock">True</property>
+                <property name="always-show-image">True</property>
+                <signal name="clicked" handler="setup_cancel_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="btn_setup_close">
+                <property name="label">gtk-close</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="use-stock">True</property>
+                <property name="always-show-image">True</property>
+                <signal name="clicked" handler="setup_close_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="position">6</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+  <object class="GtkWindow" id="bliss_term">
+    <property name="can-focus">False</property>
+    <property name="icon">bliss_term.xpm</property>
+    <child>
+      <object class="GtkNotebook" id="notebook_terminal">
+        <property name="visible">True</property>
+        <property name="can-focus">True</property>
+        <child>
+          <object class="VteTerminal" id="Term1">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hscroll-policy">natural</property>
+            <property name="vscroll-policy">natural</property>
+            <property name="encoding">UTF-8</property>
+            <property name="scroll-on-keystroke">True</property>
+            <property name="scroll-on-output">False</property>
+            <signal name="child-exited" handler="child_exited_handler" swapped="no"/>
+          </object>
+        </child>
+        <child type="tab">
+          <object class="GtkLabel" id="label_term1">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="tooltip-text" translatable="yes">Term 1</property>
+            <property name="label" translatable="yes">Term 1</property>
+            <attributes>
+              <attribute name="font-desc" value="Blissymbolics 30"/>
+            </attributes>
+          </object>
+          <packing>
+            <property name="tab-fill">False</property>
+          </packing>
+        </child>
+        <child type="action-end">
+          <object class="GtkToolbar">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkToolButton" id="button_add">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Add a tab</property>
+                <property name="use-underline">True</property>
+                <property name="stock-id">gtk-add</property>
+                <signal name="clicked" handler="button_add_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="button_delete">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Remove/close the current tab</property>
+                <property name="use-underline">True</property>
+                <property name="stock-id">gtk-remove</property>
+                <signal name="clicked" handler="button_delete_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="button_setup">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Configure the terminal</property>
+                <property name="use-underline">True</property>
+                <property name="stock-id">gtk-properties</property>
+                <signal name="clicked" handler="button_setup_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="button_help_about">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes">Help About</property>
+                <property name="use-underline">True</property>
+                <property name="stock-id">gtk-about</property>
+                <signal name="clicked" handler="button_help_about_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="tab-fill">False</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+  <object class="GtkSizeGroup" id="sizegroup_terminal">
+    <widgets>
+      <widget name="notebook_terminal"/>
+    </widgets>
+  </object>
+  <object class="GtkTextBuffer" id="textbuffer_manual">
+    <property name="text" translatable="yes" context="Detail about how to use the virtual terminal emulator." comments="Orriginally written in Australian English.">Bliss Term
+========
+
+General
+------------
+Bliss Term  is  a  combining character aware unicode virtual terminal emulator.  It has the ability to have multiple tabs and tabs can, if the user wishes, be saved between sessions.
+
+Bliss Term keeps its user interface file, bliss_term.glade, in either /usr/local/etc/ or /etc/ by default.  For a user that has not used Bliss Term before, it gets the default configuration file, bliss_term.conf, from either /usr/local/etc or /etc/ and creates a local version at ~/.config/bliss_term.conf (where '~' is the user's home directory).
+
+Configuration
+---------------------
+
+You may modify the site-wide bliss_term.glade file (located in /etc or in /usr/local/etc) using the Glade editor.  Such editing must be done as the root user and the signal names, widget names and form names as understood by the system (that is, the ID) must be maintaned.  However, the layout can be adjusted and the text (including this user manual help text) can also be adjusted.
+
+The default site-wide configuration file, bliss_term.conf, located in either /etc or /usr/local/etc, may also be modified by the root user.  This might be useful, for instance, to modify the default colours or the default font.
+</property>
+  </object>
+  <object class="GtkDialog" id="dialogue_about">
+    <property name="width-request">100</property>
+    <property name="height-request">500</property>
+    <property name="can-focus">False</property>
+    <property name="halign">start</property>
+    <property name="valign">start</property>
+    <property name="border-width">1</property>
+    <property name="title" translatable="yes">Help</property>
+    <property name="default-width">100</property>
+    <property name="default-height">500</property>
+    <property name="destroy-with-parent">True</property>
+    <property name="icon">bliss_term.xpm</property>
+    <property name="type-hint">dialog</property>
+    <signal name="delete-event" handler="dialogue_about_delete_event_cb" object="box_about" swapped="no"/>
+    <signal name="destroy" handler="dialogue_about_destroy_cb" swapped="no"/>
+    <child internal-child="vbox">
+      <object class="GtkBox" id="box_about">
+        <property name="name">about_main_box</property>
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">2</property>
+        <child internal-child="action_area">
+          <object class="GtkButtonBox" id="buttonbox_about_close">
+            <property name="can-focus">False</property>
+            <property name="layout-style">end</property>
+            <child>
+              <object class="GtkButton" id="button_close_about">
+                <property name="label">gtk-close</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="use-stock">True</property>
+                <signal name="clicked" handler="button_close_about_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkNotebook" id="dialogue_about_notebook">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="tab-pos">bottom</property>
+            <child>
+              <!-- n-columns=1 n-rows=3 -->
+              <object class="GtkGrid" id="page_about_grid">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="row-spacing">3</property>
+                <property name="column-spacing">3</property>
+                <property name="column-homogeneous">True</property>
+                <child>
+                  <object class="GtkLabel" id="label_revision">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">Revision 1.0.0
+</property>
+                    <property name="justify">center</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="label_copyright">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">Copyright (C) 2024 Hyper Quantum Pty Ltd.
+See copyright tab for full details.
+Written by Ross Summerfield</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="Label_about_description">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">Bliss Term  is  a  combining character aware unicode virtual terminal emulator.  It has the ability to have multiple tabs and tabs can, if the user wishes, be saved between sessions.
+This application uses the Gnome VTE library and was developed by Ross Summerfield.
+It is written in Ada and also written to accommodate Blissymbolocs.  The main objective is to correctly display Blissymbolics' multi-combining character format.   While many of the standard unicode terminals handle unicode characters, they do not properly handle the display of combining characters. This is important to making it highly useful for a  language like Blissymbolics.
+The  other main difference is the use Glade for the  graphical  user interface.
+</property>
+                    <property name="wrap">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">1</property>
+                  </packing>
+                </child>
+              </object>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label_about_about">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">About</property>
+              </object>
+              <packing>
+                <property name="tab-fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <!-- n-columns=1 n-rows=2 -->
+              <object class="GtkGrid" id="page_revision_grid">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="row-spacing">3</property>
+                <property name="column-spacing">3</property>
+                <property name="column-homogeneous">True</property>
+                <child>
+                  <object class="GtkLabel" id="label_revision1">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">Revision 1.0.0
+</property>
+                    <property name="justify">center</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="label_versions">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">
+</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">1</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label_about_revision_details">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">Revision Details</property>
+              </object>
+              <packing>
+                <property name="position">1</property>
+                <property name="tab-fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="label_usage">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">label</property>
+              </object>
+              <packing>
+                <property name="position">2</property>
+              </packing>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label_about_usage">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">Usage</property>
+              </object>
+              <packing>
+                <property name="position">2</property>
+                <property name="tab-fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow" id="window_manual">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hscrollbar-policy">never</property>
+                <property name="window-placement">bottom-left</property>
+                <property name="shadow-type">in</property>
+                <property name="min-content-width">100</property>
+                <property name="min-content-height">300</property>
+                <child>
+                  <object class="GtkViewport" id="viewport_manual">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <child>
+                      <object class="GtkTextView" id="the_manual">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="editable">False</property>
+                        <property name="wrap-mode">word</property>
+                        <property name="buffer">textbuffer_manual</property>
+                        <property name="accepts-tab">False</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="position">3</property>
+              </packing>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label_about_manual">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">Manual	</property>
+              </object>
+              <packing>
+                <property name="position">3</property>
+                <property name="tab-fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="label_copyright_notice">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">Bliss Terminal is free software; you can redistribute it  and/or  modify  it under terms of the GNU  General  Public  Licence  as published by the Free Software Foundation; either version 2, or (at   your  option)  any  later  version.  Bliss Term is distributed in hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public Licence for  more details.  You should have received a copy  of the GNU General Public Licence distributed with Cell Writer.  If not, write to the Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.</property>
+                <property name="wrap">True</property>
+              </object>
+              <packing>
+                <property name="position">4</property>
+              </packing>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label_about_copyright">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes">Copyright</property>
+              </object>
+              <packing>
+                <property name="position">4</property>
+                <property name="tab-fill">False</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>
