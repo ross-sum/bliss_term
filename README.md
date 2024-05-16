@@ -101,6 +101,10 @@ Clearly, a lot of thanks goes to the developers of VTE.  Although there is none
 of their code in this, it has inspired the development.  Also thanks to Vincent
 Bernat who has a web page that shows how to make a simple terminal using VTE.
 Source the page at https://vincent.bernat.ch/en/blog/2017-write-own-terminal
+The source really came from the developer of EduTerm, whos web page is at
+https://www.uninformativ.de/blog/postings/2018-02-24/0/POSTING-en.html
+That code gave the true insight in how to actually implement the code to
+actually run up a terminal.
 
 I would also like to thank the late Dr Charles K. Bliss.  It was an article about 
 him and Blissymbolics in a Readers Digest magazine that I read when I was really 

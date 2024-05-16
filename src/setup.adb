@@ -2,7 +2,7 @@
 --                                                                   --
 --                             S E T U P                             --
 --                                                                   --
---                     S p e c i f i c a t i o n                     --
+--                              B o d y                              --
 --                                                                   --
 --                           $Revision: 1.0 $                        --
 --                                                                   --
@@ -34,36 +34,41 @@
 -- with Gtkada.Builder;  use Gtkada.Builder;
 -- with Glib.Object, Gdk.RGBA, Pango.Font;
 -- with dStrings;        use dStrings;
--- with Vte.Terminal, VTE.Enums;
--- with Glib.Error, Glib.Spawn;
+-- with Gtk.Terminal;
 with System;
 with Ada.Directories;
-with Ada.Strings.Fixed;
 with Ada.Characters.Conversions;
-with GNAT.Strings;
+with Ada.Strings.UTF_Encoding.Wide_Strings;
 with Gtk.Widget; with Gtk.Main;
+with Gtk.Window;
 with Gtk.Label, Gtk.Check_Button, Gtk.Color_Button;
 with Gtk.Tool_Button, Gtk.Font_Button, Gtk.Spin_Button;
 with Gtk.Combo_Box;
 with Gtk.Notebook;
+with Gtk.Text_Buffer, Gtk.Text_Iter;
+with Gtk.Terminal.CInterface;
 with Error_Log;
 with Host_Functions;
 with String_Conversions;
 with Blobs, Blobs.Base_64;
 with Config_File_Manager;
 with Help_About;
-with Bliss_Term_Version;  -- , CSS_Management;
+with Bliss_Term_Version, CSS_Management;
 package body Setup is
 
-   the_builder : Gtkada_Builder;
+   the_builder          : Gtkada_Builder;
    the_config_file_name : text;
-   config_data : Config_File_Manager.config_file;
+   config_data          : Config_File_Manager.config_file;
+   css_file_name        : text;
    
    procedure Initialise_Setup(Builder : in out Gtkada_Builder;
                               from_configuration_file : in text;
+                              using_css : in text;
                               usage : in text) is
-      use Gtk.Label;
-   begin
+      use Gtk.Label, Gtk.Text_Buffer, Gtk.Tool_Button;
+      text_buffer: Gtk.Text_Buffer.gtk_text_buffer;
+      the_button : Gtk.Tool_Button.gtk_tool_button;
+   begin  -- Initialise_Setup
       Error_Log.Debug_Data(at_level => 9, 
                            with_details => "Initialise_Setup: Start.");
       the_builder := Builder;  -- save for later use
@@ -88,6 +93,23 @@ package body Setup is
       -- set up: load the fields from the configuration file
       Load_Data_From(config_file_name=>the_config_file_name, Builder=>Builder,
                      with_initially_setup => false);
+      -- set up: load the CSS file into the setup dialogue box
+      css_file_name := using_css;
+      text_buffer := gtk_text_buffer(Get_Object(the_builder,"textbuffer_css"));
+      Set_Text(text_buffer, 
+               To_UTF8_String(CSS_Management.Get_Text(Value(css_file_name))));
+      -- set up: load the buttons' CSS data
+      the_button:=gtk_tool_button(Get_Object(Builder, "button_add"));
+      CSS_Management.Load(the_button => the_button);
+      the_button:=gtk_tool_button(Get_Object(Builder, "button_delete"));
+      CSS_Management.Load(the_button => the_button);
+      the_button:=gtk_tool_button(Get_Object(Builder, "button_setup"));
+      CSS_Management.Load(the_button => the_button);
+      the_button:=gtk_tool_button(Get_Object(Builder, "button_help_about"));
+      CSS_Management.Load(the_button => the_button);
+      
+      Error_Log.Debug_Data(at_level => 9, 
+                           with_details => "Initialise_Setup: End.");
    end Initialise_Setup;
 
    function Adjust_Configuration_Path(from : in text) return text is
@@ -107,46 +129,195 @@ package body Setup is
       end if;
    end Adjust_Configuration_Path;
 
-   procedure Child_Ready(terminal: Vte.Terminal.Vte_Terminal; 
-                         pid : Glib.Spawn.GPid;
-                         error : Glib.Error.GError) is --; 
-                         -- user_data : System.Address) is
+   procedure Title_Changed(terminal : Gtk.Terminal.Gtk_Terminal; 
+                           title    : UTF8_String) is
+      -- Called whenever the title is changed for the terminal by the
+      -- underlying terminal driver (usually to set it to the full path name).
+      use Gtk.Window;
+      main_window : Gtk.Window.Gtk_Window;
+   begin
+      Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Start." & " Title ='" & Ada.Characters.Conversions.To_Wide_String(title) & "'.");
+      main_window:= Gtk.Window.Gtk_Window(
+                         Get_Object(Gtkada_Builder(the_builder),"bliss_term"));
+      Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Got main window.");
+      if main_window /= null then
+         Gtk.Window.Set_Title(main_window, title);
+      end if;
+      Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Finish.");
+   end Title_Changed;
+
+   procedure Child_Closed(terminal: Gtk.Terminal.Gtk_Terminal) is
       -- Depending on which terminal (i.e. whether there is one or more left),
       -- either delete the current tab or kill the application.
-      use Glib.Spawn;
-      use Vte.Terminal;
+      use Gtk.Terminal;
+      use Config_File_Manager;
+      use Blobs, Blobs.Base_64;
+      the_notebook  : Gtk.Notebook.Gtk_Notebook;
+      the_buffer    : text;
+      term_num      : natural;
    begin
-      if terminal /= null
-      then
-         if (pid = -1)
-         then  -- Execute the quit operation (by injecting the relevant signal)
-            Gtk.Main.Main_Quit;    -- *********FIX ME************
-         end if;
+      Error_Log.Debug_Data(at_level=> 7, with_details=> "Child_Closed: Start");
+      -- Get the notebook to work out this tab number and the number of tabs
+      the_notebook := Gtk.Notebook.gtk_notebook(
+                  Get_Object(Gtkada_Builder(the_builder),"notebook_terminal"));
+      -- Issue shutdown command to this terminal's task(s)
+      Error_Log.Debug_Data(at_level=> 9, with_details=> "Child_Closed: Issuing Gtk.Terminal.Shut_Down command for the terminal");
+      Gtk.Terminal.Shut_Down(the_terminal => terminal);
+      -- If required, save the terminal data for this terminal
+      if Read_Parameter(config_data, in_section => "TERMINAL", 
+                                        with_id => "SaveTerminals")
+      then  -- history should be kept, so update it for this terminal
+         term_num := Gtk.Terminal.Get_ID(for_terminal => terminal);
+         Error_Log.Debug_Data(at_level => 9, with_details => "Child_Closed: Saving terminal's buffer at terminal number" & term_num'Wide_Image & ".");
+         the_buffer := Value(Encode(Gtk.Terminal.Get_Text(terminal)));
+         Put(parameter => the_buffer, 
+             into => config_data, in_section => "TABS", 
+             with_id => "Term" & Ada.Characters.Conversions.
+                                    To_Wide_String(term_num'Image
+                                                  (2..term_num'Image'Length)));
+         Put(parameter => Value(Gtk.Terminal.Get_Path(for_terminal=>terminal)),
+             into => config_data, in_section => "PATHS", 
+             with_id => "Term" & Ada.Characters.Conversions.
+                                    To_Wide_String(term_num'Image
+                                                  (2..term_num'Image'Length)));
       end if;
-   end Child_Ready;
+      Error_Log.Debug_Data(at_level => 9, with_details => "Child_Closed: Gtk.Notebook.Get_N_Pages(the_notebook)" & Gtk.Notebook.Get_N_Pages(the_notebook)'Wide_Image & ".");
+      if Gtk.Notebook.Get_N_Pages(the_notebook) = 1
+      then  -- Last tab - execute the quit applicaton operation
+          -- First, save the configuration details to file if necessary
+         if Read_Parameter(config_data, in_section => "TERMINAL", 
+                                        with_id => "SaveTerminals")
+         then  -- history should be kept, so save it to the configuration file
+            Error_Log.Debug_Data(at_level => 9, with_details => "Child_Closed: Save(the_configuration_details}.");
+            Save(the_configuration_details => config_data);
+         end if;
+         -- Now exit the application
+         Gtk.Main.Main_Quit;
+      end if;
+   end Child_Closed;
    
-   procedure Child_Ready_CB(Object : access Gtkada_Builder_Record'Class) is
-      use Glib, Glib.Spawn, Glib.Error;
-      use Vte.Terminal;
-      the_terminal : Vte.Terminal.Vte_Terminal;
-      term_id : UTF8_string := "Term1";         -- ********FIX ME**********
-      null_error : Glib.Error.GError := Error_New(Unknown_Quark, 0, "");
+   procedure Close_The_Terminal(at_number : in natural) is
+      -- Close the terminal at the specified terminal number (which is actually
+      -- the tab number, where the first tab is 1 (not 0)).
+      -- This does not remove or delete the tab.
+      use Gtk.Terminal;
+      the_notebook : Gtk.Notebook.Gtk_Notebook;
+      the_terminal : Gtk.Terminal.Gtk_Terminal;
    begin
-      the_terminal := Vte_Terminal(Get_Object(Gtkada_Builder(Object),term_id));
-      Child_Ready(the_terminal, -1, null_error);
-   end Child_Ready_CB;
+      Error_Log.Debug_Data(at_level => 6, 
+                           with_details => "Close_The_Terminal: Start" & ". At number " & at_number'Wide_Image & ".");
+      the_notebook:= Gtk.Notebook.gtk_notebook(
+                  Get_Object(Gtkada_Builder(the_builder),"notebook_terminal"));
+      the_terminal:= Gtk_Terminal(Gtk.Notebook.
+                                    Get_Nth_Page(the_notebook,
+                                                 page_num=>Gint(at_number-1)));
+      if the_terminal /= null then
+         Child_Closed(the_terminal);
+      else  -- Some trouble with the terminal ID
+         Error_Log.Put(the_error => 5,
+                       error_intro => "Close_The_Terminal error", 
+                       error_message=>"Could not get the termnal for term_id");
+      end if;
+   end Close_The_Terminal;
+
+   function Set_User_Environment_Variables return text is
+      -- Extract the user's environment variables, either from the
+      -- configuration file or from the environment itself if not specified in
+      -- that configuration file, and return as a string.
+      use Config_File_Manager;
+      environment : text;
+   begin
+         -- Load the enviornment variable
+      Clear(environment);
+      if Length(Read_Parameter(config_data, in_section => "ENVIRONMENT", 
+                               with_id => "Term")) = 0
+      then
+         Append("TERM="&Gtk.Terminal.CInterface.terminal_name,to=>environment);
+         Put(parameter=>Value_From_Wide(Gtk.Terminal.CInterface.terminal_name),
+             into => config_data, in_section => "ENVIRONMENT", 
+             with_id => "Term");
+      else
+         Append(tail => "TERM=" &
+                        Read_Parameter(config_data,in_section=>"ENVIRONMENT",
+                                       with_id => "Term"), 
+                to => environment);
+      end if;
+      if Length(Read_Parameter(config_data, in_section => "ENVIRONMENT", 
+                               with_id => "Home")) = 0
+      then
+         Append(wide_tail => ",HOME=" & 
+                    Host_Functions.Get_Environment_Value(for_variable=>"HOME"),
+                to => environment);
+         Put(parameter=>Host_Functions.Get_Environment_Value(for_variable=>"HOME"),
+             into => config_data, in_section => "ENVIRONMENT", 
+             with_id => "Home");
+      else
+         Append(tail => ",HOME=" &
+                        Read_Parameter(config_data,in_section=>"ENVIRONMENT",
+                                       with_id => "Home"), 
+                to => environment);
+      end if;
+      if Length(Read_Parameter(config_data, in_section => "ENVIRONMENT", 
+                               with_id => "Shell")) = 0
+      then
+         Append(wide_tail => ",SHELL=" & 
+                   Host_Functions.Get_Environment_Value(for_variable=>"SHELL"),
+                to => environment);
+         Put(parameter=>Host_Functions.Get_Environment_Value(for_variable=>"SHELL"),
+             into => config_data, in_section => "ENVIRONMENT", 
+             with_id => "Shell");
+      else
+         Append(tail => ",SHELL=" &
+                        Read_Parameter(config_data,in_section=>"ENVIRONMENT",
+                                       with_id => "Shell"), 
+                to => environment);
+      end if;
+      if Length(Read_Parameter(config_data, in_section => "ENVIRONMENT", 
+                               with_id => "User")) = 0
+      then
+         Append(wide_tail => ",USER=" & 
+                   Host_Functions.Get_Environment_Value(for_variable=>"USER"),
+                to => environment);
+         Put(parameter=>Host_Functions.Get_Environment_Value(for_variable=>"USER"),
+             into => config_data, in_section => "ENVIRONMENT", 
+             with_id => "User");
+      else
+         Append(tail => ",USER=" &
+                        Read_Parameter(config_data,in_section=>"ENVIRONMENT",
+                                       with_id => "User"), 
+                to => environment);
+      end if;
+      if Length(Read_Parameter(config_data, in_section => "ENVIRONMENT", 
+                               with_id => "Logname")) = 0
+      then
+         Append(wide_tail => ",LOGNAME=" & 
+                   Host_Functions.Get_Environment_Value(for_variable=>"LOGNAME"),
+                to => environment);
+         Put(parameter=>Host_Functions.Get_Environment_Value(for_variable=>"LOGNAME"),
+             into => config_data, in_section => "ENVIRONMENT", 
+             with_id => "Logname");
+      else
+         Append(tail => ",LOGNAME=" &
+                        Read_Parameter(config_data,in_section=>"ENVIRONMENT",
+                                       with_id => "Logname"), 
+                to => environment);
+      end if;
+      return environment;
+   end Set_User_Environment_Variables;
             
    procedure Load_Data_From(config_file_name : text;
                             Builder  : in Gtkada_Builder;
                             with_initially_setup : boolean := true) is
-      use Glib;  -- , Glib.Object, Glib.Application;
+      use Ada.Strings.UTF_Encoding.Wide_Strings;
+      use Glib;
       use Gdk.RGBA;
       use Gtk.Check_Button, Gtk.Color_Button;
       use Gtk.Font_Button;
       use Gtk.Spin_Button;
-      use String_Conversions, dStrings;
+      use String_Conversions;
       use Config_File_Manager;
       use Blobs, Blobs.Base_64;
+      initially_setup : boolean := with_initially_setup;
       procedure Load_Colour(to_colour_button : in UTF8_string; 
                             with_id : in wide_string;
                             from_config_data: in config_file) is
@@ -177,45 +348,15 @@ package body Setup is
                                                 with_id => with_id);
          Set_Value(spin_entry, Glib.GDouble(Float(entry_value)));
       end Load_Spin;
-      function Get_Env(with_name : in UTF8_String; 
-                       from_list : in GNAT.Strings.String_List) 
-      return UTF8_String is
-         -- Get the specified environment variable from the string list.
-         -- This function is included here to extract the strings from
-         -- Glib.Spawn, not Glib.Application since there is a missing creator
-         -- for the command line environment in Glib.Application.
-         use Ada.Strings.Fixed;
-      begin
-         for item in from_list'Range loop
-            if from_list(item).all(1..with_name'Length) = with_name
-            then  -- found what we are looking form
-               return from_list(item).all(Index(from_list(item).all,"=",1)+1 .. 
-                                          from_list(item).all'Last);
-            end if;
-         end loop;
-         return "/bin/bash";  -- Shouldn't get here unless it wasn't found
-      end Get_Env;
-      procedure Free_String_List(env_list : in out GNAT.Strings.String_List) is
-         -- GNAT.Strings.String_List needs to be manually freed at the end of
-         -- its life :-(
-         -- This is done by freeing each string in the list (each string is
-         -- actually a pointer to a string).  The list itself is not a pointer,
-         -- so Ada automatically frees it (therefore it is not done here).
-      begin
-         for item in env_list'Range loop
-            GNAT.Strings.Free(env_list(item));
-         end loop;
-      end Free_String_List;
-      check_box   : Gtk.Check_Button.gtk_check_button;
-      font_btn    : Gtk.Font_Button.gtk_font_button;
-      start_value : integer;
-      the_environment : GNAT.Strings.String_List := Glib.Spawn.Get_Environ;
-      the_terminal: Vte.Terminal.Vte_Terminal;
-      current_dir : text;
-      num_tabs    : positive := 1;
-      the_notebook: Gtk.Notebook.Gtk_Notebook;
-      the_buffer  : text;
-   begin
+      check_box      : Gtk.Check_Button.gtk_check_button;
+      font_btn       : Gtk.Font_Button.gtk_font_button;
+      start_value    : integer;
+      the_terminal   : Gtk.Terminal.Gtk_Terminal;
+      the_notebook   : Gtk.Notebook.Gtk_Notebook;
+      current_dir    : text;
+      num_tabs       : positive := 1;
+      the_buffer     : text;
+   begin  -- Load_Data_From
       Error_Log.Debug_Data(at_level => 5, 
                            with_details => "Load_Data_From: Start");
       -- Check that the configuration file global variable is set
@@ -270,6 +411,11 @@ package body Setup is
       Set_Active(check_box, Read_Parameter(config_data, 
                                            in_section => "TERMINAL", 
                                            with_id => "SaveTerminals"));
+      check_box := gtk_check_button(Get_Object(Builder, 
+                                               "checkbtn_edit_method"));
+      Set_Active(check_box, Read_Parameter(config_data, 
+                                           in_section => "TERMINAL", 
+                                           with_id => "EditMethod"));
       -- Terminal Configuration
       -- Get the current directory (as the default starting point)
       current_dir := Value(Ada.Directories.Current_Directory);
@@ -289,16 +435,7 @@ package body Setup is
       for term_num in 1 .. num_tabs loop
          Error_Log.Debug_Data(at_level => 9, 
                            with_details => "Load_Data_From: Setting up terminal at tab '" & "label_term" & Value(term_num'Image(2..term_num'Image'Length)) & "'.");
-         if term_num = 1
-          then  -- first one exists in the GLADE file
-            the_terminal := Vte.Terminal.Vte_Terminal(Get_Object(Builder,"Term"
-                                  & term_num'Image(2..term_num'Image'Length)));
-            if not with_initially_setup then
-               Register_Handler(Builder      => Builder,
-                                Handler_Name => "child_exited_handler",
-                                Handler      => Child_Ready_CB'Access);
-            end if;
-         elsif ((not with_initially_setup) or else
+         if ((not initially_setup) or else
                 (term_num > positive(Gtk.Notebook.Get_N_Pages(the_notebook))))
          then  -- need to create the tab and the terminal
             -- Create the terminal
@@ -309,40 +446,48 @@ package body Setup is
                                             with_id => "Term" & Ada.Characters.
                                     Conversions.To_Wide_String(term_num'Image
                                                    (2..term_num'Image'Length)));
-               Vte.Terminal.Vte_New_With_Buffer(the_terminal, 
+               Gtk.Terminal.Gtk_New_With_Buffer(the_terminal, 
                                                 Decode(Value(the_buffer)));
+               current_dir := Read_Parameter(config_data, in_section=>"PATHS", 
+                                            with_id => "Term" & Ada.Characters.
+                                    Conversions.To_Wide_String(term_num'Image
+                                                   (2..term_num'Image'Length)));
             else
-               the_terminal := Vte.Terminal.Vte_Terminal_New;
+               the_terminal := Gtk.Terminal.Gtk_Terminal_New;
+               Clear(current_dir); 
             end if;
             -- Create the tab
             Gtk.Notebook.Append_Page(the_notebook,  the_terminal);
             Gtk.Notebook.Set_Current_Page(the_notebook);  -- set to last page
             Gtk.Notebook.Set_Tab_Label_Text(the_notebook, the_terminal,
                             "Term" & term_num'Image(2..term_num'Image'Length));
-            -- Connect the terminal to its handler
-            null;
+            -- and make sure the terminal is visible
+            Gtk.Terminal.Show_All(the_terminal);
+         else  -- terminal exists, so point to it
+            the_terminal:= Gtk.Terminal.Gtk_Terminal(Gtk.Notebook.
+                                     Get_Nth_Page(the_notebook,
+                                                  page_num=>Gint(term_num-1)));
          end if;
-         -- Load the setup for the tab's window
-         Load_Setup(to_terminal_window => the_terminal, 
-                    is_preconfigured => with_initially_setup);
          -- Start the new shell
          if not with_initially_setup then
-            Vte.Terminal.Spawn_Async(terminal => the_terminal,
-                                pty_flags => VTE_PTY_DEFAULT,
-                                working_directory=>"", -- To_UTF8_String(current_dir),
-                                argv => Get_Env(with_name => "SHELL", --command
-                                                 from_list => the_environment),
-                                envv => "",  -- environment
-                                spawn_flags => 0,
-                                child_setup => null,
-                                child_setup_data => System.Null_Address,
-                                child_setup_data_destroy => null,
-                                timeout => Vte.Terminal.timeout_period(-1),
-                                cancellable => null,
-                                callback => Child_Ready'Access,
-                                user_data => System.Null_Address);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Load_Data_From: Gtk.Terminal.Spawn_Shell with path='" & current_dir & " '.");
+            Gtk.Terminal.Spawn_Shell(terminal => the_terminal,
+                                working_directory=>To_UTF8_String(current_dir),
+                                command => Encode(Host_Functions.
+                                   Get_Environment_Value(for_variable=>"SHELL")),
+                                environment => 
+                                    Encode(To_String(Set_User_Environment_Variables)),
+                                use_buffer_for_editing => 
+                                       (Internal_Edit_Method = using_textview),
+                                title_callback => Title_Changed'Access,
+                                callback => Child_Closed'Access);
+            initially_setup := true;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Load_Data_From: Gtk.Terminal.Spawn_Shell done.");
          end if;
-         Free_String_List(the_environment);
+         Gtk.Terminal.Set_ID(for_terminal => the_terminal, to => term_num);
+         -- Load the setup for the tab's window
+         Load_Setup(to_terminal_window => the_terminal, 
+                    is_preconfigured => initially_setup);
       end loop;
    end Load_Data_From;
     
@@ -353,6 +498,7 @@ package body Setup is
       use Gtk.Check_Button, Gtk.Color_Button;
       use Gtk.Font_Button;
       use Gtk.Spin_Button;
+      use Gtk.Notebook;
       use String_Conversions, dStrings;
       use Config_File_Manager;
       use Blobs, Blobs.Base_64;
@@ -378,13 +524,13 @@ package body Setup is
          Put(parameter=>integer(Get_Value_As_Int(spin_entry)),into=>config_data,
              in_section => "TERMINAL", with_id => with_id);
       end Save_Spin;
-      check_box   : Gtk.Check_Button.gtk_check_button;
-      font_btn    : Gtk.Font_Button.gtk_font_button;
-      the_terminal: Vte.Terminal.Vte_Terminal;
-      num_tabs    : positive := 1;
-      the_notebook: Gtk.Notebook.Gtk_Notebook;
-      the_buffer  : text;
-   begin
+      check_box     : Gtk.Check_Button.gtk_check_button;
+      font_btn      : Gtk.Font_Button.gtk_font_button;
+      the_terminal  : Gtk.Terminal.Gtk_Terminal;
+      num_tabs      : positive := 1;
+      the_notebook  : Gtk.Notebook.Gtk_Notebook;
+      the_buffer    : text;
+   begin  -- Load_Data_To
       Error_Log.Debug_Data(at_level => 5, 
                            with_details => "Load_Data_To: Start");
       -- Open and operate on the configuraiton file
@@ -428,6 +574,10 @@ package body Setup is
                                                "checkbtn_save_terminals"));
       Put(parameter => Get_Active(check_box), into => config_data,
           in_section => "TERMINAL", with_id => "SaveTerminals");
+      check_box := gtk_check_button(Get_Object(Builder, 
+                                               "checkbtn_edit_method"));
+      Put(parameter => Get_Active(check_box), into => config_data, 
+          in_section => "TERMINAL", with_id => "EditMethod");
       -- Get a pointer to the notebook into which the terminal(s) are inserted
       the_notebook := Gtk.Notebook.gtk_notebook(Get_Object(Builder, 
                                                          "notebook_terminal"));
@@ -436,8 +586,9 @@ package body Setup is
       if Read_Parameter(config_data, in_section => "TERMINAL", 
                                      with_id => "SaveTerminals")
       then
-         Put(parameter => num_tabs, 
-             into => config_data, in_section => "TABS", with_id => "TabCount");
+         null;
+      --    num_tabs := Read_Parameter(config_data, in_section => "TABS", 
+            --                          with_id => "TabCount");
       else
          Put(parameter => 1, 
              into => config_data, in_section => "TABS", with_id => "TabCount");
@@ -445,36 +596,43 @@ package body Setup is
       -- Load the set-up configuration data to each terminal on each tab to
       -- ensure that it complies with any changes made to the configuration
       for term_num in 1 .. num_tabs loop
-         the_terminal := Vte.Terminal.Vte_Terminal(Get_Object(Builder, "Term" &
-                                    term_num'Image(2..term_num'Image'Length)));
+         the_terminal:= Gtk.Terminal.Gtk_Terminal(Gtk.Notebook.
+                                     Get_Nth_Page(the_notebook,
+                                                  page_num=>Gint(term_num-1)));
          Load_Setup(to_terminal_window => the_terminal);
          -- For comleteness, save out the terminal history (if specified) to
          -- the configuration file
          if Read_Parameter(config_data, in_section => "TERMINAL", 
                                         with_id => "SaveTerminals")
          then  -- history should be kept, so update it for this terminal
-            the_buffer := Value(Encode(Vte.Terminal.Get_Text(the_terminal)));
+            the_buffer := Value(Encode(Gtk.Terminal.Get_Text(the_terminal)));
             Put(parameter => the_buffer, 
                 into => config_data, in_section => "TABS", 
                 with_id => "Term" & Ada.Characters.Conversions.
                                     To_Wide_String(term_num'Image
-                                                  (2..term_num'Image'Length)));  -- *** THIS (AND ELSEWHERE) SHOULD BE TAB NAME ***
+                                                  (2..term_num'Image'Length)));
+            Put(parameter => Value(Gtk.Terminal.
+                                   Get_Path(for_terminal=>the_terminal)),
+                into => config_data, in_section => "PATHS", 
+                with_id => "Term" & Ada.Characters.Conversions.
+                                    To_Wide_String(term_num'Image
+                                                  (2..term_num'Image'Length)));
          end if;
       end loop;
       -- Finally, save the configuration details to file
       Save(the_configuration_details => config_data);
    end Load_Data_To;
 
-   procedure Load_Setup(to_terminal_window : in Vte.Terminal.Vte_Terminal;
+   procedure Load_Setup(to_terminal_window : in Gtk.Terminal.Gtk_Terminal;
                         is_preconfigured   : in boolean := false) is
       -- Load the set-up configuration to the specified terminal
       -- Terminal Configuration for the specified window
       use Gdk.RGBA;
       use Gtk.Spin_Button;
-      -- use Gtk.Check_Button;
       use Gtk.Color_Button;
-      use Vte.Terminal;
-      the_terminal: Vte.Terminal.Vte_Terminal renames to_terminal_window;
+      use Gtk.Terminal;
+      use dStrings;  -- for logging 9
+      the_terminal: Gtk.Terminal.Gtk_Terminal renames to_terminal_window;
       cols : natural := 80;
       row  : natural := 25;
       spin_entry  : Gtk.Spin_Button.gtk_spin_button;
@@ -484,6 +642,24 @@ package body Setup is
    begin
       Error_Log.Debug_Data(at_level => 5, 
                            with_details => "Load_Setup: Start");
+      -- Terminal font (needs to be dnoe before setting terminal size)
+      Error_Log.Debug_Data(at_level => 9, with_details => "Load_Setup: setting terminal font to " & Value(Setup.The_Font_Name) & "...");
+      Gtk.Terminal.Set_Font(for_terminal => the_terminal,
+                            to_font_desc => Setup.The_Font_Description);
+      if Setup.The_Font_Name = "Blissymbolics"
+      then  -- Ensure encoding and variable character width is correctly set
+         begin
+            Gtk.Terminal.Set_Encoding(for_terminal=>the_terminal, to=>"UTF8");
+            Gtk.Terminal.Set_Character_Width(for_terminal => the_terminal,
+                                             to =>narrow);
+            exception
+               when Encoding_Error =>  -- just silently log the error
+                  Error_Log.Put(the_error => 6,
+                                error_intro => "Load_Setup error", 
+                                error_message=>"Could not set encoding for " &
+                                               "the terminal");
+         end;
+      end if;
       -- Terminal rows and columns
       spin_entry := 
          gtk_spin_button(Get_Object(the_builder, "setup_dimension_columns"));
@@ -491,48 +667,34 @@ package body Setup is
       spin_entry := 
          gtk_spin_button(Get_Object(the_builder, "setup_dimension_rows"));
       row  := Natural(Get_Value_As_Int(spin_entry));
-      Vte.Terminal.Set_Size(terminal=>the_terminal, columns=>cols, rows=>row);
-      -- Terminal font
-      Vte.Terminal.Set_Font(terminal => the_terminal,
-                            to_font_desc => Setup.The_Font_Description);
-      if Setup.The_Font_Name = "Blissymbolics"
-      then  -- Ensure encoding and variable character width is correctly set
-         begin
-            Vte.Terminal.Set_Encoding(for_terminal=>the_terminal, to=>"UTF8");
-            Vte.Terminal.Set_Character_Width(for_terminal => the_terminal,
-                                             to =>narrow);
-            exception
-               when Encoding_Error =>  -- just silently log the error
-                  Error_Log.Put(the_error => 1,
-                                error_intro => "Load_Setup error", 
-                                error_message=>"Could not set encoding for " &
-                                               "the terminal");
-         end;
-      end if;
+      Error_Log.Debug_Data(at_level => 9, with_details => "Load_Setup: setting terminal size to " & cols'Wide_Image & " columns by " & row'Wide_Image & " rows...");
+      Gtk.Terminal.Set_Size(terminal=>the_terminal, columns=>cols, rows=>row);
       -- Terminal colours
       colour_btn := 
          gtk_color_button(Get_Object(the_builder,"colour_background"));
       Get_Rgba(colour_btn, the_colour);
-      Vte.Terminal.Set_Colour_Background(terminal => the_terminal, 
+      Gtk.Terminal.Set_Colour_Background(terminal => the_terminal, 
                                          background => the_colour);
       colour_btn := gtk_color_button(Get_Object(the_builder, "colour_text"));
       Get_Rgba(colour_btn, the_colour);
-      Vte.Terminal.Set_Colour_Text(terminal => the_terminal, 
+      Gtk.Terminal.Set_Colour_Text(terminal => the_terminal, 
                                    text_colour => the_colour);
       colour_btn := gtk_color_button(Get_Object(the_builder, "colour_bold"));
       Get_Rgba(colour_btn, the_colour);
-      Vte.Terminal.Set_Colour_Bold(terminal => the_terminal, 
+      Gtk.Terminal.Set_Colour_Bold(terminal => the_terminal, 
                                    bold_colour => the_colour);
       colour_btn:=gtk_color_button(Get_Object(the_builder,"colour_highlight"));
       Get_Rgba(colour_btn, the_colour);
-      Vte.Terminal.Set_Colour_Bold(terminal => the_terminal, 
-                                   bold_colour => the_colour);
+      Gtk.Terminal.Set_Colour_Highlight(terminal => the_terminal, 
+                                   highlight_colour => the_colour);
       -- Scroll-back line count requested
       spin_entry := 
          gtk_spin_button(Get_Object(the_builder, "setup_scrollback"));
       scroll_back := Natural(Get_Value_As_Int(spin_entry));
-      Vte.Terminal.Set_Scrollback_Lines(terminal => the_terminal, 
+      Gtk.Terminal.Set_Scrollback_Lines(terminal => the_terminal, 
                                         lines => scroll_back);
+      Error_Log.Debug_Data(at_level => 9, 
+                           with_details => "Load_Setup: End");
    end Load_Setup;
 
    procedure Show_Setup(Builder : in Gtkada_Builder) is
@@ -542,24 +704,43 @@ package body Setup is
    end Show_Setup;
       
    procedure Setup_Cancel_CB (Object : access Gtkada_Builder_Record'Class) is
+      -- Restore the set-up display to that on disk
+      use Gtk.Text_Buffer;
+      text_buffer: Gtk.Text_Buffer.gtk_text_buffer;
    begin
       Error_Log.Debug_Data(at_level => 5, 
                            with_details => "Setup_Cancel_CB: Start");
       -- reset the data
       Load_Data_From(config_file_name => the_config_file_name, 
                      Builder => Gtkada_Builder(Object));
+      -- including the CSS data
+      text_buffer := gtk_text_buffer(Get_Object(the_builder,"textbuffer_css"));
+      Set_Text(text_buffer, 
+               To_UTF8_String(CSS_Management.Get_Text(Value(css_file_name))));
       -- and hide ourselves
       Gtk.Widget.Hide(Gtk.Widget.Gtk_Widget 
          (Gtkada.Builder.Get_Object(Gtkada_Builder(Object),"dialogue_setup")));
    end Setup_Cancel_CB;
    
    procedure Setup_Close_CB (Object : access Gtkada_Builder_Record'Class) is
+      -- Save the setup data to files on disk
+      use Gtk.Text_Buffer, Gtk.Text_Iter;
+      text_buffer: Gtk.Text_Buffer.gtk_text_buffer;
+      start_iter,
+      end_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
    begin
       Error_Log.Debug_Data(at_level => 5, 
                            with_details => "Setup_Close_CB: Start");
       -- save the data
       Load_Data_To(config_file_name => the_config_file_name, 
                    Builder => Gtkada_Builder(Object));
+      -- including save the CSS data out to file
+      text_buffer := gtk_text_buffer(Get_Object(the_builder,"textbuffer_css"));
+      Get_Bounds(text_buffer, start_iter, end_iter);
+      CSS_Management.
+         Set_Text(for_file => Value(css_file_name),
+                  to => From_UTF8_String(
+                           Get_Text(text_buffer, start_iter, end_iter, true)));
       -- and hide ourselves
       Gtk.Widget.Hide(Gtk.Widget.Gtk_Widget 
          (Gtkada.Builder.Get_Object(Gtkada_Builder(Object),"dialogue_setup")));
@@ -573,11 +754,7 @@ package body Setup is
       Error_Log.Debug_Data(at_level => 5, 
                            with_details => "Setup_Hide_On_Delete: Start");
       result := Gtk.Widget.Hide_On_Delete(Gtk_Widget_Record(Object.all)'Access);
-      -- Gtk.Widget.Hide(Gtk.Widget.Gtk_Widget 
-         --             (Gtkada.Builder.Get_Object(Gtkada_Builder(Object),"dialogue_setup")));
       return result;
-      -- return Gtk.Widget.Hide_On_Delete(Gtk_Widget_Record( 
-         --               (Gtkada.Builder.Get_Object(Gtkada_Builder(Object),"dialogue_setup").all))'Access);
    end Setup_Hide_On_Delete;
 
    procedure Setup_Show_Help (Object : access Gtkada_Builder_Record'Class) is
@@ -680,6 +857,55 @@ package body Setup is
       Get_Rgba(colour_btn, the_colour);
       return the_colour;
    end Bold_Colour;
+   
+   -- type editing_method is (using_textview, using_emulator);
+   function Internal_Edit_Method return editing_method is
+      -- Indicates whether the user wants to use the text view method whenever
+      -- possible or always wants to use the terminal emulator's editing tools.
+      use Gtk.Check_Button;
+      check_box      : Gtk.Check_Button.gtk_check_button;
+   begin
+      check_box := gtk_check_button(Get_Object(the_builder, 
+                                               "checkbtn_edit_method"));
+      if Get_Active(check_box)
+      then
+         return using_emulator;
+      else
+         return using_textview;
+      end if;
+   end Internal_Edit_Method;
+
+   procedure Save_Configuration_Data is
+      -- Save the configuration data back to the configuration file on disk.
+      use Config_File_Manager;
+   begin
+      Save(the_configuration_details => config_data);
+   end Save_Configuration_Data;
+   
+   procedure Set_Tab_Count(to : in natural) is
+      -- Set the tab count in the configuration file to that specified,
+      -- providing that configuration data for terminals on tabs is specified
+      -- to be saved.
+      use Config_File_Manager;
+   begin
+      if Read_Parameter(config_data, in_section => "TERMINAL", 
+                                     with_id => "SaveTerminals")
+      then
+         Error_Log.Debug_Data(at_level => 9, with_details => "Set_Tab_Count: Saving tab count of" & to'Wide_Image & ".");
+         Put(parameter => to, 
+             into => config_data, in_section => "TABS", with_id => "TabCount");
+      end if;
+   end Set_Tab_Count;
+
+   function Get_Tab_Count return natural is
+      -- Get the tab count as understood bhy the configuration data.
+      use Config_File_Manager;
+      num_tabs : positive := 1;
+   begin
+      num_tabs := Read_Parameter(config_data, in_section => "TABS", 
+                                     with_id => "TabCount");
+      return num_tabs;
+   end Get_Tab_Count;
    
 begin
    Bliss_Term_Version.Register(revision => "$Revision: v1.0.0$",

@@ -43,13 +43,10 @@ ifeq ("$1.",".")
 else
 	FLAGS=-Xhware=$(TARGET) $1
 endif
-FLAGS+=-largs -lvte
-# Make sure to use the right version of libvte here as there is no
-# libvte.so by default!!!  So to do so, you must create a symbolic
-# link to it in the /usr/lib/x86_64-linux-gnu/ directory viz:
-#   sudo ln -s libvte-2.91.so libvte.so
-# because the following doesn't work:
-#   FLAGS+=-largs -lvtei-2.91
+FLAGS+=-largs -lutil
+# -Xmode="debug" # This flag doesn't work
+# util is used by Fork_Pseudo_Terminal in Gtk.Terminal.CInterface.
+# The other flag used is libc, which is already used in Gtk-Ada.
 
 # Define the target "all"
 all: blissterm # tobase64s

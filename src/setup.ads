@@ -33,24 +33,49 @@
 -----------------------------------------------------------------------
 with Gtkada.Builder;  use Gtkada.Builder;
 with Glib.Object, Gdk.RGBA, Pango.Font;
-with Glib.Error, Glib.Spawn;
 with dStrings;        use dStrings;
-with Vte.Terminal, VTE.Enums;
+with Gtk.Terminal;
 package Setup is
    use GLib;
    procedure Initialise_Setup(Builder : in out Gtkada_Builder;
                               from_configuration_file : in text;
+                              using_css : in text;
                               usage : in text);
    procedure Show_Setup(Builder : in Gtkada_Builder);
    function Adjust_Configuration_Path(from : in text) return text;
-   procedure Load_Setup(to_terminal_window : in Vte.Terminal.Vte_Terminal;
+   function Set_User_Environment_Variables return text;
+      -- Extract the user's environment variables, either from the
+      -- configuration file or from the environment itself if not specified in
+      -- that configuration file, and return as a string.
+   procedure Load_Setup(to_terminal_window : in Gtk.Terminal.Gtk_Terminal;
                         is_preconfigured   : in boolean := false);
       -- Load the set-up configuration to the specified terminal
+   procedure Title_Changed(terminal : Gtk.Terminal.Gtk_Terminal; 
+                           title    : UTF8_String);
+      -- Called whenever the title is changed for the terminal by the
+      -- underlying terminal driver (usually to set it to the full path name).
+   type editing_method is (using_textview, using_emulator);
+   function Internal_Edit_Method return editing_method;
+      -- Indicates whether the user wants to use the text view method whenever
+      -- possible or always wants to use the terminal emulator's editing tools.
+   procedure Child_Closed(terminal: Gtk.Terminal.Gtk_Terminal); 
+      -- Depending on which terminal (i.e. whether there is one or more left),
+      -- either delete the current tab or kill the application.
+   procedure Close_The_Terminal(at_number : in natural);
+      -- Close the terminal at the specified terminal number (which is actually
+      -- the tab number, where the first tab is 1 (not 0)).
+      -- This does not remove or delete the tab.
+   procedure Save_Configuration_Data;
+      -- Save the configuration data back to the configuration file on disk.
+   procedure Set_Tab_Count(to : in natural);
+      -- Set the tab count in the configuration file to that specified,
+      -- providing that configuration data for terminals on tabs is specified
+      -- to be saved.
+   function Get_Tab_Count return natural;
+      -- Get the tab count as understood by the configuration data.
 
 private
-
-   VTE_PTY_DEFAULT : constant VTE.Enums.VtePtyFlags := 
-                                         VTE.Enums.VtePtyFlags_VTE_PTY_DEFAULT;
+   use Gtk.Terminal;
    
    default_font_start_chr : constant wide_character := 
                                      wide_character'Val(16#A000#);
@@ -86,12 +111,6 @@ private
    procedure Setup_Cancel_CB (Object : access Gtkada_Builder_Record'Class);
    procedure Setup_Close_CB (Object : access Gtkada_Builder_Record'Class);
             
-   procedure Child_Ready(terminal: Vte.Terminal.Vte_Terminal; 
-                         pid : Glib.Spawn.GPid;
-                         error : Glib.Error.GError); 
-      -- Depending on which terminal (i.e. whether there is one or more left),
-      -- either delete the current tab or kill the application.
-   procedure Child_Ready_CB(Object : access Gtkada_Builder_Record'Class);
    procedure Load_Data_From(config_file_name : text;
                             Builder  : in Gtkada_Builder;
                             with_initially_setup : boolean := true);

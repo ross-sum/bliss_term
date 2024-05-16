@@ -34,7 +34,6 @@
 with Gtkada.Builder;  use Gtkada.Builder;
 with Gtk.Button, Gtk.Menu_Item, Gtk.Widget;
 with dStrings;        use dStrings;
-with VTE;
 with Glib;
 package Terminal is
 
@@ -42,7 +41,11 @@ package Terminal is
    procedure Initialise_Terminal(usage : in text;
                                  path_to_temp  : text:= Value("/tmp/");
                                  glade_filename: text:= Value("bliss_term.glade");
+                                 css_filename  : text:= Value("bliss_term.css");
                                  at_config_path: text:= Value(".config/bliss_term.conf"));
+      -- Create the main terminal window, then set up the terminal(s) as per
+      -- the requirements laid out in the configuration file.  Start the
+      -- operation of the terminal.
 
 private
    use Glib, Gtk.Widget;
@@ -50,16 +53,18 @@ private
     -- Main toolbar buttons
    procedure Terminal_Help_About_Select_CB 
                 (Object : access Gtkada_Builder_Record'Class);
-   procedure Btn_Add_Clicked_CB  
-                (Object : access Gtkada_Builder_Record'Class);
+   procedure Btn_Add_Clicked_CB  (Object : access Gtkada_Builder_Record'Class);
       -- Adds a terminal to the tabs
-   procedure Btn_Remove_Clicked_CB  
-                (Object : access Gtkada_Builder_Record'Class);
+   procedure Btn_Remove_Clicked_CB(Object: access Gtkada_Builder_Record'Class);
       -- Removes the current terminal from the tabs.  If there is only one
       -- terminal, then it closes the application.
-   procedure Btn_Setup_Clicked_CB  
-                (Object : access Gtkada_Builder_Record'Class);
-      -- Configure the terminal properties
+   procedure Btn_Setup_Clicked_CB (Object: access Gtkada_Builder_Record'Class);
+      -- Show the set-up dialogue box so as to be able to configure the
+      -- terminal properties
+   procedure Change_Terminal_Tab(Object : access Gtkada_Builder_Record'Class);
+      -- Change the title of the window to match the tab's title (as supplied
+      -- by the underlying virtual terminal).
+   procedure Testit(Object : access Gtkada_Builder_Record'Class);
    
     -- Window destruction management
    procedure Terminal_File_Exit_Select_CB  
