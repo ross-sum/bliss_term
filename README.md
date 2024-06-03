@@ -18,11 +18,11 @@ Bliss_Term uses the following packages:
    not directly required, but is needed for compilation.
 3. Dynamic-Strings - this is a super-set of the unbounded wide strings
    package (and pre-dates it in its origin).  it is expected to be at
-   the same directory level as the top level of Cell writer, but in
+   the same directory level as the top level of Bliss Term, but in
    its own ../dynamic-strings/ directory.
 4. Hyper Quantum's Ada Tools library - various tools are used from 
-   this library and they are expeced  to also be at the same directory
-   level as the top level of Cell writer, namely in its own
+   this library and they are expected to also be at the same directory
+   level as the top level of Bliss Term, namely in its own
    ../tools/ directory.
 
 ## Installation
@@ -101,7 +101,7 @@ Clearly, a lot of thanks goes to the developers of VTE.  Although there is none
 of their code in this, it has inspired the development.  Also thanks to Vincent
 Bernat who has a web page that shows how to make a simple terminal using VTE.
 Source the page at https://vincent.bernat.ch/en/blog/2017-write-own-terminal
-The source really came from the developer of EduTerm, whos web page is at
+The source really came from the developer of EduTerm, whose web page is at
 https://www.uninformativ.de/blog/postings/2018-02-24/0/POSTING-en.html
 That code gave the true insight in how to actually implement the code to
 actually run up a terminal.
