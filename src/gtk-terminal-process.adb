@@ -14,9 +14,9 @@ separate (Gtk.Terminal)
    St_chr  : constant character := character'Val(16#9C#);
    Esc_num : constant UTF8_String := Esc_str & "[01;";
    Tab_chr : constant UTF8_String(1..Tab_length) := (1..Tab_length => ' ');
-   Esc_Rng : constant Character_Ranges := (('A','H'),('J','K'),('S','T'),
-                                               ('f','f'),('h','i'),('l','n'),
-                                               ('s','s'),('u','u'));
+   Esc_Rng : constant Character_Ranges := (('@','H'),('J','K'),('N','P'),
+                                           ('S','T'),('f','f'),('h','i'),
+                                           ('l','n'),('s','s'),('u','u'));
    Esc_Term: constant Character_Set := To_Set(Esc_Rng);
    Osc_Rng : constant Character_Ranges := ((Bel_str(1),Bel_str(1)),
                                            (st_chr,st_chr));
@@ -55,7 +55,9 @@ separate (Gtk.Terminal)
                                            character'Pos(zero);
                   strip_number := strip_number / radix;
                   number_string(char_pos) := character'Val(unit);
-                  char_pos := char_pos + 1;
+                  if char_pos < Hex_Size'last then
+                     char_pos := char_pos + 1;
+                  end if;
                end loop;
             end if;	-- check for a zero (0)
             -- return the result
@@ -192,8 +194,13 @@ separate (Gtk.Terminal)
    procedure Process_Escape(for_sequence : in UTF8_String;
                             on_buffer  :Gtk_Terminal_Buffer) is
      -- Information sourced from https://en.wikipedia.org/wiki/ANSI_escape_code
-     -- (as at 10 April 2024)
+     -- (as at 10 April 2024) and from st.c
       use Gtk.Enums, Gdk.Color, Gdk.RGBA;
+      function "*" (mult : integer; val : character) return string is
+         result : string(1..mult) := (others => val);
+      begin
+         return result;
+      end "*";
       ist : constant integer := for_sequence'First;
       num_params : constant natural := 5;
       type params is array(1..num_params) of natural;
@@ -206,11 +213,16 @@ separate (Gtk.Terminal)
       dest_iter   : aliased Gtk.Text_Iter.Gtk_Text_Iter;
       buf_x   : Glib.Gint := 0;
       buf_y   : Glib.Gint := 0;
-      win_x   : Glib.Gint := 0;
-      win_y   : Glib.Gint := 0;
+      column  : natural;
    begin  -- Process_Escape
       if for_sequence'Length<=2
       then  -- this cannot be a valid control sequence
+         Handle_The_Error(the_error => 1, 
+                          error_intro=> "Process_Escape: Control string error",
+                          error_message => "Not a valid control sequence for '" 
+                                           & Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                           "'.");
          null;
       else  -- for_sequence(ist)=Esc_str and rest is control sequence
          if for_sequence(ist+1) = '[' or for_sequence(ist+1) = ']'
@@ -236,6 +248,33 @@ separate (Gtk.Terminal)
             when '[' =>  -- it is a Control Sequence Introducer (CSI) sequence
                Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI sequence - there are" & pnum'Wide_Image & " parameters, being " & param(1)'Wide_Image & "," & param(2)'Wide_Image & "," & param(3)'Wide_Image & " and next sequence is '" & Ada.Characters.Conversions.To_Wide_String(for_sequence(chr_pos..chr_pos)) & "'.");
                case for_sequence(chr_pos) is
+                  when '@' =>   -- Insert (param) space characters
+                     if param(1) = 0
+                     then
+                        param(1) := 1;
+                     end if;
+                     -- Insert_At_Cursor(on_buffer, (param(1) * ' '));
+                     Get_Iter_At_Mark(on_buffer, cursor_iter,
+                                      Get_Insert(on_buffer));
+                     -- Insert the spaces, leaving the cursor where it is
+                     Insert(on_buffer, cursor_iter, (param(1) * ' '));
+                  when '~' =>  -- Non-standard, but used for going to end (VT)
+                     case param(1) is
+                        when 4 => -- VT sequence for End [non-standard]
+                           Get_Iter_At_Mark(on_buffer, cursor_iter,
+                                            Get_Insert(on_buffer));
+                           Forward_To_Line_End(cursor_iter, res);
+                           Place_Cursor(on_buffer, where => cursor_iter);
+                        when others => -- not yet implemented
+                           Handle_The_Error(the_error => 2, 
+                                      error_intro=> "Process_Escape: " & 
+                                                    "Control string error",
+                                      error_message=>"Unrecognised VT non-" &
+                                                     "standard sequence for '"& 
+                                              Ada.Characters.Conversions.
+                                                  To_Wide_String(for_sequence)&
+                                                     "'.");
+                     end case;
                   when 'A' =>   -- Cursor Up (param spaces)
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
                                       Get_Insert(for_buffer));
@@ -243,81 +282,143 @@ separate (Gtk.Terminal)
                      then
                         param(1) := 1;
                      end if;
+                     -- Get the column number (to preserve it)
+                     column := UTF8_Length(Get_Line_From_Start(on_buffer, 
+                                                               cursor_iter));
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape [ A : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going up by" & param(1)'Wide_Image & " lines.  Current column =" & column'Wide_Image & ".");
+                     -- Move the cursor up
                      for line_num in 1 .. param(1) loop
-                        if Backward_Display_Line(for_buffer.parent,cursor_iter)
+                        if Backward_Display_Line(on_buffer.parent,cursor_iter)
                         then  -- Successfully gone one line back
-                           Move_Mark_By_Name(on_buffer, "insert", cursor_iter);
+                           if line_num = param(1) then -- at desired line
+                              for col in 1 .. column loop
+                                 Forward_Char(cursor_iter, res);
+                                 if not res then  -- no more characters right
+                                    if Starts_Display_Line(on_buffer.parent, 
+                                                           cursor_iter)
+                                    then  -- go back to previous position
+                                       Backward_Char(cursor_iter, res);
+                                    end if;
+                                    -- Pad out with a space character
+                                    Insert(on_buffer, cursor_iter, " ");
+                                 end if;
+                              end loop;
+                           end if;
+                           Place_Cursor(on_buffer, where => cursor_iter);
                         end if;
                      end loop;
-                  when 'B' =>   -- Cursor Down (param spaces)
+                  when 'B' | 'e' =>   -- Cursor Down (param spaces)
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                      Get_Insert(for_buffer));
+                                      Get_Insert(on_buffer));
                      if param(1) = 0
                      then
                         param(1) := 1;
                      end if;
+                     -- Get the column number (to preserve it)
+                     column := UTF8_Length(Get_Line_From_Start(on_buffer, 
+                                                               cursor_iter));
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going down by" & param(1)'Wide_Image & " lines.  Current column =" & column'Wide_Image & ".");
+                     -- Move the cursor down
                      for line_num in 1 .. param(1) loop
                         if Forward_Display_Line(on_buffer.parent, cursor_iter)
                         then  -- Successfully gone one line forward
-                           Move_Mark_By_Name(on_buffer, "insert", cursor_iter);
+                           if line_num = param(1) then -- at desired line
+                              for col in 1 .. column loop
+                                 Forward_Char(cursor_iter, res);
+                                 if not res then  -- no more characters right
+                                    if Starts_Display_Line(on_buffer.parent, 
+                                                           cursor_iter)
+                                    then  -- go back to previous position
+                                       Backward_Char(cursor_iter, res);
+                                    end if;
+                                    -- Pad out with a space character
+                                    Insert(on_buffer, cursor_iter, " ");
+                                 end if;
+                              end loop;
+                           end if;
+                           Place_Cursor(on_buffer, where => cursor_iter);
                         end if;
                      end loop;
-                  when 'C' =>   -- Cursor Forward (param spaces)
-                  -- Move  the cursor backwards (without deleting characters)
-                  -- First, get the cursor location
+                  when 'C' | 'a' =>   -- Cursor Forward (param spaces)
+                     -- Move  the cursor forwards (without deleting characters)
+                     -- First, get the cursor location
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                      Get_Insert(for_buffer));
-                  -- Then move back one character
+                                      Get_Insert(on_buffer));
+                     -- Then move forward one or more characters
                      if param(1) = 0
                      then
                         param(1) := 1;
                      end if;
-                     Forward_Chars(cursor_iter, Glib.Gint(param(1)), res);
-                     if res then
-                        Move_Mark_By_Name(on_buffer, "insert", cursor_iter);
-                     end if;
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going forward by" & param(1)'Wide_Image & " characters.  Line Length =" & Get_Chars_In_Line(cursor_iter)'Wide_Image & ", current column =" & UTF8_Length(Get_Line_From_Start(on_buffer, cursor_iter))'Wide_Image & ".");
+                     for col in 1 .. param(1)-1 loop
+                        Forward_Char(cursor_iter, res);
+                        if not res or 
+                           Starts_Display_Line(on_buffer.parent, cursor_iter)
+                        then  -- no more characters right
+                           if Starts_Display_Line(on_buffer.parent,cursor_iter)
+                           then  -- go back to previous position
+                              Backward_Char(cursor_iter, res);
+                           end if;
+                              -- Pad out with a space character
+                           Insert(on_buffer, cursor_iter, " ");
+                        end if;
+                     end loop;
+                     -- Now make this the cursor location
+                     Place_Cursor(on_buffer, where => cursor_iter);
+                     -- Forward_Chars(cursor_iter, Glib.Gint(param(1)), res);
+                     -- if res then
+                        -- Place_Cursor(on_buffer, where => cursor_iter);
+                     -- end if;
                   when 'D' =>   -- Cursor Back (param spaces)
-                  -- Move  the cursor backwards (without deleting characters)
-                  -- First, get the cursor location
+                     -- Move  the cursor backwards (without deleting characters)
+                     -- First, get the cursor location
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                      Get_Insert(for_buffer));
-                  -- Then move back one character
+                                      Get_Insert(on_buffer));
+                     -- Then move back one or more characters
                      if param(1) = 0
                      then
                         param(1) := 1;
                      end if;
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going backward by" & param(1)'Wide_Image & " characters.  Line Length =" & Get_Chars_In_Line(cursor_iter)'Wide_Image & ", current column =" & UTF8_Length(Get_Line_From_Start(on_buffer, cursor_iter))'Wide_Image & ".");
                      Backward_Chars(cursor_iter, Glib.Gint(param(1)), res);
                      if res then
-                        Move_Mark_By_Name(on_buffer, "insert", cursor_iter);
+                        Place_Cursor(on_buffer, where => cursor_iter);
                      end if;
                   when 'E' =>   -- Cursor Next Line start (param num of lines)
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                      Get_Insert(for_buffer));
+                                      Get_Insert(on_buffer));
                      Backward_Line(cursor_iter, res);  -- go to last line start
-                     Forward_Line(cursor_iter, res); -- go back to current line
+                     if res then  -- did go back
+                        Forward_Line(cursor_iter, res); -- return to current line
+                     end if;
                      if param(1) = 0
                      then
                         param(1) := 1;
                      end if;
                       -- go to desired line
                      Forward_Lines(cursor_iter, Glib.Gint(param(1)), res);
-                  when 'F' =>   -- Cursor Previous Line (1 or param spaces)
+                     Place_Cursor(on_buffer, where => cursor_iter);
+                  when 'F' =>   -- Cursor Previous Line start (1/param spaces)
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                      Get_Insert(for_buffer));
+                                      Get_Insert(on_buffer));
                      Backward_Line(cursor_iter, res);  -- go to last line start
                       -- go to desired line
                      if param(1) > 1
                      then
                         Backward_Lines(cursor_iter, Glib.Gint(param(1)), res);
                      end if;
-                  when 'G' =>   -- Move cursor to column <param>
+                     Place_Cursor(on_buffer, where => cursor_iter);
+                  when 'G' | '`' =>   -- Move cursor to column <param>
                      Backward_Line(cursor_iter, res);  -- go to last line start
-                     Forward_Line(cursor_iter, res); -- go back to current line
+                     if res then  -- did go back
+                        Forward_Line(cursor_iter, res); -- return to current line
+                     end if;
                      if param(1) > 1
                      then
-                        Forward_Chars(cursor_iter, Glib.Gint(param(1)), res);
+                        Forward_Chars(cursor_iter, Glib.Gint(param(1)-1), res);
                      end if;
-                  when 'H' =>   -- Move cursor to row <param>, column <param>
+                     Place_Cursor(on_buffer, where => cursor_iter);
+                  when 'H' | 'f' =>   -- Move cursor to row <param>, column <param>
                      -- find top left corner
                      Window_To_Buffer_Coords(on_buffer.parent, 
                                                 Gtk.Enums.Text_Window_Text, 
@@ -329,20 +430,31 @@ separate (Gtk.Terminal)
                      -- move to offset from top left corner
                      Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moving to (row,col) position (" & param(1)'Wide_Image & "," & param(2)'Wide_Image & ").");
                      if param(2) > 1 then
-                        Forward_Lines(cursor_iter, Gint(param(2)), res);
+                        Forward_Lines(cursor_iter, Gint(param(2)-1), res);
                      end if;
                      if param(1) > 1 then
-                        Forward_Chars(cursor_iter, GInt(param(1)), res);
+                        for col in 1 .. param(1)-1 loop
+                           Forward_Char(cursor_iter, res);
+                           if not res then  -- no more characters right
+                              if Starts_Display_Line(on_buffer.parent, 
+                                                     cursor_iter)
+                              then  -- go back to previous position
+                                 Backward_Char(cursor_iter, res);
+                              end if;
+                              -- Pad out with a space character
+                              Insert(on_buffer, cursor_iter, " ");
+                           end if;
+                        end loop;
                      end if;
                      -- Now make this the cursor location
-                     Move_Mark_By_Name(on_buffer, "insert", cursor_iter);
+                     Place_Cursor(on_buffer, where => cursor_iter);
                   when 'J' =>   -- Erase in Display <param> type of erase
                      Window_To_Buffer_Coords(on_buffer.parent, 
                                              Gtk.Enums.Text_Window_Text, 
                                              0, 0, buf_x, buf_y);
                      Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - top LH corner = (" & buf_x'Wide_Image & "," & buf_y'Wide_Image & ").");
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                      Get_Insert(for_buffer));
+                                      Get_Insert(on_buffer));
                      case param(1) is
                         when 0 =>   -- Clear from cursor to end of screen
                            Get_End_Iter(on_buffer, dest_iter);
@@ -360,8 +472,8 @@ separate (Gtk.Terminal)
                            Delete(on_buffer, dest_iter, cursor_iter);
                            -- Now scroll the cursor to the top
                            Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                            Get_Insert(for_buffer));
-                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - Scrolling to ensure the screen is clear.");
+                                            Get_Insert(on_buffer));
+                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - cursor pos =" & Get_Line(cursor_iter)'Wide_Image & ", Scrolling to ensure the screen is clear.");
                             -- Put the cursor position at the top of the screen
                            declare  -- NO METHOD SEEMS TO WORK IF SCREEN NOT COMPLETELY CLEAR
                               use Gtk.Text_Mark;
@@ -380,22 +492,46 @@ separate (Gtk.Terminal)
                            Delete(on_buffer, dest_iter, cursor_iter);
                         when others => null; -- invalid erase type, just ignore
                      end case;
-                  when 'K' => null;  -- Erase in Line <param> type of erase
+                  when 'K' =>   -- Erase in Line <param> type of erase
+                     Get_Iter_At_Mark(on_buffer, cursor_iter,
+                                      Get_Insert(on_buffer));
+                     -- use a large offset to point to the end of this line
                      Get_Iter_At_Line_Offset(on_buffer, dest_iter,
-                                      Glib.Gint(on_buffer.line_number-1),
-                                      20000);  -- use a large offset to get end
+                                             Get_Line(cursor_iter), 20000);
                      case param(1) is
                         when 0 =>   -- Clear from cursor to end of line
-                           Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                            Get_Insert(on_buffer));
+                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 0 'K' - cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(on_buffer, cursor_iter, dest_iter)) & "'.");
                            Delete(on_buffer, cursor_iter, dest_iter);
+                        when 1 =>   -- Clear from cursor to beginning of line
+                           -- Get_Iter_At_Line(on_buffer, dest_iter,
+                              --             Glib.Gint(for_buffer.line_number-1));
+                           Get_Iter_At_Line_Offset(on_buffer, dest_iter,
+                                                   Get_Line(cursor_iter), 0);
+                           Delete(on_buffer, dest_iter, cursor_iter);
                         when 2 =>   -- Clear the entire line
-                           Get_Iter_At_Line(on_buffer, cursor_iter,
-                                          Glib.Gint(for_buffer.line_number-1));
+                           Get_Iter_At_Line_Offset(on_buffer, cursor_iter,
+                                                   Get_Line(cursor_iter), 0);
                            Delete(on_buffer, cursor_iter, dest_iter);
                         when others => null; -- invalid clear type, just ignore
                      end case;
-                  when 'S' => null;  -- Scroll Up <param> lines
+                  when 'P' => null;  --DCH -- Delete <param> characters
+                     if param(1) = 0
+                      then
+                        param(1) := 1;
+                     end if;
+                     -- get the start point to delete from
+                     Get_Iter_At_Mark(on_buffer, cursor_iter,
+                                      Get_Insert(on_buffer));
+                     -- Get the end point to delete to (param(1) characters)
+                     Get_Iter_At_Mark(on_buffer, dest_iter,
+                                      Get_Insert(on_buffer));
+                     if param(1) > 1 then  -- dest_iter -> last char to delete
+                        Forward_Chars(dest_iter, Glib.Gint(param(1)-1), res);
+                     end if;  -- N.B. res=false if dest_iter is at end iterator
+                     -- Delete requested number of characters
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI " & param(1)'Wide_Image & " 'P' - cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(on_buffer, cursor_iter, dest_iter)) & "'.");
+                     Delete(on_buffer, cursor_iter, dest_iter);
+                  when 'S' =>   -- Scroll Up <param> lines
                         -- Get the top left hand corner of the screen
                      Window_To_Buffer_Coords(on_buffer.parent, 
                                                 Gtk.Enums.Text_Window_Text, 
@@ -414,7 +550,7 @@ separate (Gtk.Terminal)
                                    res);
                      res := Scroll_To_Iter(on_buffer.parent, dest_iter, 0.0, 
                                            true, 0.0, 0.0);
-                  when 'T' => null;  -- Scroll Down <param> lines
+                  when 'T' =>   -- Scroll Down <param> lines
                       -- Get the top left hand corner to scroll down from
                      Window_To_Buffer_Coords(on_buffer.parent, 
                                              Gtk.Enums.Text_Window_Text, 
@@ -430,7 +566,7 @@ separate (Gtk.Terminal)
                      Backward_Lines(dest_iter, Glib.Gint(param(1)), res);
                      res := Scroll_To_Iter(on_buffer.parent, dest_iter, 0.0, 
                                            true, 0.0, 0.0);
-                  when 'f' => null;  -- Horizontal Vertical Position (like H)
+                  when 'Z' => null; -- CBT Cursor Backward Tabulation <n> tab stops */
                   when '?' => -- private sequences
                      if param(1) = 0 then
                         -- extract the number, if any
@@ -479,7 +615,15 @@ separate (Gtk.Terminal)
                                  Move_Mark_By_Name(on_buffer, "end_paste", 
                                                    cursor_iter);
                               end if;
-                           when others => null; -- not valid and not interpreted
+                           when others =>  -- not valid and not interpreted
+                              Handle_The_Error(the_error => 4, 
+                                      error_intro=> "Process_Escape: " & 
+                                                    "Control string error",
+                                      error_message => "Unrecognised private "&
+                                                       "sequence for '" & 
+                                              Ada.Characters.Conversions.
+                                                  To_Wide_String(for_sequence)&
+                                                       "'.");
                         end case;
                      end if;
                   when 'm' => -- set or reset font colouring and styles
@@ -619,25 +763,72 @@ separate (Gtk.Terminal)
                               Max(on_buffer.modifier_array, span);
                            when 50 => null; -- Disable proportional spacing
                            when others => null;  -- style or colour not recognised
+                              Handle_The_Error(the_error => 6, 
+                                               error_intro=>"Process_Escape: " &
+                                                            "Control string error",
+                                               error_message=> 
+                                                  "Unrecognised control sequence " &
+                                                  " with font or colour not " & 
+                                                  "recognised for '" & 
+                                                  Ada.Characters.Conversions.
+                                                     To_Wide_String(for_sequence)&
+                                                  "'.");
                         end case;
                         count := count + 1;
                      end loop;
-                  when 'i' => null;  -- Serial port control
-                  when 'n' => null;  -- Device status request
+                  when 'i' => null;  -- Serial port control (media copy)
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                  when 'n' =>   -- Device status request
+                     if param(1) = 5
+                     then  -- Status Report "OK" '0n'
+                        Write(fd => on_buffer.master_fd, Buffer => Esc_str & "[0n");
+                     elsif param(1) = 6
+                     then  -- Report Cursor Position (CPR) "<row>;<column>R"
+                        Get_Iter_At_Mark(on_buffer, cursor_iter,
+                                            Get_Insert(on_buffer));
+                        Write(fd => on_buffer.master_fd, 
+                              Buffer => Esc_str & "[" & 
+                                        As_String(Get_Line_Number
+                                           (for_terminal=> on_buffer.parent, 
+                                            at_iter => cursor_iter)) & ";" & 
+                                        As_String(UTF8_Length(
+                                           Get_Line_From_Start
+                                              (for_buffer => on_buffer, 
+                                               up_to_iter => cursor_iter))) & 
+                                        "R");
+                     end if;
                   when 's' =>  -- Save cursor position
                      on_buffer.saved_cursor_pos:= Get_Mark(on_buffer,"insert");
                   when 'u' =>  -- Restore cursor position
                      Get_Iter_At_Mark(on_buffer, cursor_iter, 
                                       on_buffer.saved_cursor_pos);
                      Move_Mark_By_Name(on_buffer, "insert", cursor_iter);
-                  when others => null;
+                  when 'L' => null;  -- Insert (param) blank lines
+                     if param(1) = 0
+                     then
+                        param(1) := 1;
+                     end if;
+                     Insert_At_Cursor(on_buffer, (param(1) * 
+                                                  Ada.Characters.Latin_1.LF));
+                  when others => 
+                     Handle_The_Error(the_error => 5, 
+                                      error_intro=> "Process_Escape: " & 
+                                                    "Control string error",
+                                      error_message => "Unrecognised control " &
+                                              "sequence for CSI sequence '" & 
+                                              Ada.Characters.Conversions.
+                                                  To_Wide_String(for_sequence)&
+                                              "'.");
                end case;
             when 'N' => null;  -- Single Shift Two
-             -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(the_input) & "'");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
             when 'O' => null;  -- Single Shift Three
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
             when 'P' => null;  -- Device Control String 
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
             when '\' => null;  -- String Terminator (terminates other commands)
-            when ']' => null;  -- Operating System Command (seems terminate by ^G)
+               -- Handled elsewhere
+            when ']' =>   -- Operating System Command (seems terminate by ^G)
                chr_pos := ist + 2;
                if param(1) = 0 and param(2) = 0 
                then  -- Terminal title
@@ -651,15 +842,27 @@ separate (Gtk.Terminal)
                elsif param(1) = 8 and param(2) =0 and param(3) = 0 
                then  -- hyperlink
                   null;
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
                elsif for_sequence(chr_pos) = 'P'
                then  -- change the Linux Console's palette
                   -- palette is of the form 'RRGGBB'
                   null;
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
                end if;
             when 'X' => null;  -- Start of String
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
             when '^' => null;  -- Privacy Message
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
             when '_' => null;  -- Application Program Command
-            when others =>  null; -- unrecognised control sequence - ignore
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+            when others =>  null; -- unrecognised control sequence - log+ignore
+               Handle_The_Error(the_error => 3, 
+                          error_intro=> "Process_Escape: Control string error",
+                            error_message => "Unrecognised control sequence " &
+                                              "for '" & 
+                                              Ada.Characters.Conversions.
+                                                  To_Wide_String(for_sequence)&
+                                              "'.");
          end case;  -- control sequence type
       end if;
    end Process_Escape;
@@ -683,7 +886,11 @@ begin  -- Process
          (for_buffer.escape_sequence(escape_str_range'First+1) /= ']' and then
           Is_In(element => the_input(ist), set => Esc_Term))
       then  -- escape sequence is complete - process it
-         Error_Log.Debug_Data(at_level => 9, with_details => "Process : Escape sequence finished with '" & Ada.Characters.Conversions.To_Wide_String(for_buffer.escape_sequence(1..for_buffer.escape_position)) & "'");
+         Error_Log.Debug_Data(at_level => 9, with_details => "Process : Escape sequence finished with '" & Ada.Characters.Conversions.To_Wide_String(for_buffer.escape_sequence(1..for_buffer.escape_position)) & "'; Set_Overwrite(for_buffer.parent) to true");
+         -- Make sure that terminal is in overwrite mode as the escape sequence
+         -- is from the system's virtual terminal and it assumes that it is
+         -- always in some form of overwrite mode
+         Set_Overwrite(for_buffer.parent, true);
          -- process it
          Process_Escape(for_sequence => 
                      for_buffer.escape_sequence(1..for_buffer.escape_position),
@@ -694,7 +901,7 @@ begin  -- Process
       elsif for_buffer.escape_position < escape_length 
       then --else  -- escape sequence is incomplete - keep capturing it
          for_buffer.escape_position := for_buffer.escape_position + 1;
-      else  -- faulty scape sequence
+      else  -- faulty escape sequence
          Insert_At_Cursor(for_buffer, for_buffer.escape_sequence);
          Insert_At_Cursor(for_buffer, the_input);
          for_buffer.escape_sequence := (escape_str_range => ' ');
@@ -707,12 +914,17 @@ begin  -- Process
       for_buffer.escape_position := for_buffer.escape_position + 1;
       for_buffer.in_esc_sequence := true;
    elsif the_input = CR_str then
-      Get_Iter_At_Line(for_buffer, start_iter,
-                                Glib.Gint(for_buffer.line_number-1));
+      Get_Iter_At_Mark(for_buffer, start_iter, Get_Insert(for_buffer));
+      Get_Iter_At_Line_Offset(for_buffer, start_iter, Get_Line(start_iter),0);
+      -- It appears that Linux may require a line feed operation also be done
+      Get_Iter_At_Line_Offset(for_buffer, end_iter, Get_Line(end_iter),0);
+      if not Equal(start_iter, end_iter) then  -- not at last line already
+         Forward_Line(start_iter, res);
+      end if;
       Place_Cursor(for_buffer, where => start_iter);
    elsif the_input = LF_str then
       if not for_buffer.just_wrapped
-         then  -- do a new line
+      then  -- do a new line
          Place_Cursor(for_buffer, where => end_iter);
          Insert(for_buffer, end_iter, the_input);
          for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
@@ -728,7 +940,7 @@ begin  -- Process
       cursor_mark := Get_Insert(for_buffer);   
       Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
          -- here, end_iter is where the cursor is
-      Get_Start_Iter(for_buffer, start_iter);
+      -- Get_Start_Iter(for_buffer, start_iter);
       Get_Iter_At_Line(for_buffer,start_iter,Glib.Gint(for_buffer.line_number-1));
       tab_stop := Tab_length - 
                    (UTF8_Length(Get_Text(for_buffer, start_iter, end_iter)) rem
@@ -737,18 +949,23 @@ begin  -- Process
        -- insert the tab stop by inserting spaces
       Insert_At_Cursor(for_buffer, Tab_chr(1..tab_stop));
    elsif the_input = BS_str then
-      -- Move  the cursor back one character (without deleting the character)
+      -- Move the cursor back one character (deleting the character) --(without deleting the character)
+      -- Move the cursor back one character (without deleting the character)
       -- First, get the cursor location
       cursor_mark := Get_Insert(for_buffer);   
       Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
+   --    -- Then execute the Backspace function
+      -- res := Backspace(for_buffer, end_iter, true, true);
       -- Then move back one character
       Backward_Char(end_iter, res);
       if res then
          Move_Mark(for_buffer, cursor_mark, end_iter);
       end if;
       -- Now lock only this portion of text from editing
-      Get_Start_Iter(for_buffer, start_iter);
-      Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
+      if (not for_buffer.history_review) then
+         Get_Start_Iter(for_buffer, start_iter);
+         Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
+      end if;
    else  -- An ordinary character
       if for_buffer.markup_text = Null_Ptr
       then  -- not in some kind of mark-up so just add the text
@@ -759,17 +976,47 @@ begin  -- Process
       for_buffer.just_wrapped := false;
       null;
    end if;
-   -- Ensure this displayed text cannot be edited
-   Get_Start_Iter(for_buffer, start_iter);
-   cursor_mark := Get_Insert(for_buffer);
-   Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
-   if the_input /= BS_str then  -- don't lock if in back space
-      Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
-   end if;
-   -- and move the anchor_point where reading can commence from forward
-   Get_Iter_At_Line(for_buffer,start_iter,Glib.Gint(for_buffer.line_number-1));
-   for_buffer.anchor_point := 
+   -- If we are not in an app and the output is not a consequence of
+   -- being at a command prompt and we are navigating through Bash history,
+   -- then adjust the editing of the displayed text and adjust the anchor
+   -- point.
+   -- if (not for_buffer.bracketed_paste_mode) and (not for_buffer.history_review)
+   if (not for_buffer.history_review)
+   then  -- can lock down uneditable region and set anchor_point
+      Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
+      -- Ensure this displayed text cannot be edited
+      Get_Start_Iter(for_buffer, start_iter);
+      cursor_mark := Get_Insert(for_buffer);
+      Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
+      if the_input /= BS_str then  -- don't lock if in back space
+         Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
+      end if;
+      -- and move the anchor_point where reading can commence from forward
+      Get_Iter_At_Line(for_buffer, start_iter,
+                       Glib.Gint(for_buffer.line_number-1));
+      for_buffer.anchor_point := 
                   UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
+   elsif for_buffer.history_review
+   then  -- Command line (e.g. Bash) history scrolling taking place
+      declare
+         unedit_mark : Gtk.Text_Mark.Gtk_Text_Mark;  -- End of uneditable zone
+         unedit_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+      begin
+         cursor_mark := Get_Insert(for_buffer);
+         Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
+         unedit_mark := Get_Mark(for_buffer, "end_unedit");
+         Get_Iter_At_Mark(for_buffer, unedit_iter, unedit_mark);
+         if Compare(unedit_iter, end_iter) > 0
+         then  -- Bash moved back a line, so move the editable region
+            Get_Start_Iter(for_buffer, start_iter);
+            Apply_Tag_By_Name(for_buffer, "history_text", 
+                              start_iter, end_iter);
+            Move_Mark(for_buffer, unedit_mark, end_iter);
+         end if;
+      end;
+   else  -- Must be an application operating in the terminal
+      Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.history_review is set. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
+   end if;
    -- Scroll if required to make it visible
    if not for_buffer.in_esc_sequence then
       cursor_mark := Get_Insert(for_buffer);

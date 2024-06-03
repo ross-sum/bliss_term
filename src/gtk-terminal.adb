@@ -244,8 +244,9 @@ package body Gtk.Terminal is
          Add(the_terminal, the_terminal.terminal);
          On_Key_Press_Event(self=>the_terminal.terminal, 
                             call=>Scroll_Key_Press_Check'access, after=>false);
-         -- Give an initial default dimension of 80 characters x 25 lines
-         Set_Size (terminal => the_terminal, columns => 80, rows => 25);
+         -- Give an initial default dimension of nowrap_size (1000) characters
+         -- wide x 25 lines (i.e. no wrap)
+         Set_Size (terminal => the_terminal, columns => nowrap_size, rows => 25);
       end if;
    end Initialize;
    -- procedure Initialise (The_Terminal : access Gtk_Terminal_Record'Class)
@@ -518,32 +519,62 @@ package body Gtk.Terminal is
       -- or, in the case of terminal emulator controlled editing, left and
       -- right arrow key has been been pressed.  If so, it gets passed to the
       -- terminal emulator and not to the buffer for processing.
-      use Ada.Strings.UTF_Encoding.Wide_Strings;
+      -- use Ada.Strings.UTF_Encoding.Wide_Strings;
       use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
       -- the_terminal : Gtk_Terminal := Gtk_Terminal(for_terminal);
-      the_term : Gtk_Text_View := Gtk_Text_View(for_terminal);
+      esc_start : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ "; 
+      the_term  : Gtk_Text_View := Gtk_Text_View(for_terminal);
       the_terminal : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
-      the_key : wide_string(1..1) := " ";
+      the_key   : string(1..3) := esc_start;
    begin
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ".");
       case for_event.keyval is
-         when GDK_Up | GDK_Down =>
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key identified as up or down.");
-            the_key(1) := wide_character'Val(natural(for_event.keyval));
-         when GDK_Home | GDK_End | GDK_Left | GDK_Right =>
+         when GDK_Up => 
+            the_key(3) := 'A';
+         when GDK_Down =>
+            the_key(3) := 'B';
+            -- the_key(1) := wide_character'Val(natural(for_event.keyval));
+         when GDK_Home =>
             if not the_terminal.buffer.use_buffer_editing
             then
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key identified as line movement and NOT use_buffer_editing.");
-               the_key(1) := wide_character'Val(natural(for_event.keyval));
+               the_key(3) := 'G';
+            end if;
+         when GDK_End =>
+            if not the_terminal.buffer.use_buffer_editing
+            then
+               the_key(3) := '4';
+            end if;
+         when GDK_Left =>
+            if not the_terminal.buffer.use_buffer_editing
+            then
+               the_key(3) := 'D';
+            end if;
+         when GDK_Right =>
+            if not the_terminal.buffer.use_buffer_editing
+            then
+               the_key(3) := 'C';
             end if;
          when others =>
             null;
       end case;
-      if the_key /= " "
-      then  -- we have set it to pass to the write routine
-         Write(fd => the_terminal.buffer.master_fd, Buffer => Encode(the_key));
+      if the_terminal.buffer.bracketed_paste_mode and the_key /= esc_start
+      then  -- at command prompt: we have set it to pass to the write routine
+         Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
+         Write(fd => the_terminal.buffer.master_fd, Buffer => the_key);
+         the_terminal.buffer.history_review := true;
+         Set_Overwrite(the_terminal.terminal, true);
          return true;
-      else
+      elsif (not the_terminal.buffer.bracketed_paste_mode) and the_key /= esc_start
+      then  -- in an app: we have set it to pass to the write routine
+         Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
+         if for_event.keyval = GDK_End
+         then  -- Actually a 4 character non-standard sequence
+            Write(fd => the_terminal.buffer.master_fd, Buffer => the_key & '~');
+         else  -- standard sequence
+            Write(fd => the_terminal.buffer.master_fd, Buffer => the_key);
+         end if;
+         return true;
+      else  -- at command prompt and not a terminal history action key press
          return false;
       end if;
    end Scroll_Key_Press_Check;
@@ -557,7 +588,172 @@ package body Gtk.Terminal is
    begin
       return Natural(String(of_string)'Length);
    end UTF8_Length;
+   
+   function As_String(the_number : in natural) return UTF8_String is
+       -- provide the (non-negative) number as a compact string
+      number: UTF8_String := the_number'Image;
+   begin
+      return number(number'First+1..number'Last);
+   end As_String;
+   
+   function Line_Length(for_buffer : in Gtk_Terminal_Buffer;
+                        at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                        for_printable_characters_only : boolean := true)
+     return natural is
+       -- Get the line length for the line that the at_iter is currently on.
+   begin
+      return UTF8_Length(Get_Line_Length(for_buffer, at_iter, 
+                                         for_printable_characters_only));
+   end Line_Length;
+
+   function Get_Line_Length(for_buffer : in Gtk_Terminal_Buffer;
+                            at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                            for_printable_characters_only : boolean := true)
+     return UTF8_String is
+       -- Get the whole line that the at_iter is currently on.
+      use Gtk.Text_Iter;
+      line_start : Gtk.Text_Iter.Gtk_Text_Iter;
+      line_end   : Gtk.Text_Iter.Gtk_Text_Iter;
+      result     : boolean;
+      line_number: natural;
+   begin
+      -- Get pointers to the start and end of the current line
+      line_start := at_iter;
+      line_number := natural(Get_Line(line_start));
+      Backward_Line(line_start, result);
+      if line_number > 0 and result
+      then  -- was not on the first line
+         Forward_Line(line_start, result);
+      end if;
+      line_end := at_iter;
+      Forward_To_Line_End(line_end, result);
+      -- Calculate and return the line between iterators
+      return Get_Slice(for_buffer, line_start, line_end, 
+                       not for_printable_characters_only);
+   end Get_Line_Length;
+       
+   function Get_Line_From_Start(for_buffer : in Gtk_Terminal_Buffer;
+                                up_to_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                                for_printable_characters_only : boolean:= true)
+     return UTF8_String is
+       -- Get the line that the at_iter is currently on, starting with the
+       -- first character and going up to up_to_iter.
+      use Gtk.Text_Iter;
+      line_start : Gtk.Text_Iter.Gtk_Text_Iter;
+      result     : boolean;
+      line_number: natural;
+   begin
+      -- Get pointers to the start and end of the current line
+      line_start := up_to_iter;
+      line_number := natural(Get_Line(line_start));
+      Backward_Line(line_start, result);
+      if line_number > 0 and result
+      then  -- was not on the first line
+         Forward_Line(line_start, result);
+      end if;
+      -- Calculate and return the line between iterators
+      return Get_Slice(for_buffer, line_start, up_to_iter, 
+                       not for_printable_characters_only);
+   end Get_Line_From_Start;
+       
+   function Get_Line_To_End(for_buffer : in Gtk_Terminal_Buffer;
+                            starting_from_iter: in Gtk.Text_Iter.Gtk_Text_Iter;
+                            for_printable_characters_only : boolean := true)
+     return UTF8_String is
+       -- Get the line that the at_iter is currently on, starting with the
+       -- first character and going up to up_to_iter.
+      use Gtk.Text_Iter;
+      line_end   : Gtk.Text_Iter.Gtk_Text_Iter;
+      result     : boolean;
+   begin
+      -- Get pointers to the start and end of the current line
+      line_end := starting_from_iter;
+      Forward_To_Line_End(line_end, result);
+      -- Calculate and return the length of the line between iterators
+      return Get_Slice(for_buffer, starting_from_iter, line_end, 
+                       not for_printable_characters_only);
+   end Get_Line_To_End;
+   
+   function Get_Line_Number(for_terminal : Gtk.Text_View.Gtk_Text_View; 
+                            at_iter : in Gtk.Text_Iter.Gtk_Text_Iter) 
+   return natural is
+      -- Return the current line number from the top of the screen to the
+      -- specified at_iter.
+      use Gtk.Text_Iter;
+      result      : boolean;
+      buf_x       : Glib.Gint := 0;
+      buf_y       : Glib.Gint := 0;
+      line_number : natural;
+      first_line  : aliased Gtk.Text_Iter.Gtk_Text_Iter;
+      current_line: Gtk.Text_Iter.Gtk_Text_Iter := at_iter;
+   begin
+      -- Get the top left hand corner point in the buffer
+      Window_To_Buffer_Coords(for_terminal, Gtk.Enums.Text_Window_Text, 0, 0, 
+                              buf_x, buf_y);
+      result:= Get_Iter_At_Position(for_terminal, first_line'access, null, 
+                                 buf_x, buf_y);
+       -- Get the start of the current line
+      line_number := natural(Get_Line(current_line));
+      Backward_Line(current_line, result);
+      if line_number > 0 and result
+      then  -- was not on the first line, so move back to the line
+         Forward_Line(current_line, result);  -- now at first character
+      end if;
+      -- Move the first_line pointer until it matches the current line
+      line_number := 1;
+      while Compare(first_line, current_line) < 0 loop
+         Forward_Line(first_line, result);
+         if result then  -- not at the very end
+            line_number := line_number + 1;
+         end if;
+      end loop;
+      return line_number;
+   end Get_Line_Number;
+   
+   -- The built-in Gtk.Text_Buffer Insert and Insert_at_Cursor procedures do
+   -- not take into account the Overwrite status and Insert whether in Insert
+   -- or in Overwrite.  Further, Gtk.Text_Buffer does not have an Overwrite or
+   -- an Overwrite_at_Cursor procedure.  So we need to set up our own Insert
+   -- procedures and call the relevant inherited function at the appropriate
+   -- point, with overwrite handling code around it.
+   -- procedure Insert  (buffer   : access Gtk_Terminal_Buffer_Record;
+   --                    iter     : in out Gtk.Text_Iter.Gtk_Text_Iter;
+   --                    the_text : UTF8_String) is
+   --    --  Inserts Len bytes of Text at position Iter. If Len is -1, Text must be
+   --    --  nul-terminated and will be inserted in its entirety. Emits the
+   --    --  "insert-text" signal; insertion actually occurs in the default handler
+   --    --  for the signal. Iter is invalidated when insertion occurs (because the
+   --    --  buffer contents change), but the default signal handler revalidates it
+   --    --  to point to the end of the inserted text.
+   --    --  "iter": a position in the buffer
+   --    --  "text": text in UTF-8 format
+      -- use Gtk.Text_Iter;
+      -- end_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+      -- result   : boolean;
+   -- begin
+      -- Get_End_Iter(buffer, end_iter);
+      -- if Get_Overwrite(buffer.parent) and then  -- if in 'overwrite' mode
+      --    Compare(iter, end_iter) < 0
+      -- then  -- delete the character at the iter before inserting the new one
+         -- end_iter := iter;
+         -- Forward_Char(end_iter, result);
+         -- Delete(buffer, iter, end_iter);
+      -- end if;
+      -- Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), iter, the_text);
+   -- end Insert;
       
+   procedure Insert_At_Cursor (buffer   : access Gtk_Terminal_Buffer_Record;
+                               the_text : UTF8_String) is
+      --  Simply calls Gtk.Terminal.Insert, using the current cursor position
+      --  as the insertion point.
+      --  "text": text in UTF-8 format
+      use Gtk.Text_Iter;
+      cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+   begin
+      Get_Iter_At_Mark(buffer, cursor_iter, Get_Insert(buffer));
+      Insert(buffer, cursor_iter, the_text);
+   end Insert_At_Cursor;
+   
    -- buffer_length : constant positive := 255;
    -- type buf_index is mod buffer_length;
    -- type buffer_type is array (buf_index) of wide_character;
@@ -796,8 +992,10 @@ package body Gtk.Terminal is
          the_fds   : Gtk.Terminal.CInterface.poll_fd_access;
          res       : Interfaces.C.int;
       begin
-         -- Check for end of line (i.e. the Return/Enter key is pressed) and
-         -- then set flags and potentially enable update of the line count.
+         -- Check for end of line (i.e. the Return/Enter key is pressed) or
+         -- alternatively User has buffer_editing (i.e. use the virtual
+         -- terminal's editing) not set, and then set flags and potentially
+         -- enable update of the line count.
          if for_string'Length > 0 and then 
             ((for_string(for_string'Last) = Ada.Characters.Latin_1.LF and
               (for_string'Length > 1 and then
@@ -805,6 +1003,10 @@ package body Gtk.Terminal is
              ((not for_buffer.use_buffer_editing) or 
               (not for_buffer.bracketed_paste_mode)))
          then  -- Return/Enter key has been pressed + not line continuation
+            -- Reset the history processing indicator value
+            for_buffer.history_review := false;
+            Set_Overwrite(for_buffer.parent, false);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false.");
             -- Process the keys through to the terminal
             the_fds := new Gtk.Terminal.CInterface.poll_fd;
             the_fds.fd      := for_buffer.master_fd;
@@ -1047,6 +1249,7 @@ package body Gtk.Terminal is
       end_iter    : Gtk.Text_Iter.Gtk_Text_Iter;
       history_tag : Gtk.Text_Tag.Gtk_Text_Tag;
       end_mark    : Gtk.Text_Mark.Gtk_Text_Mark;
+      unedit_mark : Gtk.Text_Mark.Gtk_Text_Mark;
       window_size : aliased win_size := 
                                 (Interfaces.C.unsigned_short(terminal.rows),
                                  Interfaces.C.unsigned_short(terminal.cols), 
@@ -1116,6 +1319,8 @@ package body Gtk.Terminal is
       Set_Property(history_tag, Editable_Property, false);
       Apply_Tag(terminal.buffer, history_tag,
                 start_iter, end_iter);
+      unedit_mark := Create_Mark(terminal.buffer, "end_unedit", end_iter, 
+                                 left_gravity=>true);
       Get_Iter_At_Line(terminal.buffer, start_iter,
                        Glib.Gint(terminal.buffer.line_number));
       terminal.buffer.anchor_point := 
@@ -1181,17 +1386,28 @@ package body Gtk.Terminal is
    procedure Set_Size (terminal : access Gtk_Terminal_Record'Class; 
                        columns, rows : natural) is
       -- Set the terminal's size to the specified number of columns and rows.
+      use Gtk.Terminal.CInterface, Interfaces.C;
+      default_columns  : constant natural := 80;
       default_vert_size: constant natural := 32;
       horizontal_scale : constant natural := 15;
       vertical_scale   : constant natural := 
                    natural(1.3*float(Get_Size(terminal.current_font))/1000.0);
       col_size : Glib.Gint := Glib.Gint(columns * horizontal_scale);
       row_size : Glib.Gint := Glib.Gint(rows * vertical_scale);
+      term_size: aliased win_size := (0, 0, 0, 0);
    begin
       Error_Log.Debug_Data(at_level => 9, with_details => "Set_Size :  Font size =" &  Get_Size(terminal.current_font)'Wide_Image & ", vertical_scale =" & vertical_scale'Wide_Image & ".");
       if natural(row_size) < rows
       then  -- it could be that the font has yet to be set
          row_size := Glib.Gint(rows * default_vert_size);
+      end if;
+      if columns >= nowrap_size
+      then  -- Assume no wrapping, so set the displayed size to 80 characters
+         col_size := Glib.Gint(default_columns * horizontal_scale);
+         -- and set wrapping to off for the screen
+         Set_Wrap_Mode(terminal.terminal, Gtk.Enums.Wrap_None);
+      else  -- Set wrapping to on for the screen
+         Set_Wrap_Mode(terminal.terminal, Gtk.Enums.Wrap_Char);
       end if;
       Set_Size_Request(terminal, Width=>col_size, Height=>row_size);
       -- Do a sanity check
@@ -1199,6 +1415,31 @@ package body Gtk.Terminal is
       then -- it makes no sense for the scroll-back size to be < display height
          terminal.scrollback_size := rows;  -- so set it to that.
       end if;
+      -- Tell the virtual terminal to resize
+      if terminal.id /= 0 then  -- i.e. terminal is already set up
+         -- First, get the current size
+         if IO_Control(for_file => terminal.master_fd, request => TIOCGWINSZ, 
+                       params => term_size'Address) < 0
+         then  -- failed to get the current size :-(
+            Handle_The_Error(the_error => 13, 
+                          error_intro  => "Set_Size: Terminal resize error",
+                          error_message=> "Couldn't get current window size.");
+         else  -- Second, set the new number of rows and columns
+            term_size.rows := Interfaces.C.unsigned_short(rows);
+            term_size.cols := Interfaces.C.unsigned_short(columns);
+            if IO_Control(for_file => terminal.master_fd, request=> TIOCSWINSZ,
+                          params => term_size'Address) < 0
+            then -- Error in rezizing :-(
+               Handle_The_Error(the_error => 14, 
+                             error_intro  => "Set_Size: Terminal resize error",
+                             error_message=> "Couldn't set window size to " & 
+                                             "rows =" & rows'Wide_Image & 
+                                             ", cols =" & columns'Wide_Image &
+                                             ".");
+            end if;
+         end if;
+      end if;
+      -- And save the size itself
       terminal.cols := columns;
       terminal.rows := rows;
    end Set_Size;

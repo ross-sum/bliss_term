@@ -239,6 +239,8 @@ package Gtk.Terminal is
    private
    ----------------------------------------------------------------------------
    
+   nowrap_size : constant natural := 1000;
+       -- number of column characters that represents a no-wrap screen
    service_initialised : boolean := false;
    the_error_handler : error_handler := null;
    procedure Handle_The_Error(the_error : in integer;
@@ -249,6 +251,8 @@ package Gtk.Terminal is
 
    function UTF8_Length(of_string : in UTF8_String) return natural;
        -- get the absolute string length (i.e. including parts of characters)
+   function As_String(the_number : in natural) return UTF8_String;
+       -- provide the (non-negative) number as a compact string
 
    -------------------------
    -- Gtk Terminal Buffer --
@@ -292,6 +296,10 @@ package Gtk.Terminal is
                                      -- current row number in the buffer
          anchor_point        : natural := 0;
                  -- placed at the end of the command prompt on line_number line
+         history_review      : boolean := false;
+                 -- are we reviewing command line (usually Bash) history?
+                 -- If so, then that affects editing positions and anchor_point
+                 -- movement.
          waiting_for_response: boolean := false;  -- from the terminal
          in_response         : boolean := false; -- from the terminal
          just_wrapped        : boolean := false; -- is output at next line?
@@ -336,6 +344,51 @@ package Gtk.Terminal is
       --  Initialise does nothing if the object was already created with another
       --  call to Initialise* or G_New.
       --  "table": a tag table, or null to create a new one
+   function Line_Length(for_buffer : in Gtk_Terminal_Buffer;
+                        at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                        for_printable_characters_only : boolean := true)
+     return natural;
+       -- Get the line length for the line that the at_iter is currently on.
+   function Get_Line_Length(for_buffer : in Gtk_Terminal_Buffer;
+                            at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                            for_printable_characters_only : boolean := true)
+     return UTF8_String;
+       -- Get the whole line that the at_iter is currently on.
+   function Get_Line_From_Start(for_buffer : in Gtk_Terminal_Buffer;
+                                up_to_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                                for_printable_characters_only : boolean:= true)
+     return UTF8_String;
+       -- Get the line that the at_iter is currently on, starting with the
+       -- first character and going up to up_to_iter.
+   function Get_Line_To_End(for_buffer : in Gtk_Terminal_Buffer;
+                            starting_from_iter: in Gtk.Text_Iter.Gtk_Text_Iter;
+                            for_printable_characters_only : boolean := true)
+     return UTF8_String;
+       -- Get the line that the at_iter is currently on, starting with the
+       -- first character and going up to up_to_iter.
+   
+   -- The built-in Gtk.Text_Buffer Insert and Insert_at_Cursor procedures do
+   -- not take into account the Overwrite status and Insert whether in Insert
+   -- or in Overwrite.  Further, Gtk.Text_Buffer does not have an Overwrite or
+   -- an Overwrite_at_Cursor procedure.  So we need to set up our own Insert
+   -- procedures and call the relevant inherited function at the appropriate
+   -- point, with overwrite handling code around it.
+   -- procedure Insert  (buffer   : access Gtk_Terminal_Buffer_Record;
+   --                    iter     : in out Gtk.Text_Iter.Gtk_Text_Iter;
+   --                    the_text : UTF8_String);
+--       --  Inserts Len bytes of Text at position Iter. If Len is -1, Text must be
+--       --  nul-terminated and will be inserted in its entirety. Emits the
+--       --  "insert-text" signal; insertion actually occurs in the default handler
+--       --  for the signal. Iter is invalidated when insertion occurs (because the
+--       --  buffer contents change), but the default signal handler revalidates it
+--       --  to point to the end of the inserted text.
+--       --  "iter": a position in the buffer
+--       --  "text": text in UTF-8 format
+   procedure Insert_At_Cursor (buffer   : access Gtk_Terminal_Buffer_Record;
+                               the_text : UTF8_String);
+      --  Simply calls Gtk.Terminal.Insert, using the current cursor position
+      --  as the insertion point.
+      --  "text": text in UTF-8 format
        
    -------------------------------------------
    -- Gtk_Terminal_Buffer Private Callbacks --
@@ -363,7 +416,7 @@ package Gtk.Terminal is
     -- is some spare idle time, the Check_For_Display_Data routine can use this
     -- list to call on each buffer's display buffer to check that there is
     -- something to display, in which case it displays it.  The display
-    -- operation must be done is the main application thread and cannot be done
+    -- operation must be done in the main application thread and cannot be done
     -- in a task.
    package Buffer_Arrays is new Ada.Containers.Vectors
          (index_type   => natural,
@@ -406,6 +459,12 @@ package Gtk.Terminal is
          rows             : natural := 25;  -- default number of rows
       end record;
        
+   function Get_Line_Number(for_terminal : Gtk.Text_View.Gtk_Text_View; 
+                            at_iter : in Gtk.Text_Iter.Gtk_Text_Iter) 
+   return natural;
+      -- Return the current line number from the top of the screen to the
+      -- specified at_iter.
+     
    -------------------------------------------
    -- Gtk_Terminal_Record Private Callbacks --
    -------------------------------------------

@@ -47,7 +47,8 @@ package Gtk.Terminal.CInterface is
    O_NOCTTY : constant flags := (15=> true, others=>false);
                                  -- Don't assign a controlling terminal
    -- I/O control flags and commands
-   TIOCSWINSZ:constant Interfaces.C.unsigned_long  := 16#5414#;
+   TIOCGWINSZ: constant Interfaces.C.unsigned_long := 16#5413#;
+   TIOCSWINSZ: constant Interfaces.C.unsigned_long := 16#5414#;
    TIOCSCTTY : constant Interfaces.C.unsigned_long := 16#540E#;
    -- Input mode flag bits (/usr/include/asm-generic/termbits.h)
    IUCLC     : constant Interfaces.C.unsigned      := 16#0200#;
@@ -222,8 +223,8 @@ package Gtk.Terminal.CInterface is
       -- It is a part of libc.
  
    function IO_Control(for_file : int; 
-                       request : unsigned_long; 
-                       params : access System.Address) return int;
+                       request  : unsigned_long; 
+                       params   : System.Address) return int;
       pragma Import (C, IO_Control, "ioctl");
       -- Manipulate the underlying parameters for the specified device.  This
       -- function is quite important for managing the operating characteristics
