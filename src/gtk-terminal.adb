@@ -716,33 +716,35 @@ package body Gtk.Terminal is
    -- an Overwrite_at_Cursor procedure.  So we need to set up our own Insert
    -- procedures and call the relevant inherited function at the appropriate
    -- point, with overwrite handling code around it.
-   -- procedure Insert  (buffer   : access Gtk_Terminal_Buffer_Record;
-   --                    iter     : in out Gtk.Text_Iter.Gtk_Text_Iter;
-   --                    the_text : UTF8_String) is
-   --    --  Inserts Len bytes of Text at position Iter. If Len is -1, Text must be
-   --    --  nul-terminated and will be inserted in its entirety. Emits the
-   --    --  "insert-text" signal; insertion actually occurs in the default handler
-   --    --  for the signal. Iter is invalidated when insertion occurs (because the
-   --    --  buffer contents change), but the default signal handler revalidates it
-   --    --  to point to the end of the inserted text.
-   --    --  "iter": a position in the buffer
-   --    --  "text": text in UTF-8 format
-      -- use Gtk.Text_Iter;
-      -- end_iter : Gtk.Text_Iter.Gtk_Text_Iter;
-      -- result   : boolean;
-   -- begin
-      -- Get_End_Iter(buffer, end_iter);
-      -- if Get_Overwrite(buffer.parent) and then  -- if in 'overwrite' mode
-      --    Compare(iter, end_iter) < 0
-      -- then  -- delete the character at the iter before inserting the new one
-         -- end_iter := iter;
-         -- Forward_Char(end_iter, result);
-         -- Delete(buffer, iter, end_iter);
-      -- end if;
-      -- Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), iter, the_text);
-   -- end Insert;
+   procedure Insert  (into     : access Gtk_Terminal_Buffer_Record'Class;
+                      at_iter  : in out Gtk.Text_Iter.Gtk_Text_Iter;
+                      the_text : UTF8_String) is
+      --  Inserts Len bytes of Text at position Iter. If Len is -1, Text must be
+      --  nul-terminated and will be inserted in its entirety. Emits the
+      --  "insert-text" signal; insertion actually occurs in the default handler
+      --  for the signal. Iter is invalidated when insertion occurs (because the
+      --  buffer contents change), but the default signal handler revalidates it
+      --  to point to the end of the inserted text.
+      --  "iter": a position in the buffer
+      --  "text": text in UTF-8 format
+      use Gtk.Text_Iter;
+      buffer   : access Gtk_Terminal_Buffer_Record'Class renames into;
+      end_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+      result   : boolean;
+   begin
+      Get_End_Iter(buffer, end_iter);
+      if Get_Overwrite(buffer.parent) and then  -- if in 'overwrite' mode
+         Compare(at_iter, end_iter) < 0
+      then  -- delete the character at the iter before inserting the new one
+         end_iter := at_iter;
+         Forward_Char(end_iter, result);
+         Delete(buffer, at_iter, end_iter);
+      end if;
+      -- Now call the inherited Insert operation
+      Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
+   end Insert;
       
-   procedure Insert_At_Cursor (buffer   : access Gtk_Terminal_Buffer_Record;
+   procedure Insert_At_Cursor (into : access Gtk_Terminal_Buffer_Record'Class;
                                the_text : UTF8_String) is
       --  Simply calls Gtk.Terminal.Insert, using the current cursor position
       --  as the insertion point.
@@ -750,8 +752,8 @@ package body Gtk.Terminal is
       use Gtk.Text_Iter;
       cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
    begin
-      Get_Iter_At_Mark(buffer, cursor_iter, Get_Insert(buffer));
-      Insert(buffer, cursor_iter, the_text);
+      Get_Iter_At_Mark(into, cursor_iter, Get_Insert(into));
+      Gtk.Terminal.Insert(into, at_iter => cursor_iter, the_text => the_text);
    end Insert_At_Cursor;
    
    -- buffer_length : constant positive := 255;

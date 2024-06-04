@@ -257,7 +257,8 @@ separate (Gtk.Terminal)
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
                                       Get_Insert(on_buffer));
                      -- Insert the spaces, leaving the cursor where it is
-                     Insert(on_buffer, cursor_iter, (param(1) * ' '));
+                     Insert(on_buffer, at_iter=>cursor_iter, 
+                            the_text=>(param(1)*' '));
                   when '~' =>  -- Non-standard, but used for going to end (VT)
                      case param(1) is
                         when 4 => -- VT sequence for End [non-standard]
@@ -300,7 +301,8 @@ separate (Gtk.Terminal)
                                        Backward_Char(cursor_iter, res);
                                     end if;
                                     -- Pad out with a space character
-                                    Insert(on_buffer, cursor_iter, " ");
+                                    Insert(on_buffer, at_iter=>cursor_iter,
+                                           the_text=>" ");
                                  end if;
                               end loop;
                            end if;
@@ -332,7 +334,8 @@ separate (Gtk.Terminal)
                                        Backward_Char(cursor_iter, res);
                                     end if;
                                     -- Pad out with a space character
-                                    Insert(on_buffer, cursor_iter, " ");
+                                    Insert(on_buffer, at_iter=>cursor_iter,
+                                           the_text=>" ");
                                  end if;
                               end loop;
                            end if;
@@ -360,7 +363,8 @@ separate (Gtk.Terminal)
                               Backward_Char(cursor_iter, res);
                            end if;
                               -- Pad out with a space character
-                           Insert(on_buffer, cursor_iter, " ");
+                           Insert(on_buffer, at_iter=>cursor_iter,
+                                  the_text=>" ");
                         end if;
                      end loop;
                      -- Now make this the cursor location
@@ -442,7 +446,8 @@ separate (Gtk.Terminal)
                                  Backward_Char(cursor_iter, res);
                               end if;
                               -- Pad out with a space character
-                              Insert(on_buffer, cursor_iter, " ");
+                              Insert(on_buffer, at_iter=>cursor_iter,
+                                     the_text=>" ");
                            end if;
                         end loop;
                      end if;
@@ -525,9 +530,9 @@ separate (Gtk.Terminal)
                      -- Get the end point to delete to (param(1) characters)
                      Get_Iter_At_Mark(on_buffer, dest_iter,
                                       Get_Insert(on_buffer));
-                     if param(1) > 1 then  -- dest_iter -> last char to delete
-                        Forward_Chars(dest_iter, Glib.Gint(param(1)-1), res);
-                     end if;  -- N.B. res=false if dest_iter is at end iterator
+                     -- dest_iter -> just past the last char to delete
+                     Forward_Chars(dest_iter, Glib.Gint(param(1)), res);
+                     -- N.B. res=false if dest_iter is at end iterator
                      -- Delete requested number of characters
                      Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI " & param(1)'Wide_Image & " 'P' - cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(on_buffer, cursor_iter, dest_iter)) & "'.");
                      Delete(on_buffer, cursor_iter, dest_iter);
@@ -808,7 +813,7 @@ separate (Gtk.Terminal)
                      then
                         param(1) := 1;
                      end if;
-                     Insert_At_Cursor(on_buffer, (param(1) * 
+                     Insert_At_Cursor(on_buffer, the_text=>(param(1) * 
                                                   Ada.Characters.Latin_1.LF));
                   when others => 
                      Handle_The_Error(the_error => 5, 
@@ -902,8 +907,8 @@ begin  -- Process
       then --else  -- escape sequence is incomplete - keep capturing it
          for_buffer.escape_position := for_buffer.escape_position + 1;
       else  -- faulty escape sequence
-         Insert_At_Cursor(for_buffer, for_buffer.escape_sequence);
-         Insert_At_Cursor(for_buffer, the_input);
+         Insert_At_Cursor(for_buffer, the_text=>for_buffer.escape_sequence);
+         Insert_At_Cursor(for_buffer, the_text=>the_input);
          for_buffer.escape_sequence := (escape_str_range => ' ');
          for_buffer.escape_position := escape_str_range'First;
       end if;
@@ -926,7 +931,7 @@ begin  -- Process
       if not for_buffer.just_wrapped
       then  -- do a new line
          Place_Cursor(for_buffer, where => end_iter);
-         Insert(for_buffer, end_iter, the_input);
+         Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);
          for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
       else  -- Just wrapped, so ignore this LF and reset just_wrapped
          for_buffer.just_wrapped := false;
@@ -947,7 +952,7 @@ begin  -- Process
                                                                Tab_length);
       Ada.Wide_Text_IO.Put_Line("Process : Tab - line length =" & Natural'Wide_Image(UTF8_Length(Get_Text(for_buffer, start_iter, end_iter))) & ", tab stop =" & Natural'Wide_Image(tab_stop) & ".");
        -- insert the tab stop by inserting spaces
-      Insert_At_Cursor(for_buffer, Tab_chr(1..tab_stop));
+      Insert_At_Cursor(for_buffer, the_text=>Tab_chr(1..tab_stop));
    elsif the_input = BS_str then
       -- Move the cursor back one character (deleting the character) --(without deleting the character)
       -- Move the cursor back one character (without deleting the character)
@@ -969,7 +974,7 @@ begin  -- Process
    else  -- An ordinary character
       if for_buffer.markup_text = Null_Ptr
       then  -- not in some kind of mark-up so just add the text
-         Insert_At_Cursor(for_buffer, the_input);
+         Insert_At_Cursor(for_buffer, the_text=>the_input);
       else  -- in some kind of mark-up - append it to the mark-up string
          Append_To_Markup(for_buffer, the_text => the_input);
       end if;

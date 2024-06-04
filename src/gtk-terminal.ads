@@ -373,18 +373,18 @@ package Gtk.Terminal is
    -- an Overwrite_at_Cursor procedure.  So we need to set up our own Insert
    -- procedures and call the relevant inherited function at the appropriate
    -- point, with overwrite handling code around it.
-   -- procedure Insert  (buffer   : access Gtk_Terminal_Buffer_Record;
-   --                    iter     : in out Gtk.Text_Iter.Gtk_Text_Iter;
-   --                    the_text : UTF8_String);
---       --  Inserts Len bytes of Text at position Iter. If Len is -1, Text must be
---       --  nul-terminated and will be inserted in its entirety. Emits the
---       --  "insert-text" signal; insertion actually occurs in the default handler
---       --  for the signal. Iter is invalidated when insertion occurs (because the
---       --  buffer contents change), but the default signal handler revalidates it
---       --  to point to the end of the inserted text.
---       --  "iter": a position in the buffer
---       --  "text": text in UTF-8 format
-   procedure Insert_At_Cursor (buffer   : access Gtk_Terminal_Buffer_Record;
+   procedure Insert  (into     : access Gtk_Terminal_Buffer_Record'Class;
+                      at_iter  : in out Gtk.Text_Iter.Gtk_Text_Iter;
+                      the_text : UTF8_String);
+      --  Inserts Len bytes of Text at position Iter. If Len is -1, Text must be
+      --  nul-terminated and will be inserted in its entirety. Emits the
+      --  "insert-text" signal; insertion actually occurs in the default handler
+      --  for the signal. Iter is invalidated when insertion occurs (because the
+      --  buffer contents change), but the default signal handler revalidates it
+      --  to point to the end of the inserted text.
+      --  "iter": a position in the buffer
+      --  "text": text in UTF-8 format
+   procedure Insert_At_Cursor (into : access Gtk_Terminal_Buffer_Record'Class;
                                the_text : UTF8_String);
       --  Simply calls Gtk.Terminal.Insert, using the current cursor position
       --  as the insertion point.
