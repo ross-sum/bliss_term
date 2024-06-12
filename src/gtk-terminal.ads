@@ -314,6 +314,7 @@ package Gtk.Terminal is
          cursor_is_visible        : boolean := true;
           -- Escape sequence flags
          bracketed_paste_mode     : boolean := false;
+         pass_through_characters  : boolean := false;  -- matchs br. paste mode
          alternative_screen_buffer: boolean := false;
          reporting_focus_enabled  : boolean := false;
          saved_cursor_pos         : Gtk.Text_Mark.Gtk_Text_Mark;
@@ -425,6 +426,13 @@ package Gtk.Terminal is
    display_output_handling_buffer : buffer_array;
    
    function Check_For_Display_Data return boolean;
+      -- Check that there is any data to display.  If so, then process it.
+      -- This function is called as a part of the idle cycles, essentially in
+      -- lieu of the ability to use a task, to take data from the system's
+      -- virtual terminal (i.e. the terminal client) and process it for
+      -- display.
+      -- For it to work, every terminal must register it's buffer into the
+      -- display_output_handling_buffer (done as a part of Spawn_Shell).
 
    ------------------
    -- Gtk Terminal --
@@ -432,9 +440,10 @@ package Gtk.Terminal is
    
    task type Terminal_Input_Handling is
       -- Terminal Input Handling responds to data coming from the terminal
-      -- client.  This data gets displayed on the screen and could involve
-      -- manipulation of the screen (for instance, to go into bold mode,
-      -- change the font colour or other screen commands).
+      -- client, that is, the system's virtual terminal.  This data gets
+      -- displayed on the screen and could involve manipulation of the screen
+      -- (for instance, to go into bold mode, change the font colour or other
+      -- screen commands).
       entry Start(with_fd : Interfaces.C.int;
                   with_terminal_buffer : Gtk_Terminal_Buffer);
       entry Stop;
@@ -478,6 +487,10 @@ package Gtk.Terminal is
       -- terminal emulator and not to the buffer for processing.
       
    -- Supporting IO functions
+   -- Read and Write are provided to read from and write to a Linux file handle
+   -- (as the OS understands a file handle).  These procedures are needed
+   -- because reading and writing to files is a little tricky, very much
+   -- written for a C program rather than an Ada program.
    procedure Write(fd    : in out Interfaces.C.int; Buffer : in string);
    procedure Read (fd    : in out Interfaces.C.int; 
                    buffer: in out string; Last: out natural);

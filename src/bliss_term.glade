@@ -324,6 +324,7 @@ Author: Ross Summerfield
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
                         <property name="tooltip-text" translatable="yes">Pick a font</property>
+                        <property name="margin-bottom">2</property>
                         <property name="font">Sans 12</property>
                         <property name="language">en-au</property>
                         <property name="preview-text"/>
@@ -356,6 +357,7 @@ Author: Ross Summerfield
               <object class="GtkBox" id="box_configuration">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
+                <property name="hexpand">True</property>
                 <property name="orientation">vertical</property>
                 <child>
                   <object class="GtkBox" id="box_setup_terminal_dimensions">
@@ -380,7 +382,7 @@ Author: Ross Summerfield
                       <object class="GtkSpinButton" id="setup_dimension_columns">
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
-                        <property name="width-chars">3</property>
+                        <property name="width-chars">5</property>
                         <property name="text" translatable="yes">80</property>
                         <property name="caps-lock-warning">False</property>
                         <property name="adjustment">adjustment_columns</property>
@@ -404,6 +406,7 @@ Author: Ross Summerfield
                       <packing>
                         <property name="expand">False</property>
                         <property name="fill">True</property>
+                        <property name="padding">1</property>
                         <property name="position">2</property>
                       </packing>
                     </child>
@@ -430,11 +433,13 @@ Author: Ross Summerfield
                       <object class="GtkLabel" id="setup_label_rows">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
-                        <property name="label" translatable="yes">rows</property>
+                        <property name="label" translatable="yes">rows   </property>
+                        <property name="width-chars">5</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
                         <property name="fill">True</property>
+                        <property name="padding">2</property>
                         <property name="position">4</property>
                       </packing>
                     </child>
@@ -553,6 +558,7 @@ Author: Ross Summerfield
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
                 <property name="shadow-type">in</property>
+                <property name="min-content-width">100</property>
                 <child>
                   <object class="GtkTextView" id="textview_css">
                     <property name="visible">True</property>

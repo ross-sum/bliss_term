@@ -517,11 +517,9 @@ package body Gtk.Terminal is
    return boolean is
       -- Respond to any key press events to check if an up arrow, down arrow
       -- or, in the case of terminal emulator controlled editing, left and
-      -- right arrow key has been been pressed.  If so, it gets passed to the
-      -- terminal emulator and not to the buffer for processing.
-      -- use Ada.Strings.UTF_Encoding.Wide_Strings;
+      -- right arrow and backspace key has been been pressed.  If so, it gets
+      -- passed to the terminal emulator and not to the buffer for processing.
       use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
-      -- the_terminal : Gtk_Terminal := Gtk_Terminal(for_terminal);
       esc_start : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ "; 
       the_term  : Gtk_Text_View := Gtk_Text_View(for_terminal);
       the_terminal : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
@@ -533,7 +531,6 @@ package body Gtk.Terminal is
             the_key(3) := 'A';
          when GDK_Down =>
             the_key(3) := 'B';
-            -- the_key(1) := wide_character'Val(natural(for_event.keyval));
          when GDK_Home =>
             if not the_terminal.buffer.use_buffer_editing
             then
@@ -547,20 +544,28 @@ package body Gtk.Terminal is
          when GDK_Left =>
             if not the_terminal.buffer.use_buffer_editing
             then
-               the_key(3) := 'D';
+            the_key(3) := 'D';
             end if;
          when GDK_Right =>
             if not the_terminal.buffer.use_buffer_editing
             then
-               the_key(3) := 'C';
+            the_key(3) := 'C';
             end if;
+         when GDK_BackSpace =>  --16#FF08# / 10#65288#
+            the_key(1) := Ada.Characters.Latin_1.BS;
+            the_key(2) := ' ';
          when others =>
             null;
       end case;
       if the_terminal.buffer.bracketed_paste_mode and the_key /= esc_start
       then  -- at command prompt: we have set it to pass to the write routine
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
-         Write(fd => the_terminal.buffer.master_fd, Buffer => the_key);
+         if for_event.keyval = GDK_BackSpace
+         then  -- Actually a single back-space character
+            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
+         else  -- standard sequence
+            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
+         end if;
          the_terminal.buffer.history_review := true;
          Set_Overwrite(the_terminal.terminal, true);
          return true;
@@ -569,9 +574,12 @@ package body Gtk.Terminal is
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
          if for_event.keyval = GDK_End
          then  -- Actually a 4 character non-standard sequence
-            Write(fd => the_terminal.buffer.master_fd, Buffer => the_key & '~');
+            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key & '~');
+         elsif for_event.keyval = GDK_BackSpace
+         then  -- Actually a single back-space character
+            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
          else  -- standard sequence
-            Write(fd => the_terminal.buffer.master_fd, Buffer => the_key);
+            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
          end if;
          return true;
       else  -- at command prompt and not a terminal history action key press
@@ -833,6 +841,12 @@ package body Gtk.Terminal is
     
    function Check_For_Display_Data return boolean is
       -- Check that there is any data to display.  If so, then process it.
+      -- This function is called as a part of the idle cycles, essentially in
+      -- lieu of the ability to use a task, to take data from the system's
+      -- virtual terminal (i.e. the terminal client) and process it for
+      -- display.
+      -- For it to work, every terminal must register it's buffer into the
+      -- display_output_handling_buffer (done as a part of Spawn_Shell).
       use Buffer_Arrays;
       use Ada.Strings.UTF_Encoding.Wide_Strings;
       the_buffer    : Gtk_Terminal_Buffer;
@@ -924,9 +938,10 @@ package body Gtk.Terminal is
    task body Terminal_Input_Handling is
       use Gtk.Terminal.CInterface, Interfaces.C, GLib;
       -- Terminal Input Handling responds to data coming from the terminal
-      -- client.  This data gets displayed on the screen and could involve
-      -- manipulation of the screen (for instance, to go into bold mode,
-      -- change the font colour or other screen commands).
+      -- client, that is, the system's virtual terminal.  This data gets
+      -- displayed on the screen and could involve manipulation of the screen
+      -- (for instance, to go into bold mode, change the font colour or other
+      -- screen commands).
       char_wait_time : constant Interfaces.C.Int := 250; -- msec
       master_fd : Interfaces.C.int;
       quit_loop : boolean := false;
@@ -959,7 +974,7 @@ package body Gtk.Terminal is
             if res > 0 and then the_fds.revents = POLLIN
             then  -- There is key presses waiting to be read
                Read(master_fd, input, read_len);
-               Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input = '" & Ada.Characters.Conversions.To_Wide_String(input) & "'.");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input (from terminal client (system's virtual terminal)) = '" & Ada.Characters.Conversions.To_Wide_String(input) & "'.");
             else
                read_len := 0;  -- simulate no character yet
             end if;
@@ -991,8 +1006,14 @@ package body Gtk.Terminal is
          use Gtk.Terminal.CInterface, Interfaces.C;
          char_wait_time : constant Interfaces.C.Int := 250; -- msec
          nfds           : constant Gtk.Terminal.CInterface.nfds_t := 1;
-         the_fds   : Gtk.Terminal.CInterface.poll_fd_access;
-         res       : Interfaces.C.int;
+         the_fds        : Gtk.Terminal.CInterface.poll_fd_access;
+         res            : Interfaces.C.int;
+         history_text   : constant boolean := for_buffer.history_review;
+         clear_line_text: constant UTF8_String := 
+                                   Ada.Characters.Latin_1.Esc & "[2K";
+         enter_text     : constant UTF8_String(1..1) := 
+                                   (1 => Ada.Characters.Latin_1.LF);
+         the_terminal   : Gtk_Terminal := Gtk_Terminal(Get_Parent(for_buffer.parent));
       begin
          -- Check for end of line (i.e. the Return/Enter key is pressed) or
          -- alternatively User has buffer_editing (i.e. use the virtual
@@ -1008,7 +1029,7 @@ package body Gtk.Terminal is
             -- Reset the history processing indicator value
             for_buffer.history_review := false;
             Set_Overwrite(for_buffer.parent, false);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false.");
+            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
             -- Process the keys through to the terminal
             the_fds := new Gtk.Terminal.CInterface.poll_fd;
             the_fds.fd      := for_buffer.master_fd;
@@ -1019,16 +1040,53 @@ package body Gtk.Terminal is
                exit when res > 0 and then the_fds.revents = POLLOUT;
                delay 0.05;  -- seconds
             end loop;
-            -- Delete the text from the buffer so that the terminal may write
-            -- it back and then write that deleted text out to the termnal
-            Delete(for_buffer, over_range_start, and_end);  -------------******************FIX: causes a subsequent Gtk-WARNING **: 21:48:00.652: Invalid text buffer iterator: either the iterator is uninitialized... 
-            Write(fd => for_buffer.master_fd, Buffer => for_string);
+            if history_text and for_buffer.use_buffer_editing
+            then  -- terminal client is just expecting an Enter key here
+               -- we need to assume the terminal client (i.e. the system's
+               -- virtual terminal) has the correct line including edits to it
+               Write(fd => for_buffer.master_fd, Buffer => enter_text);
+            else -- not history, normal keyboard command entry
+               -- Delete the text from the buffer so that the terminal may write
+               -- it back and then write that deleted text out to the termnal
+               Delete(for_buffer, over_range_start, and_end);  -------------******************FIX: causes a subsequent Gtk-WARNING **: 21:48:00.652: Invalid text buffer iterator: either the iterator is uninitialized... 
+               Write(fd => for_buffer.master_fd, Buffer => for_string);
+            end if;
+            -- Check that the buffer length is not exceeded (remove line if so)
+            if natural(Get_Line_Count(for_buffer))>the_terminal.scrollback_size
+            then  -- Clip the buffer back to being within size
+               declare
+                  start_iter  : Gtk.Text_Iter.gtk_text_iter;
+                  line_2_iter : Gtk.Text_Iter.gtk_text_iter;
+               begin
+                  Get_Start_Iter(for_buffer, start_iter);
+                  Get_Iter_At_Line(for_buffer, line_2_iter, 1);
+                  Delete(for_buffer, start_iter, line_2_iter);
+               end;
+            end if;
             -- Put ourselves into a 'waiting for response' mode
             if for_buffer.bracketed_paste_mode then
                for_buffer.waiting_for_response := true;
             end if;
             -- Update the line count
             for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
+         elsif for_string'Length > 0 and then 
+            (history_text and for_buffer.use_buffer_editing)
+         then  -- some other key pressed to modify a history line
+            -- Process the key(s) through to the terminal
+            the_fds := new Gtk.Terminal.CInterface.poll_fd;
+            the_fds.fd      := for_buffer.master_fd;
+            the_fds.events  := POLLOUT;
+            loop
+               the_fds.revents := 0;
+               res := Gtk.Terminal.CInterface.Poll(the_fds, nfds, char_wait_time);
+               exit when res > 0 and then the_fds.revents = POLLOUT;
+               delay 0.05;  -- seconds
+            end loop;
+            Write(fd => for_buffer.master_fd, Buffer => for_string);
+            -- Put ourselves into a 'waiting for response' mode
+            if for_buffer.bracketed_paste_mode then
+               for_buffer.waiting_for_response := true;
+            end if;
          end if;
       end Process_Keys;
       start_iter : Gtk.Text_Iter.Gtk_Text_Iter;
@@ -1053,10 +1111,7 @@ package body Gtk.Terminal is
          end if;
          if (not Equal(end_iter, start_iter))
          then  -- There is actually some input
-            -- Check the cursor is not prior to the prompt, inhibiting the change
-            -- if so, revert the change
-            null;
-            -- Otherwise get the string and act upon it
+            -- Get the string and act upon it
             Process_Keys(for_string => Get_Text(for_buffer,start_iter,end_iter),
                          over_range_start => start_iter, and_end => end_iter);
          else  -- Nothing to do here
