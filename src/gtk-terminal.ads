@@ -331,6 +331,8 @@ package Gtk.Terminal is
             -- possible or, alternatively, always use the terminal emulator's
             -- editor.
          parent              : Gtk.Text_View.Gtk_Text_View;
+         -- The alternative buffer (to emulate an xterm)
+         alt_buffer          : Gtk.Text_Buffer.Gtk_Text_Buffer;
       end record;
    type Gtk_Terminal_Buffer is access all Gtk_Terminal_Buffer_Record'Class;
    
@@ -485,6 +487,9 @@ package Gtk.Terminal is
       -- or, in the case of terminal emulator controlled editing, left and
       -- right arrow key has been been pressed.  If so, it gets passed to the
       -- terminal emulator and not to the buffer for processing.
+--       
+   -- procedure Show (the_terminal : access Gtk_Widget_Record'Class);
+--       -- Respond to being shown by ensuring the cursor is visible.
       
    -- Supporting IO functions
    -- Read and Write are provided to read from and write to a Linux file handle

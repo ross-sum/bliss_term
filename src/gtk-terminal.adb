@@ -122,6 +122,7 @@ package body Gtk.Terminal is
    --        -- terminal display buffer handling
    --       input_monitor       : input_monitor_type_access;
    --       parent              : Gtk.Text_View.Gtk_Text_View;
+   --       alt_buffer          : Gtk_Text_Buffer;
    --    end record;
    -- type Gtk_Terminal_Buffer is access all Gtk_Terminal_Buffer_Record'Class;
    -- Encoding_Error : exception;
@@ -247,6 +248,11 @@ package body Gtk.Terminal is
          -- Give an initial default dimension of nowrap_size (1000) characters
          -- wide x 25 lines (i.e. no wrap)
          Set_Size (terminal => the_terminal, columns => nowrap_size, rows => 25);
+         -- Create the alternative buffer (as per xterm)
+         Gtk_New(the_terminal.buffer.alt_buffer);
+         -- the_terminal.buffer.alt_buffer.parent := the_terminal.terminal;
+         -- Ensure the terminal's cursor is visible when it is shown
+      --    On_Show(self=>the_terminal.terminal, call=>Show'access, after=>false);
       end if;
    end Initialize;
    -- procedure Initialise (The_Terminal : access Gtk_Terminal_Record'Class)
@@ -270,6 +276,17 @@ package body Gtk.Terminal is
          (buffer'Length = 1 and then buffer(buffer'First) /= character'Val(0))
       then  --  It is not a null buffer or an empty buffer
          Feed(the_terminal, data => buffer & cr_char & lf_char);
+      --    -- Now ensure the cursor is visible at the end of the buffer  -- THIS DIDN'T WORK
+      --    declare
+      --       use Gtk.Text_Iter;
+      --       end_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+      --       res      : boolean;
+      --    begin
+      --       Get_End_Iter(the_terminal.buffer, end_iter);
+      --       Backward_Visible_Cursor_Position(end_iter, res);
+      --       Forward_Visible_Cursor_Position(end_iter, res);
+      --       Place_Cursor(the_terminal.buffer, end_iter);
+      --    end;
       end if;
    end Initialise_With_Buffer;
 
@@ -320,7 +337,7 @@ package body Gtk.Terminal is
       Free(the_terminal.title);
       null;
       -- Finally, call up the inherited finalise operation (if any)
-      null;
+      null;  -- there's none
    end Finalize;
    -- procedure Finalise(the_terminal : access Gtk_Terminal_Record'Class)
    --    renames Finalize;
@@ -542,14 +559,16 @@ package body Gtk.Terminal is
                the_key(3) := '4';
             end if;
          when GDK_Left =>
-            if not the_terminal.buffer.use_buffer_editing
+            if the_terminal.buffer.history_review or
+               not the_terminal.buffer.use_buffer_editing
             then
-            the_key(3) := 'D';
+               the_key(3) := 'D';
             end if;
          when GDK_Right =>
-            if not the_terminal.buffer.use_buffer_editing
+            if the_terminal.buffer.history_review or
+               not the_terminal.buffer.use_buffer_editing
             then
-            the_key(3) := 'C';
+               the_key(3) := 'C';
             end if;
          when GDK_BackSpace =>  --16#FF08# / 10#65288#
             the_key(1) := Ada.Characters.Latin_1.BS;
@@ -586,6 +605,16 @@ package body Gtk.Terminal is
          return false;
       end if;
    end Scroll_Key_Press_Check;
+-- 
+   -- procedure Show (the_terminal : access Gtk_Widget_Record'Class) is
+--       -- Respond to being shown by ensuring the cursor is visible.
+      -- the_term      : Gtk_Text_View := Gtk_Text_View(the_terminal);
+      -- this_terminal : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
+   --    res           : boolean;
+--    begin
+--       Set_Cursor_Visible(this_terminal.terminal, true);
+--       res := Place_Cursor_Onscreen(this_terminal.terminal);
+--    end Show;
 
    -------------------------
    -- Terminal Management --
@@ -1021,8 +1050,8 @@ package body Gtk.Terminal is
          -- enable update of the line count.
          if for_string'Length > 0 and then 
             ((for_string(for_string'Last) = Ada.Characters.Latin_1.LF and
-              (for_string'Length > 1 and then
-               for_string(for_string'Last-1) /= '\')) or
+              (not(for_string'Length > 1 and then
+                   for_string(for_string'Last-1) = '\'))) or
              ((not for_buffer.use_buffer_editing) or 
               (not for_buffer.bracketed_paste_mode)))
          then  -- Return/Enter key has been pressed + not line continuation
@@ -1044,6 +1073,15 @@ package body Gtk.Terminal is
             then  -- terminal client is just expecting an Enter key here
                -- we need to assume the terminal client (i.e. the system's
                -- virtual terminal) has the correct line including edits to it
+               -- First, undo the 'Enter' key press
+               declare
+                  cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+                  res : boolean;
+               begin
+                  Get_Iter_At_Mark(for_buffer, cursor_iter, Get_Insert(for_buffer));
+                  res := Backspace(for_buffer, cursor_iter, false, true);
+               end;
+               -- Now output that enter key
                Write(fd => for_buffer.master_fd, Buffer => enter_text);
             else -- not history, normal keyboard command entry
                -- Delete the text from the buffer so that the terminal may write
@@ -1412,6 +1450,18 @@ package body Gtk.Terminal is
          Write(fd => terminal.buffer.master_fd, 
                Buffer=> "cd " & working_directory & Ada.Characters.Latin_1.LF);
       end if;
+      --    -- Now ensure the cursor is visible at the end of the buffer  -- THIS DIDN'T WORK
+      --    declare
+      --       use Gtk.Text_Iter;
+      --       end_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+      --       res      : boolean;
+      --    begin
+      --       Get_End_Iter(terminal.buffer, end_iter);
+      --       Backward_Cursor_Position(end_iter, res);
+      --       Forward_Cursor_Position(end_iter, res);
+      --       Place_Cursor(terminal.buffer, end_iter);
+      --       res := Place_Cursor_Onscreen(terminal.terminal);
+      --    end;
    end Spawn_Shell;
 
     -- Terminal Configuration Management (encoding, size, etc)
@@ -1667,3 +1717,5 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+
+

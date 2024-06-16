@@ -214,7 +214,16 @@ separate (Gtk.Terminal)
       buf_x   : Glib.Gint := 0;
       buf_y   : Glib.Gint := 0;
       column  : natural;
+      the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
    begin  -- Process_Escape
+      -- First up, work out which buffer, the main or the alternative buffer
+      -- that the display input/output will operate on
+      if on_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         the_buf := on_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(on_buffer);
+      end if;
       if for_sequence'Length<=2
       then  -- this cannot be a valid control sequence
          Handle_The_Error(the_error => 1, 
@@ -617,13 +626,34 @@ separate (Gtk.Terminal)
                                  on_buffer.reporting_focus_enabled := false;
                               end if;
                            when 1049 =>  -- alternative screen buffer
-                              if for_sequence(chr_pos) = 'h'
-                              then
-                                 on_buffer.alternative_screen_buffer := true;
-                              elsif for_sequence(chr_pos) = 'l'
-                              then
-                                 on_buffer.alternative_screen_buffer := false;
-                              end if;
+                              declare
+                                 the_term : Gtk_Terminal := 
+                                    Gtk_Terminal(Get_Parent(on_buffer.parent));
+                              begin
+                                 if for_sequence(chr_pos) = 'h'
+                                 then  -- switch to the alternate screen buffer
+                                    -- Set the flags to indicate which buffer
+                                    on_buffer.alternative_screen_buffer:= true;
+                                     -- Clear out the alternate buffer
+                                    Get_Start_Iter(on_buffer.alt_buffer,
+                                                   cursor_iter);
+                                    Get_End_Iter(on_buffer.alt_buffer,dest_iter);
+                                    Delete(on_buffer.alt_buffer,
+                                           cursor_iter, dest_iter);
+                                     -- Switch to the alternate buffer
+                                    -- Gtk.Text_View.Set_Buffer
+                                       --         (view  => the_term.terminal,
+                                       --          buffer=> on_buffer.alt_buffer);
+                                 elsif for_sequence(chr_pos) = 'l'
+                                 then  -- switch back to the regular buffer
+                                    -- Set the flags to indicate which buffer
+                                    on_buffer.alternative_screen_buffer:=false;
+                                     -- Switch to the main regular buffer
+                                    -- Gtk.Text_View.Set_Buffer
+                                       --         (view  => the_term.terminal,
+                                       --          buffer=> on_buffer);
+                                 end if;
+                              end;
                            when 2004 =>  -- bracketed paste mode, text pasted in
                               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?2004' - Setting on_buffer.bracketed_paste_mode.");
                               if for_sequence(chr_pos) = 'h'
@@ -902,8 +932,8 @@ separate (Gtk.Terminal)
    start_iter : Gtk.Text_Iter.Gtk_Text_Iter;
    end_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
    cursor_mark: Gtk.Text_Mark.Gtk_Text_Mark;
-   ist : constant integer := the_input'First;
-   res : boolean;
+   ist        : constant integer := the_input'First;
+   res        : boolean;
 begin  -- Process
    for_buffer.in_response := true;
    Get_End_Iter(for_buffer, end_iter);
@@ -985,23 +1015,19 @@ begin  -- Process
        -- insert the tab stop by inserting spaces
       Insert_At_Cursor(for_buffer, the_text=>Tab_chr(1..tab_stop));
    elsif the_input = BS_str then
-      -- Move the cursor back one character (deleting the character) --(without deleting the character)
       -- Move the cursor back one character (without deleting the character)
-      -- First, get the cursor location
-      cursor_mark := Get_Insert(for_buffer);   
-      Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
-   --    -- Then execute the Backspace function
-      -- res := Backspace(for_buffer, end_iter, true, true);
-      -- Then move back one character
-      Backward_Char(end_iter, res);
-      if res then
-         Move_Mark(for_buffer, cursor_mark, end_iter);
-      end if;
-      -- Now lock only this portion of text from editing
-      if (not for_buffer.history_review) then
-         Get_Start_Iter(for_buffer, start_iter);
-         Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
-      end if;
+      -- We use the Process_Escape procedure as that works (but doing it here
+      -- doesn't for some very strange reason).
+      Process_Escape(for_sequence => esc_str & "[D", on_buffer => for_buffer);
+   --    -- Now lock only this portion of text from editing
+      -- if (not for_buffer.history_review) then
+         -- Get_Start_Iter(for_buffer, start_iter);
+         -- cursor_mark := Get_Insert(for_buffer);   
+         -- Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
+         -- Backward_Line(end_iter, res);
+         -- Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : BS - modified history_text tag start and end.");
+      -- end if;
    else  -- An ordinary character
       if for_buffer.markup_text = Null_Ptr
       then  -- not in some kind of mark-up so just add the text
@@ -1019,19 +1045,21 @@ begin  -- Process
    -- if (not for_buffer.bracketed_paste_mode) and (not for_buffer.history_review)
    if (not for_buffer.history_review)
    then  -- can lock down uneditable region and set anchor_point
-      Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
       -- Ensure this displayed text cannot be edited
       Get_Start_Iter(for_buffer, start_iter);
       cursor_mark := Get_Insert(for_buffer);
       Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
       if the_input /= BS_str then  -- don't lock if in back space
+         Backward_Line(end_iter, res);
          Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
+         Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);  -- restore it
       end if;
       -- and move the anchor_point where reading can commence from forward
       Get_Iter_At_Line(for_buffer, start_iter,
                        Glib.Gint(for_buffer.line_number-1));
       for_buffer.anchor_point := 
                   UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
+      Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    elsif for_buffer.history_review
    then  -- Command line (e.g. Bash) history scrolling taking place
       declare
