@@ -250,7 +250,6 @@ package body Gtk.Terminal is
          Set_Size (terminal => the_terminal, columns => nowrap_size, rows => 25);
          -- Create the alternative buffer (as per xterm)
          Gtk_New(the_terminal.buffer.alt_buffer);
-         -- the_terminal.buffer.alt_buffer.parent := the_terminal.terminal;
          -- Ensure the terminal's cursor is visible when it is shown
       --    On_Show(self=>the_terminal.terminal, call=>Show'access, after=>false);
       end if;
@@ -585,8 +584,12 @@ package body Gtk.Terminal is
          else  -- standard sequence
             Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
          end if;
-         the_terminal.buffer.history_review := true;
-         Set_Overwrite(the_terminal.terminal, true);
+         if for_event.keyval = GDK_Up or for_event.keyval = GDK_Down
+         then  -- these keys are about starting/continuing history review
+            the_terminal.buffer.history_review := true;
+            the_terminal.buffer.switch_light_cb(3, true);
+            Set_Overwrite(the_terminal.terminal, true);
+         end if;
          return true;
       elsif (not the_terminal.buffer.bracketed_paste_mode) and the_key /= esc_start
       then  -- in an app: we have set it to pass to the write routine
@@ -606,7 +609,7 @@ package body Gtk.Terminal is
       end if;
    end Scroll_Key_Press_Check;
 -- 
-   -- procedure Show (the_terminal : access Gtk_Widget_Record'Class) is
+   -- procedure Show (the_terminal : access Gtk_Widget_Record'Class) is  -- DOESN'T WORK
 --       -- Respond to being shown by ensuring the cursor is visible.
       -- the_term      : Gtk_Text_View := Gtk_Text_View(the_terminal);
       -- this_terminal : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
@@ -765,12 +768,18 @@ package body Gtk.Terminal is
       --  "iter": a position in the buffer
       --  "text": text in UTF-8 format
       use Gtk.Text_Iter;
-      buffer   : access Gtk_Terminal_Buffer_Record'Class renames into;
+      buffer   : Gtk.Text_Buffer.Gtk_Text_Buffer;
       end_iter : Gtk.Text_Iter.Gtk_Text_Iter;
       result   : boolean;
    begin
+      if into.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := into.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(into);
+      end if;
       Get_End_Iter(buffer, end_iter);
-      if Get_Overwrite(buffer.parent) and then  -- if in 'overwrite' mode
+      if Get_Overwrite(into.parent) and then  -- if in 'overwrite' mode
          Compare(at_iter, end_iter) < 0
       then  -- delete the character at the iter before inserting the new one
          end_iter := at_iter;
@@ -789,7 +798,13 @@ package body Gtk.Terminal is
       use Gtk.Text_Iter;
       cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
    begin
-      Get_Iter_At_Mark(into, cursor_iter, Get_Insert(into));
+      if into.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         Get_Iter_At_Mark(into.alt_buffer, cursor_iter, 
+                          Get_Insert(into.alt_buffer));
+      else  -- using the main buffer for display
+         Get_Iter_At_Mark(into, cursor_iter, Get_Insert(into));
+      end if;
       Gtk.Terminal.Insert(into, at_iter => cursor_iter, the_text => the_text);
    end Insert_At_Cursor;
    
@@ -952,6 +967,7 @@ package body Gtk.Terminal is
          raise Terminal_IO_Error;
       end if;
    
+      Error_Log.Debug_Data(at_level => 9, with_details => "Write: sending to system's VT '" & Ada.Characters.Conversions.To_Wide_String(Buffer) & "'.");
       res := C_Write(fd => fd, data => out_buffer, len => Interfaces.C.int(len));
       Free (out_buffer);
    
@@ -1052,12 +1068,15 @@ package body Gtk.Terminal is
             ((for_string(for_string'Last) = Ada.Characters.Latin_1.LF and
               (not(for_string'Length > 1 and then
                    for_string(for_string'Last-1) = '\'))) or
-             ((not for_buffer.use_buffer_editing) or 
-              (not for_buffer.bracketed_paste_mode)))
+             ((not for_buffer.use_buffer_editing) ))--or 
+              --(not for_buffer.bracketed_paste_mode)))
          then  -- Return/Enter key has been pressed + not line continuation
             -- Reset the history processing indicator value
-            for_buffer.history_review := false;
-            Set_Overwrite(for_buffer.parent, false);
+            if for_string(for_string'Last) = Ada.Characters.Latin_1.LF then
+               for_buffer.history_review := false;
+               for_buffer.switch_light_cb(3, false);
+               Set_Overwrite(for_buffer.parent, false);
+            end if;
             Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
             -- Process the keys through to the terminal
             the_fds := new Gtk.Terminal.CInterface.poll_fd;
@@ -1120,6 +1139,15 @@ package body Gtk.Terminal is
                exit when res > 0 and then the_fds.revents = POLLOUT;
                delay 0.05;  -- seconds
             end loop;
+            -- First, undo the key press in the buffer
+            declare
+               cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+               res : boolean;
+            begin
+               Get_Iter_At_Mark(for_buffer, cursor_iter, Get_Insert(for_buffer));
+               res := Backspace(for_buffer, cursor_iter, false, true);
+            end;
+            -- Now output that key that was pressed
             Write(fd => for_buffer.master_fd, Buffer => for_string);
             -- Put ourselves into a 'waiting for response' mode
             if for_buffer.bracketed_paste_mode then
@@ -1137,12 +1165,17 @@ package body Gtk.Terminal is
       then  -- Spawn_Shell has been run for this terminal buffer
          for_buffer.in_esc_sequence := false;
          -- Get the key(s) pressed
-         Get_End_Iter(for_buffer, end_iter);
+         if for_buffer.history_review
+         then  -- use the cursor position to copy up to
+            Get_Iter_At_Mark(for_buffer, end_iter, Get_Insert(for_buffer));
+         else  -- getting entire line (so the end point
+            Get_End_Iter(for_buffer, end_iter);
+         end if;
          if for_buffer.anchor_point = 0
          then  -- start_iter is at the start of the line
             Get_Iter_At_Line(for_buffer, start_iter,
                              Glib.Gint(for_buffer.line_number-1));
-         else
+         else  -- start_iter is at anchor_point in the current line(s)
             Get_Iter_At_Line_Index(for_buffer, start_iter, 
                                    Glib.Gint(for_buffer.line_number-1),
                                    Glib.Gint(for_buffer.anchor_point));
@@ -1170,7 +1203,8 @@ package body Gtk.Terminal is
                           environment : UTF8_String := "";
                           use_buffer_for_editing : boolean := true;
                           title_callback : Spawn_Title_Callback;
-                          callback : Spawn_Closed_Callback) is
+                          callback : Spawn_Closed_Callback;
+                          switch_light    : Switch_Light_Callback) is
       -- Principally, spawn a terminal shell.  This procedure does the initial
       -- Terminal Configuration Management (encoding, size, etc).  This
       -- procedure actually launches the terminal, making sure that it is
@@ -1356,6 +1390,7 @@ package body Gtk.Terminal is
       terminal.closed_callback := callback;
       terminal.title_callback  := title_callback;
       terminal.buffer.use_buffer_editing := use_buffer_for_editing;
+      terminal.buffer.switch_light_cb := switch_light;
       Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Set up callbacks done.  terminal.master_fd initialised at" & terminal.master_fd'Wide_Image & ".");
       -- Get the file descriptors and spawn the child
       child_pid := Fork_Pseudo_Terminal(with_fd  => terminal.master_fd'Address,
@@ -1717,5 +1752,3 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
-
-

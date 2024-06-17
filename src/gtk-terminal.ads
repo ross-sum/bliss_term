@@ -125,6 +125,8 @@ package Gtk.Terminal is
    type Spawn_Title_Callback is access procedure
         (terminal : Gtk_Terminal; title : UTF8_String);
    type Spawn_Closed_Callback is access procedure (terminal : Gtk_Terminal);
+   type Switch_Light_Callback is access procedure (at_light_number : natural;
+                                                   to_on : boolean := false);
 
    type Cb_Gtk_Terminal_Void is access 
                            procedure (Self : access Gtk_Terminal_Record'Class);
@@ -151,7 +153,8 @@ package Gtk.Terminal is
                           environment : UTF8_String := "";
                           use_buffer_for_editing : boolean := true;
                           title_callback : Spawn_Title_Callback;
-                          callback       : Spawn_Closed_Callback);
+                          callback       : Spawn_Closed_Callback;
+                          switch_light   : Switch_Light_Callback);
       -- Principally, spawn a terminal shell.  This procedure does the initial
       -- Terminal Configuration Management (encoding, size, etc).  This
       -- procedure actually launches the terminal, making sure that it is
@@ -333,6 +336,7 @@ package Gtk.Terminal is
          parent              : Gtk.Text_View.Gtk_Text_View;
          -- The alternative buffer (to emulate an xterm)
          alt_buffer          : Gtk.Text_Buffer.Gtk_Text_Buffer;
+         switch_light_cb     : Switch_Light_Callback;
       end record;
    type Gtk_Terminal_Buffer is access all Gtk_Terminal_Buffer_Record'Class;
    

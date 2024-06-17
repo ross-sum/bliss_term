@@ -213,11 +213,12 @@ package body Terminal is
                               command => Encode(Host_Functions.
                                    Get_Environment_Value(for_variable=>"SHELL")),
                               environment => 
-                                    Encode(To_String(Setup.Set_User_Environment_Variables)),
+                                   Encode(To_String(Setup.Set_User_Environment_Variables)),
                               use_buffer_for_editing => 
                                        (Internal_Edit_Method = using_textview),
                               title_callback => Setup.Title_Changed'Access,
-                              callback => Setup.Child_Closed'Access);
+                              callback => Setup.Child_Closed'Access,
+                               switch_light => Setup.Switch_The_Light'Access);
       -- Load the setup for the tab's window
       Setup.Load_Setup(to_terminal_window => the_terminal);
       Gtk.Terminal.Set_ID(for_terminal => the_terminal, to => term_num);

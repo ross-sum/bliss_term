@@ -286,11 +286,13 @@ separate (Gtk.Terminal)
                            if on_buffer.bracketed_paste_mode
                            then  -- sequence following not commands
                               on_buffer.pass_through_characters := true;
+                              on_buffer.switch_light_cb(4, true);
                            end if;
                         when 201 => -- may not treat characters as command?
                            if on_buffer.bracketed_paste_mode
                            then  -- start reinterpreting sequences as commands
                               on_buffer.pass_through_characters := false;
+                              on_buffer.switch_light_cb(4, false);
                            end if;
                         when others => -- not yet implemented
                            Handle_The_Error(the_error => 2, 
@@ -630,6 +632,7 @@ separate (Gtk.Terminal)
                                  the_term : Gtk_Terminal := 
                                     Gtk_Terminal(Get_Parent(on_buffer.parent));
                               begin
+                                 Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1049' - Switching between main and alternative screen buffer.");
                                  if for_sequence(chr_pos) = 'h'
                                  then  -- switch to the alternate screen buffer
                                     -- Set the flags to indicate which buffer
@@ -641,17 +644,19 @@ separate (Gtk.Terminal)
                                     Delete(on_buffer.alt_buffer,
                                            cursor_iter, dest_iter);
                                      -- Switch to the alternate buffer
-                                    -- Gtk.Text_View.Set_Buffer
-                                       --         (view  => the_term.terminal,
-                                       --          buffer=> on_buffer.alt_buffer);
+                                    Gtk.Text_View.Set_Buffer
+                                               (view  => the_term.terminal,
+                                                buffer=> on_buffer.alt_buffer);
+                                    on_buffer.switch_light_cb(1, false);
                                  elsif for_sequence(chr_pos) = 'l'
                                  then  -- switch back to the regular buffer
                                     -- Set the flags to indicate which buffer
                                     on_buffer.alternative_screen_buffer:=false;
                                      -- Switch to the main regular buffer
-                                    -- Gtk.Text_View.Set_Buffer
-                                       --         (view  => the_term.terminal,
-                                       --          buffer=> on_buffer);
+                                    Gtk.Text_View.Set_Buffer
+                                               (view  => the_term.terminal,
+                                                buffer=> on_buffer);
+                                    on_buffer.switch_light_cb(1, true);
                                  end if;
                               end;
                            when 2004 =>  -- bracketed paste mode, text pasted in
@@ -659,12 +664,14 @@ separate (Gtk.Terminal)
                               if for_sequence(chr_pos) = 'h'
                               then  -- switch on echo if config allows
                                  on_buffer.bracketed_paste_mode := true;
+                                 on_buffer.switch_light_cb(2, true);
                               elsif for_sequence(chr_pos) = 'l'
                               then  -- switch off keyboard echo + paste in
                                  on_buffer.bracketed_paste_mode := false;
                                  Get_End_Iter(on_buffer, cursor_iter);
                                  Move_Mark_By_Name(on_buffer, "end_paste", 
                                                    cursor_iter);
+                                 on_buffer.switch_light_cb(2, false);
                               end if;
                            when others =>  -- not valid and not interpreted
                               Handle_The_Error(the_error => 4, 
@@ -934,8 +941,15 @@ separate (Gtk.Terminal)
    cursor_mark: Gtk.Text_Mark.Gtk_Text_Mark;
    ist        : constant integer := the_input'First;
    res        : boolean;
+   the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
 begin  -- Process
    for_buffer.in_response := true;
+   if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+      the_buf := for_buffer.alt_buffer;
+   else  -- using the main buffer for display
+      the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+   end if;
    Get_End_Iter(for_buffer, end_iter);
    Error_Log.Debug_Data(at_level => 9, with_details => "Process : '" & Ada.Characters.Conversions.To_Wide_String(the_input) & ''');
    if for_buffer.escape_sequence(escape_str_range'First) = Esc_str(1) then
@@ -1043,7 +1057,7 @@ begin  -- Process
    -- then adjust the editing of the displayed text and adjust the anchor
    -- point.
    -- if (not for_buffer.bracketed_paste_mode) and (not for_buffer.history_review)
-   if (not for_buffer.history_review)
+   if (not for_buffer.history_review) -- and not (SOMETHING THAT SAYS WE ARE IN AN APPLICATION LIKE LESS OR VI)
    then  -- can lock down uneditable region and set anchor_point
       -- Ensure this displayed text cannot be edited
       Get_Start_Iter(for_buffer, start_iter);
@@ -1078,6 +1092,12 @@ begin  -- Process
             Move_Mark(for_buffer, unedit_mark, end_iter);
          end if;
       end;
+      -- and move the anchor_point where the cursor currently is
+      Get_Iter_At_Line(for_buffer, start_iter,
+                       Glib.Gint(for_buffer.line_number-1));
+      for_buffer.anchor_point := 
+                  UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
+      Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    else  -- Must be an application operating in the terminal
       Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.history_review is set. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    end if;

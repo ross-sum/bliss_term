@@ -43,6 +43,7 @@ with Gtk.Widget; with Gtk.Main;
 with Gtk.Window;
 with Gtk.Label, Gtk.Check_Button, Gtk.Color_Button;
 with Gtk.Tool_Button, Gtk.Font_Button, Gtk.Spin_Button;
+with Gtk.Toggle_Tool_Button;
 with Gtk.Combo_Box;
 with Gtk.Notebook;
 with Gtk.Text_Buffer, Gtk.Text_Iter;
@@ -145,6 +146,29 @@ package body Setup is
       end if;
       Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Finish.");
    end Title_Changed;
+   
+   procedure Switch_The_Light(at_light_number : in natural; 
+                              to_on : in boolean := false) is
+      -- A debugging procedure to switch a status light
+      use Gtk.Toggle_Tool_Button;
+      the_light : Gtk.Toggle_Tool_Button.Gtk_Toggle_Tool_Button;
+   begin
+      case at_light_number is
+         when 1 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_main_screen_buffer"));
+            Set_Active(the_light, to_on);
+         when 2 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_bracketed_paste_mode"));
+            Set_Active(the_light, to_on);
+         when 3 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_in_history_list"));
+            Set_Active(the_light, to_on);
+         when 4 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_pass_through"));
+            Set_Active(the_light, to_on);
+         when others => null;  -- ignore
+      end case;
+   end Switch_The_Light;
 
    procedure Child_Closed(terminal: Gtk.Terminal.Gtk_Terminal) is
       -- Depending on which terminal (i.e. whether there is one or more left),
@@ -471,6 +495,7 @@ package body Setup is
          -- Start the new shell
          if not with_initially_setup then
             Error_Log.Debug_Data(at_level => 9, with_details => "Load_Data_From: Gtk.Terminal.Spawn_Shell with path='" & current_dir & " '.");
+            Switch_The_Light(1, true);
             Gtk.Terminal.Spawn_Shell(terminal => the_terminal,
                                 working_directory=>To_UTF8_String(current_dir),
                                 command => Encode(Host_Functions.
@@ -480,7 +505,8 @@ package body Setup is
                                 use_buffer_for_editing => 
                                        (Internal_Edit_Method = using_textview),
                                 title_callback => Title_Changed'Access,
-                                callback => Child_Closed'Access);
+                                callback => Child_Closed'Access,
+                                switch_light => Switch_The_Light'Access);
             initially_setup := true;
             Error_Log.Debug_Data(at_level => 9, with_details => "Load_Data_From: Gtk.Terminal.Spawn_Shell done.");
          end if;
