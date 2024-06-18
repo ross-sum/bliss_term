@@ -40,6 +40,11 @@ package Help_About is
                                    usage : in text);
    procedure Show_Help_About(Builder : in Gtkada_Builder);
 
+   procedure Switch_The_Light( at_light_number : in natural; 
+                              to_on : in boolean := false);
+      -- A debugging procedure to switch a status light on for display on one
+      -- of the help tabs.
+
 private
    use Gtk.Widget, Gdk.Event;
 

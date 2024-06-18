@@ -136,12 +136,12 @@ package body Terminal is
       end;
       
       -- Set up child forms
+      Help_About.Initialise_Help_About(Builder, usage);
+      Error_Log.Debug_Data(at_level => 9, with_details => "Initialise_Terminal: Help_About initialised.");
       Setup.Initialise_Setup(Builder, 
                              from_configuration_file => at_config_path,
                              using_css => css_file, 
                              usage => usage);
-      Help_About.Initialise_Help_About(Builder, usage);
-      Error_Log.Debug_Data(at_level => 9, with_details => "Initialise_Terminal: Help_About initialised.");
       CSS_Management.Load(the_window => main_window);
       Error_Log.Debug_Data(at_level => 9, with_details => "Initialise_Terminal: CSS_Management.Load run.");
       
@@ -209,16 +209,16 @@ package body Terminal is
       Gtk.Notebook.Set_Current_Page(the_notebook, -1);  -- set to last page
       -- Start the new shell
       Gtk.Terminal.Spawn_Shell(terminal => the_terminal,
-                              working_directory=>"",
-                              command => Encode(Host_Functions.
+                               working_directory=>"",
+                               command => Encode(Host_Functions.
                                    Get_Environment_Value(for_variable=>"SHELL")),
-                              environment => 
+                               environment => 
                                    Encode(To_String(Setup.Set_User_Environment_Variables)),
-                              use_buffer_for_editing => 
+                               use_buffer_for_editing => 
                                        (Internal_Edit_Method = using_textview),
-                              title_callback => Setup.Title_Changed'Access,
-                              callback => Setup.Child_Closed'Access,
-                               switch_light => Setup.Switch_The_Light'Access);
+                               title_callback => Setup.Title_Changed'Access,
+                               callback => Setup.Child_Closed'Access,
+                               switch_light => Help_About.Switch_The_Light'Access);
       -- Load the setup for the tab's window
       Setup.Load_Setup(to_terminal_window => the_terminal);
       Gtk.Terminal.Set_ID(for_terminal => the_terminal, to => term_num);

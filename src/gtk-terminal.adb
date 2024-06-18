@@ -759,18 +759,20 @@ package body Gtk.Terminal is
    procedure Insert  (into     : access Gtk_Terminal_Buffer_Record'Class;
                       at_iter  : in out Gtk.Text_Iter.Gtk_Text_Iter;
                       the_text : UTF8_String) is
-      --  Inserts Len bytes of Text at position Iter. If Len is -1, Text must be
-      --  nul-terminated and will be inserted in its entirety. Emits the
-      --  "insert-text" signal; insertion actually occurs in the default handler
-      --  for the signal. Iter is invalidated when insertion occurs (because the
-      --  buffer contents change), but the default signal handler revalidates it
-      --  to point to the end of the inserted text.
-      --  "iter": a position in the buffer
-      --  "text": text in UTF-8 format
+      -- Inserts the_text at position at_iter. The_text will be inserted in its
+      -- entirety. Emits the "insert-text" signal; insertion actually occurs in
+      -- the default handler for the signal. Iter is invalidated when insertion
+      -- occurs (because the buffer contents change), but the default signal
+      -- handler revalidates it to point to the end of the inserted text.
+      -- If in overwrite, will overwrite existing text from the cursor point
+      -- onwards, rather than insert it.
+      -- "at_iter": a position in the buffer
+      -- "the_text": text in UTF-8 format
       use Gtk.Text_Iter;
-      buffer   : Gtk.Text_Buffer.Gtk_Text_Buffer;
-      end_iter : Gtk.Text_Iter.Gtk_Text_Iter;
-      result   : boolean;
+      buffer    : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      end_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
+      delete_ch : Gtk.Text_Iter.Gtk_Text_Iter;
+      result    : boolean;
    begin
       if into.alternative_screen_buffer
        then  -- using the alternative buffer for display
@@ -779,11 +781,14 @@ package body Gtk.Terminal is
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(into);
       end if;
       Get_End_Iter(buffer, end_iter);
-      if Get_Overwrite(into.parent) and then  -- if in 'overwrite' mode
-         Compare(at_iter, end_iter) < 0
-      then  -- delete the character at the iter before inserting the new one
-         end_iter := at_iter;
-         Forward_Char(end_iter, result);
+      if Get_Overwrite(into.parent) -- if in 'overwrite' mode
+      then  -- delete the characters at the iter before inserting the new one
+         delete_ch := at_iter;
+         Forward_Chars(delete_ch, the_text'Length, result);
+         if Compare(delete_ch, end_iter) < 0
+         then  -- more than enough characters to delete
+            end_iter := delete_ch;
+         end if;  -- (otherwise delete as many as possible)
          Delete(buffer, at_iter, end_iter);
       end if;
       -- Now call the inherited Insert operation
@@ -1752,3 +1757,4 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+

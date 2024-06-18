@@ -74,10 +74,6 @@ package Setup is
    function Get_Tab_Count return natural;
       -- Get the tab count as understood by the configuration data.
 
-   procedure Switch_The_Light( at_light_number : in natural; 
-                              to_on : in boolean := false);
-      -- A debugging procedure to switch a status light
-
 private
    use Gtk.Terminal;
    

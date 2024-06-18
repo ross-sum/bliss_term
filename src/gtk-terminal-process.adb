@@ -268,13 +268,15 @@ separate (Gtk.Terminal)
                      then
                         param(1) := 1;
                      end if;
+                     -- Insert the spaces, leaving the cursor where it is
+                     Gtk.Text_Buffer.Insert_At_Cursor(Gtk_Text_Buffer(on_buffer), 
+                                                      text => (param(1)*' '));
                      -- Get the current cursor position
                      Get_Iter_At_Mark(on_buffer, cursor_iter,
                                       Get_Insert(on_buffer));
-                     -- Insert the spaces, leaving the cursor where it is
-                     Insert_At_Cursor(on_buffer, the_text=>(param(1)*' '));
                      -- Move the cursor back to the starting point
-                     Place_Cursor(on_buffer, cursor_iter);
+                     Backward_Chars(cursor_iter, Glib.Gint(param(1)), res);
+                     Place_Cursor(on_buffer, where => cursor_iter);
                   when '~' =>  -- Non-standard, but used for going to end (VT)
                      case param(1) is
                         when 4 => -- VT sequence for End [non-standard]
@@ -380,21 +382,19 @@ separate (Gtk.Terminal)
                      then
                         param(1) := 1;
                      end if;
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going forward by" & param(1)'Wide_Image & " characters.  Line Length =" & Get_Chars_In_Line(cursor_iter)'Wide_Image & ", current column =" & UTF8_Length(Get_Line_From_Start(on_buffer, cursor_iter))'Wide_Image & ".");
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : [" & param(1)'Wide_Image & "C - Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going forward by" & param(1)'Wide_Image & " characters.  Line Length =" & Get_Chars_In_Line(cursor_iter)'Wide_Image & ", current column =" & UTF8_Length(Get_Line_From_Start(on_buffer, cursor_iter))'Wide_Image & ".");
+                     res := true;  -- Initial value
                      for col in 1 .. param(1) loop
-                        Forward_Char(cursor_iter, res);
-                        if not res or else
-                           Starts_Display_Line(on_buffer.parent, cursor_iter)
-                        then  -- no more characters right
-                           if Starts_Display_Line(on_buffer.parent,cursor_iter)
-                           then  -- go back to previous position
-                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : [" & param(1)'Wide_Image & "C: Going back one character to line before " & Get_Line(cursor_iter)'Wide_Image & ".");
-                              Backward_Char(cursor_iter, res);
-                           end if;
+                        Get_End_Iter(on_buffer, dest_iter);
+                        if Equal(cursor_iter, dest_iter) or not res
+                        then  -- already at the end of the line
                               -- Pad out with a space character
+                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : [" & param(1)'Wide_Image & "C: Either NOT Res (" & res'Wide_Image & ") or cursor_iter = End of Line.");
                            Insert(on_buffer, at_iter=>cursor_iter,
                                   the_text=>" ");
+                           Backward_Char(cursor_iter, res);
                         end if;
+                        Forward_Char(cursor_iter, res);
                      end loop;
                      -- Now make this the cursor location
                      Place_Cursor(on_buffer, where => cursor_iter);

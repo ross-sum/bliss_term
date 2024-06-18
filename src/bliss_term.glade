@@ -160,7 +160,7 @@ Author: Ross Summerfield
               <object class="GtkToggleToolButton" id="light_pass_through">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="tooltip-text" translatable="yes">Pass through text on/off</property>
+                <property name="tooltip-text" translatable="yes">Pass through text on/off.  When bracketed paste mode is on and this is on, programs running in the terminal (e.g. Vi) should not treat characters as commands.</property>
                 <property name="use-underline">True</property>
               </object>
               <packing>

@@ -37,9 +37,11 @@ with Gtk.Window;
 -- with Error_Log;
 with Bliss_Term_Version;
 with Gtk.Label;
+with Gtk.Toggle_Tool_Button;
 with String_Conversions;
 package body Help_About is
 
+   the_builder          : Gtkada_Builder;
 
    procedure Initialise_Help_About(Builder : in out Gtkada_Builder;
                                    usage : in text) is
@@ -51,6 +53,7 @@ package body Help_About is
       usage_dets   : gtk_label;
       help_about   : gtk_window;
    begin
+      the_builder := Builder;  -- save for later use
       -- Initialise: hide the close button in the top right hand corner
       help_about := Gtk_Window(Builder.Get_Object("dialogue_about"));
       -- Set_Deletable(help_about, false);
@@ -124,6 +127,29 @@ package body Help_About is
    begin
       return Gtk.Widget.Hide_on_Delete(Object);
    end On_Delete_Request;
+   
+   procedure Switch_The_Light(at_light_number : in natural; 
+                              to_on : in boolean := false) is
+      -- A debugging procedure to switch a status light
+      use Gtk.Toggle_Tool_Button;
+      the_light : Gtk.Toggle_Tool_Button.Gtk_Toggle_Tool_Button;
+   begin
+      case at_light_number is
+         when 1 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_main_screen_buffer"));
+            Set_Active(the_light, to_on);
+         when 2 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_bracketed_paste_mode"));
+            Set_Active(the_light, to_on);
+         when 3 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_in_history_list"));
+            Set_Active(the_light, to_on);
+         when 4 => 
+            the_light := gtk_toggle_tool_button(Get_Object(the_builder, "light_pass_through"));
+            Set_Active(the_light, to_on);
+         when others => null;  -- ignore
+      end case;
+   end Switch_The_Light;
   
 begin
    Bliss_Term_Version.Register(revision => "$Revision: v1.0.0$",
