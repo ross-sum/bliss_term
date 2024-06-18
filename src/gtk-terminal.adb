@@ -587,7 +587,7 @@ package body Gtk.Terminal is
          if for_event.keyval = GDK_Up or for_event.keyval = GDK_Down
          then  -- these keys are about starting/continuing history review
             the_terminal.buffer.history_review := true;
-            the_terminal.buffer.switch_light_cb(3, true);
+            Switch_The_Light(the_terminal.buffer, 2, true);
             Set_Overwrite(the_terminal.terminal, true);
          end if;
          return true;
@@ -608,6 +608,22 @@ package body Gtk.Terminal is
          return false;
       end if;
    end Scroll_Key_Press_Check;
+
+   procedure Switch_The_Light (for_buffer : access Gtk_Terminal_Buffer_Record'Class;
+                               at_light_number : natural;
+                               to_on : boolean := false;
+                               with_status : UTF8_String := "") is
+      -- Check that the switch_light_cb call back procedure is assigned.  If
+      -- so, execute it, otherwise, just ignore and continue processing.
+      the_term  : Gtk_Text_View := for_buffer.parent;
+      the_terminal : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
+   begin
+      if for_buffer.switch_light_cb /= null
+      then  -- it is assigned, so process it
+         for_buffer.switch_light_cb (the_terminal, 
+                                     at_light_number, to_on, with_status);
+      end if;
+   end Switch_The_Light;
 -- 
    -- procedure Show (the_terminal : access Gtk_Widget_Record'Class) is  -- DOESN'T WORK
 --       -- Respond to being shown by ensuring the cursor is visible.
@@ -1079,7 +1095,7 @@ package body Gtk.Terminal is
             -- Reset the history processing indicator value
             if for_string(for_string'Last) = Ada.Characters.Latin_1.LF then
                for_buffer.history_review := false;
-               for_buffer.switch_light_cb(3, false);
+               Switch_The_Light(for_buffer, 2, false);
                Set_Overwrite(for_buffer.parent, false);
             end if;
             Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
@@ -1757,4 +1773,3 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
-

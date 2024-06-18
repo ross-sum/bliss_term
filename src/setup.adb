@@ -471,7 +471,7 @@ package body Setup is
          -- Start the new shell
          if not with_initially_setup then
             Error_Log.Debug_Data(at_level => 9, with_details => "Load_Data_From: Gtk.Terminal.Spawn_Shell with path='" & current_dir & " '.");
-            Help_About.Switch_The_Light(1, true);
+            Help_About.Switch_The_Light(the_terminal, 1, true);
             Gtk.Terminal.Spawn_Shell(terminal => the_terminal,
                                 working_directory=>To_UTF8_String(current_dir),
                                 command => Encode(Host_Functions.

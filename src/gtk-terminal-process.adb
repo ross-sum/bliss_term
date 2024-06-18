@@ -288,13 +288,13 @@ separate (Gtk.Terminal)
                            if on_buffer.bracketed_paste_mode
                            then  -- sequence following not commands
                               on_buffer.pass_through_characters := true;
-                              on_buffer.switch_light_cb(4, true);
+                              Switch_The_Light(on_buffer, 4, true);
                            end if;
                         when 201 => -- may not treat characters as command?
                            if on_buffer.bracketed_paste_mode
                            then  -- start reinterpreting sequences as commands
                               on_buffer.pass_through_characters := false;
-                              on_buffer.switch_light_cb(4, false);
+                              Switch_The_Light(on_buffer, 4, false);
                            end if;
                         when others => -- not yet implemented
                            Handle_The_Error(the_error => 2, 
@@ -647,7 +647,7 @@ separate (Gtk.Terminal)
                                     Gtk.Text_View.Set_Buffer
                                                (view  => the_term.terminal,
                                                 buffer=> on_buffer.alt_buffer);
-                                    on_buffer.switch_light_cb(1, false);
+                                    Switch_The_Light(on_buffer, 1, false);
                                  elsif for_sequence(chr_pos) = 'l'
                                  then  -- switch back to the regular buffer
                                     -- Set the flags to indicate which buffer
@@ -656,7 +656,7 @@ separate (Gtk.Terminal)
                                     Gtk.Text_View.Set_Buffer
                                                (view  => the_term.terminal,
                                                 buffer=> on_buffer);
-                                    on_buffer.switch_light_cb(1, true);
+                                    Switch_The_Light(on_buffer, 1, true);
                                  end if;
                               end;
                            when 2004 =>  -- bracketed paste mode, text pasted in
@@ -664,14 +664,14 @@ separate (Gtk.Terminal)
                               if for_sequence(chr_pos) = 'h'
                               then  -- switch on echo if config allows
                                  on_buffer.bracketed_paste_mode := true;
-                                 on_buffer.switch_light_cb(2, true);
+                                 Switch_The_Light(on_buffer, 3, true);
                               elsif for_sequence(chr_pos) = 'l'
                               then  -- switch off keyboard echo + paste in
                                  on_buffer.bracketed_paste_mode := false;
                                  Get_End_Iter(on_buffer, cursor_iter);
                                  Move_Mark_By_Name(on_buffer, "end_paste", 
                                                    cursor_iter);
-                                 on_buffer.switch_light_cb(2, false);
+                                 Switch_The_Light(on_buffer, 3, false);
                               end if;
                            when others =>  -- not valid and not interpreted
                               Handle_The_Error(the_error => 4, 

@@ -31,8 +31,9 @@
 --                                                                   --
 -----------------------------------------------------------------------
 with Gtkada.Builder;  use Gtkada.Builder;
-with Glib.Object, Gtk.Widget, Gdk.Event;
+with Glib, Glib.Object, Gtk.Widget, Gdk.Event;
 with dStrings;        use dStrings;
+with Gtk.Terminal;
 package Help_About is
 
 
@@ -40,8 +41,10 @@ package Help_About is
                                    usage : in text);
    procedure Show_Help_About(Builder : in Gtkada_Builder);
 
-   procedure Switch_The_Light( at_light_number : in natural; 
-                              to_on : in boolean := false);
+   procedure Switch_The_Light(for_terminal : Gtk.Terminal.Gtk_Terminal;
+                              at_light_number : in natural; 
+                              to_on : in boolean := false;
+                              with_status : Glib.UTF8_String := "");
       -- A debugging procedure to switch a status light on for display on one
       -- of the help tabs.
 

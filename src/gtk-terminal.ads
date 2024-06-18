@@ -125,8 +125,10 @@ package Gtk.Terminal is
    type Spawn_Title_Callback is access procedure
         (terminal : Gtk_Terminal; title : UTF8_String);
    type Spawn_Closed_Callback is access procedure (terminal : Gtk_Terminal);
-   type Switch_Light_Callback is access procedure (at_light_number : natural;
-                                                   to_on : boolean := false);
+   type Switch_Light_Callback is access procedure (for_terminal : Gtk_Terminal;
+                                                   at_light_number : natural;
+                                                   to_on : boolean := false;
+                                                   with_status:UTF8_String:="");
 
    type Cb_Gtk_Terminal_Void is access 
                            procedure (Self : access Gtk_Terminal_Record'Class);
@@ -439,6 +441,13 @@ package Gtk.Terminal is
       -- display.
       -- For it to work, every terminal must register it's buffer into the
       -- display_output_handling_buffer (done as a part of Spawn_Shell).
+
+   procedure Switch_The_Light (for_buffer : access Gtk_Terminal_Buffer_Record'Class;
+                               at_light_number : natural;
+                               to_on : boolean := false;
+                               with_status : UTF8_String := "");
+      -- Check that the switch_light_cb call back procedure is assigned.  If
+      -- so, execute it, otherwise, just ignore and continue processing.
 
    ------------------
    -- Gtk Terminal --
