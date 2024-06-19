@@ -38,7 +38,7 @@ with Gtk.Window;
 -- with Error_Log;
 with Bliss_Term_Version;
 with Gtk.Label;
-with Gtk.Check_Button, Gtk.Toggle_Tool_Button;
+with Gtk.Check_Button, Gtk.GEntry;
 with String_Conversions;
 package body Help_About is
 
@@ -134,44 +134,54 @@ package body Help_About is
                               to_on : in boolean := false;
                               with_status : Glib.UTF8_String := "") is
       -- A debugging procedure to switch a status light
-      use Gtk.Check_Button, Gtk.Label, Gtk.Toggle_Tool_Button;
-      the_lightb : Gtk.Toggle_Tool_Button.Gtk_Toggle_Tool_Button;
+      use Gtk.Check_Button, Gtk.Label, Gtk.GEntry;
       the_light  : Gtk.Check_Button.gtk_check_button;
+      the_entry  : Gtk.GEntry.gtk_entry;
       the_status : Gtk.Label.gtk_label;
    begin
       case at_light_number is
          when 1 => 
-            the_lightb := gtk_toggle_tool_button(Get_Object(the_builder, "light_main_screen_buffer"));
-            Set_Active(the_lightb, to_on);
             the_light := gtk_check_button(Get_Object(the_builder, 
                                           "status_checkbox_1"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_1"));
             the_status.Set_Label(with_status);
          when 2 => 
-            the_lightb := gtk_toggle_tool_button(Get_Object(the_builder, "light_in_history_list"));
-            Set_Active(the_lightb, to_on);
             the_light := gtk_check_button(Get_Object(the_builder, 
                                           "status_checkbox_2"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_2"));
             the_status.Set_Label(with_status);
          when 3 => 
-            the_lightb := gtk_toggle_tool_button(Get_Object(the_builder, "light_bracketed_paste_mode"));
-            Set_Active(the_lightb, to_on);
             the_light := gtk_check_button(Get_Object(the_builder, 
                                           "status_checkbox_3"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_3"));
             the_status.Set_Label(with_status);
          when 4 => 
-            the_lightb := gtk_toggle_tool_button(Get_Object(the_builder, "light_pass_through"));
-            Set_Active(the_lightb, to_on);
             the_light := gtk_check_button(Get_Object(the_builder, 
                                           "status_checkbox_4"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_4"));
             the_status.Set_Label(with_status);
+         when 5 => 
+            the_light := gtk_check_button(Get_Object(the_builder, 
+                                          "status_checkbox_5"));
+            Set_Active(the_light, to_on);
+            the_status := Gtk_Label(the_builder.Get_Object("status_label_5"));
+            the_status.Set_Label(with_status);
+         when 6 => 
+            the_entry := gtk_entry(Get_Object(the_builder, 
+                                          "status_entry_6"));
+            Set_Text(the_entry, with_status);
+         when 7 => 
+            the_entry := gtk_entry(Get_Object(the_builder, 
+                                          "status_entry_7"));
+            Set_Text(the_entry, with_status);
+         when 8 => 
+            the_entry := gtk_entry(Get_Object(the_builder, 
+                                          "status_entry_8"));
+            Set_Text(the_entry, with_status);
          when others => null;  -- ignore
       end case;
    end Switch_The_Light;

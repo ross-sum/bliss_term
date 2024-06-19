@@ -967,6 +967,7 @@ begin  -- Process
          -- is from the system's virtual terminal and it assumes that it is
          -- always in some form of overwrite mode
          Set_Overwrite(for_buffer.parent, true);
+         Switch_The_Light(for_buffer, 5, false);
          -- process it
          Process_Escape(for_sequence => 
                      for_buffer.escape_sequence(1..for_buffer.escape_position),
@@ -974,14 +975,27 @@ begin  -- Process
          -- reset the buffer and pointer
          for_buffer.escape_sequence := (escape_str_range => ' ');
          for_buffer.escape_position := escape_str_range'First;
+         -- And reset the terminal back to being in 'Insert' mode
+         if not for_buffer.history_review
+         then  -- but only if not searching through history
+            Set_Overwrite(for_buffer.parent, false);
+            Switch_The_Light(for_buffer, 5, true);
+         end if;
       elsif for_buffer.escape_position < escape_length 
       then --else  -- escape sequence is incomplete - keep capturing it
          for_buffer.escape_position := for_buffer.escape_position + 1;
       else  -- faulty escape sequence
+         -- Output that faulty escape sequence to the terminal
          Insert_At_Cursor(for_buffer, the_text=>for_buffer.escape_sequence);
          Insert_At_Cursor(for_buffer, the_text=>the_input);
+         -- Reset the escape sequence (i.e. clear it)
          for_buffer.escape_sequence := (escape_str_range => ' ');
          for_buffer.escape_position := escape_str_range'First;
+         -- Switch overwrite off if not searching history
+         if not for_buffer.history_review then
+            Set_Overwrite(for_buffer.parent, false);
+            Switch_The_Light(for_buffer, 5, true);
+         end if;
       end if;
    elsif the_input = Esc_str then
       -- Starting a new escape string sequence
@@ -992,6 +1006,9 @@ begin  -- Process
       for_buffer.escape_sequence(for_buffer.escape_position) := Esc_str(1);
       for_buffer.escape_position := for_buffer.escape_position + 1;
       for_buffer.in_esc_sequence := true;
+      -- Once escape sequence is initiated, need to be in overwrite mode
+      Set_Overwrite(for_buffer.parent, true);
+      Switch_The_Light(for_buffer, 5, false);
    elsif the_input = CR_str then
       Get_Iter_At_Mark(for_buffer, start_iter, Get_Insert(for_buffer));
       Get_Iter_At_Line_Offset(for_buffer, start_iter, Get_Line(start_iter),0);
@@ -1008,6 +1025,7 @@ begin  -- Process
          Place_Cursor(for_buffer, where => end_iter);
          Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);
          for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
+         Switch_The_Light(for_buffer, 7, false, for_buffer.line_number'Image);
       else  -- Just wrapped, so ignore this LF and reset just_wrapped
          for_buffer.just_wrapped := false;
       end if;
@@ -1073,6 +1091,7 @@ begin  -- Process
                        Glib.Gint(for_buffer.line_number-1));
       for_buffer.anchor_point := 
                   UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
+      Switch_The_Light(for_buffer, 8, false, for_buffer.anchor_point'Image);
       Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    elsif for_buffer.history_review
    then  -- Command line (e.g. Bash) history scrolling taking place
@@ -1097,6 +1116,7 @@ begin  -- Process
                        Glib.Gint(for_buffer.line_number-1));
       for_buffer.anchor_point := 
                   UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
+      Switch_The_Light(for_buffer, 8, false, for_buffer.anchor_point'Image);
       Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    else  -- Must be an application operating in the terminal
       Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.history_review is set. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");

@@ -124,11 +124,35 @@ package Gtk.Terminal is
 
    type Spawn_Title_Callback is access procedure
         (terminal : Gtk_Terminal; title : UTF8_String);
+      -- This call-back procedure is to display the title in the titlebar.
+      -- The main application should provide such a procedure that displays
+      -- the title.
    type Spawn_Closed_Callback is access procedure (terminal : Gtk_Terminal);
+      -- This call-back procedure is to shut down the virtual terminal (or
+      -- potentially the application).
    type Switch_Light_Callback is access procedure (for_terminal : Gtk_Terminal;
                                                    at_light_number : natural;
                                                    to_on : boolean := false;
                                                    with_status:UTF8_String:="");
+      -- This call-back is to display status switch lights and values.
+      -- "at_light_number" has the following possible values:
+      --    1: whether or not the main screen buffer (and not the auxiliary
+      --       buffer) is active.
+      --    2: whether the history list is being searched (initiated by
+      --       pressing either the up or down arrow at the command line).
+      --    3: whether the system has put the virtual terminal into bracketed
+      --       paste mode.
+      --    4: whether pass-through text is on (or off).  When bracketed paste
+      --       mode is on and this is on, programs running in the terminal
+      --       (e.g. Vi) should not treat characters as commands.
+      --    5: whether the terminal is in 'Insert' (and not 'Overwrite') mode.
+      --    6: total number of history lines in the buffer, including those
+      --       currently being displayed on screen and those above the top of
+      --       the screen.  This number is passed as text in the 'with_status'
+      --       field (so is technically not a light).
+      --    7: current line number, that is, the line number that the cursor is
+      --       on.
+      --    8: column number where the cursor is.
 
    type Cb_Gtk_Terminal_Void is access 
                            procedure (Self : access Gtk_Terminal_Record'Class);
@@ -156,12 +180,33 @@ package Gtk.Terminal is
                           use_buffer_for_editing : boolean := true;
                           title_callback : Spawn_Title_Callback;
                           callback       : Spawn_Closed_Callback;
-                          switch_light   : Switch_Light_Callback);
+                          switch_light   : Switch_Light_Callback := null);
       -- Principally, spawn a terminal shell.  This procedure does the initial
       -- Terminal Configuration Management (encoding, size, etc).  This
       -- procedure actually launches the terminal, making sure that it is
       -- running with the right shell and set to the right directory with the
       -- right environment variables set.
+      --   "terminal": the virtual terminal for which the shell is to be
+      --               spawned.
+      --   "working_directory": where to land the terminal when it opens.  By
+      --                        default, it opens in the current working
+      --                        directory.
+      --   "command": command to provide the terminal.  For a virtual terminal,
+      --              this is usually the shell (e.g. Bash).
+      --   "environment": a comma separated list of <ENVIRONMENT>=<VALUE> pairs
+      --                  to pass to the virtual terminal.
+      --   "use_buffer_for_editing": whether or not to use the built-in editing
+      --                             capabilities of the Gtk.Text_Buffer, or
+      --                             otherwise use the editing within the
+      --                             system's virtual terminal manager.
+      --   "title_callback": A procedure (see above) for displaying the title
+      --                     as provided by the system's virtual terminal.
+      --   "callback": Closed call-back procedure that is called when the
+      --               system closes the virtual terminal, for instance, when
+      --               the user types the "exit" command.
+      --   "switch_light": An optional call-back procedure that displays the
+      --                   internal status of various parts of the virtual
+      --                   terminal as a series of 'lights' or other values.
    procedure Set_Encoding (for_terminal : access Gtk_Terminal_Record'Class; 
                            to : in UTF8_string := "UTF8");
       -- Set the terminal's encoding method.  If not UTF-8, then it must be a

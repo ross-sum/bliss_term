@@ -589,6 +589,7 @@ package body Gtk.Terminal is
             the_terminal.buffer.history_review := true;
             Switch_The_Light(the_terminal.buffer, 2, true);
             Set_Overwrite(the_terminal.terminal, true);
+            Switch_The_Light(the_terminal.buffer, 5, false);
          end if;
          return true;
       elsif (not the_terminal.buffer.bracketed_paste_mode) and the_key /= esc_start
@@ -1097,6 +1098,7 @@ package body Gtk.Terminal is
                for_buffer.history_review := false;
                Switch_The_Light(for_buffer, 2, false);
                Set_Overwrite(for_buffer.parent, false);
+               Switch_The_Light(for_buffer, 5, true);
             end if;
             Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
             -- Process the keys through to the terminal
@@ -1141,12 +1143,15 @@ package body Gtk.Terminal is
                   Delete(for_buffer, start_iter, line_2_iter);
                end;
             end if;
+            Switch_The_Light(for_buffer, 6, false, 
+                              Get_Line_Count(for_buffer)'Image);
             -- Put ourselves into a 'waiting for response' mode
             if for_buffer.bracketed_paste_mode then
                for_buffer.waiting_for_response := true;
             end if;
             -- Update the line count
             for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
+            Switch_The_Light(for_buffer, 7, false, for_buffer.line_number'Image);
          elsif for_string'Length > 0 and then 
             (history_text and for_buffer.use_buffer_editing)
          then  -- some other key pressed to modify a history line
@@ -1225,7 +1230,7 @@ package body Gtk.Terminal is
                           use_buffer_for_editing : boolean := true;
                           title_callback : Spawn_Title_Callback;
                           callback : Spawn_Closed_Callback;
-                          switch_light    : Switch_Light_Callback) is
+                          switch_light    : Switch_Light_Callback := null) is
       -- Principally, spawn a terminal shell.  This procedure does the initial
       -- Terminal Configuration Management (encoding, size, etc).  This
       -- procedure actually launches the terminal, making sure that it is
@@ -1466,6 +1471,8 @@ package body Gtk.Terminal is
       Get_End_Iter(terminal.buffer, end_iter);
       terminal.buffer.line_number := 
                       line_numbers(Get_Line_Count(terminal.buffer));
+      Switch_The_Light(terminal.buffer, 7, false, 
+                       terminal.buffer.line_number'Image);
       history_tag := terminal.buffer.Create_Tag("history_text");
       Set_Property(history_tag, Editable_Property, false);
       Apply_Tag(terminal.buffer, history_tag,
@@ -1476,6 +1483,8 @@ package body Gtk.Terminal is
                        Glib.Gint(terminal.buffer.line_number));
       terminal.buffer.anchor_point := 
                   UTF8_Length(Get_Text(terminal.buffer, start_iter, end_iter));
+      Switch_The_Light(terminal.buffer, 8, false, 
+                       terminal.buffer.anchor_point'Image);
       Place_Cursor(terminal.buffer, end_iter);
       end_mark := Create_Mark(terminal.buffer, "end_paste", end_iter, 
                               left_gravity=>true);
@@ -1773,3 +1782,4 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+
