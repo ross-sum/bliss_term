@@ -96,6 +96,13 @@ package body Gtk.Terminal is
    --                                   -- current row number in the buffer
    --       anchor_point        : natural := 0;
    --               -- placed at the end of the command prompt on line_number line
+   --       history_review      : boolean := false;
+   --               -- are we reviewing command line (usually Bash) history?
+   --               -- If so, then that affects editing positions and anchor_point
+   --               -- movement.
+   --       cmd_prompt_check    : check_for_command_prompt_end;
+   --               -- check for the end of the command prompt so that we know
+   --               -- where the end point of the history_review is.
    --       waiting_for_response: boolean := false;  -- from the terminal
    --       in_response         : boolean := false; -- from the terminal
    --       just_wrapped        : boolean := false; -- is output at next line?
@@ -110,6 +117,7 @@ package body Gtk.Terminal is
    --       cursor_is_visible        : boolean := true;
    --        -- Escape sequence flags
    --       bracketed_paste_mode     : boolean := false;
+   --       pass_through_characters  : boolean := false;  -- matchs br. paste mode
    --       alternative_screen_buffer: boolean := false;
    --       reporting_focus_enabled  : boolean := false;
    --       saved_cursor_pos         : Gtk.Text_Mark.Gtk_Text_Mark;
@@ -121,8 +129,14 @@ package body Gtk.Terminal is
    --       highlight_colour    : Gdk.RGBA.Gdk_RGBA;
    --        -- terminal display buffer handling
    --       input_monitor       : input_monitor_type_access;
+   --       use_buffer_editing  : boolean := true;
+   --          -- indicates to use the buffer's editing capabilities wherever
+   --          -- possible or, alternatively, always use the terminal emulator's
+   --          -- editor.
    --       parent              : Gtk.Text_View.Gtk_Text_View;
+   --       -- The alternative buffer (to emulate an xterm)
    --       alt_buffer          : Gtk_Text_Buffer;
+   --       switch_light_cb     : Switch_Light_Callback;  -- or monitoring
    --    end record;
    -- type Gtk_Terminal_Buffer is access all Gtk_Terminal_Buffer_Record'Class;
    -- Encoding_Error : exception;
@@ -131,13 +145,14 @@ package body Gtk.Terminal is
    --       terminal         : Gtk.Text_View.Gtk_Text_View;
    --       buffer           : Gtk_Terminal_Buffer;
    --       master_fd        : Interfaces.C.int;
+   --       id               : natural := 0;
+   --       title            : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
    --       scrollback_size  : natural := 0;
    --       current_font     : Pango.Font.Pango_Font_Description := Pango.Font.
    --                          To_Font_Description("Monospace Regular",size=>10);
    --       encoding         : encoding_types := utf8;
    --       title_callback   : Spawn_Title_Callback
    --       closed_callback  : Spawn_Closed_Callback;
-   --       cancellable      : Glib.Cancellable.Gcancellable;
    --       term_input       : Terminal_Handling_Access;
    --       cols             : natural := 80;  -- default number of columns
    --       rows             : natural := 25;  -- default number of rows
@@ -248,8 +263,6 @@ package body Gtk.Terminal is
          -- Give an initial default dimension of nowrap_size (1000) characters
          -- wide x 25 lines (i.e. no wrap)
          Set_Size (terminal => the_terminal, columns => nowrap_size, rows => 25);
-         -- Create the alternative buffer (as per xterm)
-         Gtk_New(the_terminal.buffer.alt_buffer);
          -- Ensure the terminal's cursor is visible when it is shown
       --    On_Show(self=>the_terminal.terminal, call=>Show'access, after=>false);
       end if;
@@ -301,8 +314,15 @@ package body Gtk.Terminal is
       --  Create a new terminal text buffer.
    begin
       Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_New (the_buffer): Start.");
+      -- Create the buffer itself
       the_buffer := new Gtk_Terminal_Buffer_Record;
+      -- Now create the alternative buffer (as per xterm)
+      Gtk_New(the_buffer.alt_buffer);
+      -- Initialise both the_buffer and the alternative buffer, making sure
+      -- that they share the same tag table.
       Gtk.Terminal.Initialise(the_buffer, table);
+      Gtk.Text_Buffer.Initialize(the_buffer.alt_buffer, 
+                   Gtk.Text_Buffer.Get_Tag_Table(Gtk_Text_Buffer(the_buffer)));
    end Gtk_New;
 
    procedure Initialize(the_buffer : access Gtk_Terminal_Buffer_Record'Class;
@@ -317,10 +337,14 @@ package body Gtk.Terminal is
       if not the_buffer.Is_Created
       then  -- create the terminal text buffer and initialise
          -- First up, call the inherited initialise operation
-         Gtk.Text_Buffer.Initialize(Gtk_Text_Buffer(the_buffer));
-         -- Set up the character handler
+         Gtk.Text_Buffer.Initialize(Gtk_Text_Buffer(the_buffer), table);
+         -- Set up the character handlers
          On_Changed(self=> the_buffer, 
                     call=> Key_Pressed'access, after => false);
+         Gtk.Text_Buffer.On_Changed(self=> the_buffer.alt_buffer, 
+                    call=> Alt_Key_Pressed'access, after => false);
+         -- And set up the command prompt end finding protected entity
+         the_buffer.cmd_prompt_check := new check_for_command_prompt_end;
       end if;
    end Initialize;
    -- procedure Initialise(the_buffer: access Gtk_Terminal_Buffer_Record'Class;
@@ -536,10 +560,10 @@ package body Gtk.Terminal is
       -- right arrow and backspace key has been been pressed.  If so, it gets
       -- passed to the terminal emulator and not to the buffer for processing.
       use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
-      esc_start : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ "; 
-      the_term  : Gtk_Text_View := Gtk_Text_View(for_terminal);
-      the_terminal : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
-      the_key   : string(1..3) := esc_start;
+      esc_start   : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ ";
+      the_term    : Gtk_Text_View := Gtk_Text_View(for_terminal);
+      the_terminal: Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
+      the_key     : string(1..3) := esc_start;
    begin
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ".");
       case for_event.keyval is
@@ -570,8 +594,12 @@ package body Gtk.Terminal is
                the_key(3) := 'C';
             end if;
          when GDK_BackSpace =>  --16#FF08# / 10#65288#
-            the_key(1) := Ada.Characters.Latin_1.BS;
-            the_key(2) := ' ';
+            if the_terminal.buffer.history_review or
+               not the_terminal.buffer.use_buffer_editing
+            then
+               the_key(1) := Ada.Characters.Latin_1.BS;
+               the_key(2) := ' ';
+            end if;
          when others =>
             null;
       end case;
@@ -636,9 +664,9 @@ package body Gtk.Terminal is
 --       res := Place_Cursor_Onscreen(this_terminal.terminal);
 --    end Show;
 
-   -------------------------
-   -- Terminal Management --
-   -------------------------
+   -------------------------------
+   -- Terminal Support Routines --
+   -------------------------------
 
    function UTF8_Length(of_string : in UTF8_String) return natural is
        -- get the absolute string length (i.e. including parts of characters)
@@ -659,13 +687,13 @@ package body Gtk.Terminal is
      return natural is
        -- Get the line length for the line that the at_iter is currently on.
    begin
-      return UTF8_Length(Get_Line_Length(for_buffer, at_iter, 
+      return UTF8_Length(Get_Whole_Line(for_buffer, at_iter, 
                                          for_printable_characters_only));
    end Line_Length;
 
-   function Get_Line_Length(for_buffer : in Gtk_Terminal_Buffer;
-                            at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
-                            for_printable_characters_only : boolean := true)
+   function Get_Whole_Line(for_buffer : in Gtk_Terminal_Buffer;
+                           at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                           for_printable_characters_only : boolean := true)
      return UTF8_String is
        -- Get the whole line that the at_iter is currently on.
       use Gtk.Text_Iter;
@@ -687,7 +715,7 @@ package body Gtk.Terminal is
       -- Calculate and return the line between iterators
       return Get_Slice(for_buffer, line_start, line_end, 
                        not for_printable_characters_only);
-   end Get_Line_Length;
+   end Get_Whole_Line;
        
    function Get_Line_From_Start(for_buffer : in Gtk_Terminal_Buffer;
                                 up_to_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
@@ -766,6 +794,54 @@ package body Gtk.Terminal is
       end loop;
       return line_number;
    end Get_Line_Number;
+    
+   standard_prompt : constant string := "$ ";
+   root_prompt     : constant string := "# ";
+   protected body check_for_command_prompt_end is
+      -- Monitor input for the end of the command prompt.  This can be either
+      -- the "$ " string or the "# " string, depending on whether it is root or
+      -- an ordinary user.  It only looks when switched to bracketed paste mode
+      -- as this seems to be always the case just prior to the command prompt.
+      -- This operation is used to determine where to put the last point of the
+      -- history buffer.
+      procedure Start_Looking is
+         -- at bracketed paste mode
+      begin
+         looking := true;
+      end Start_Looking;
+      procedure Stop_Looking is
+         -- not bracketed paste mode or at pass through text
+      begin
+         looking := false;
+         last_two := "  ";
+      end Stop_Looking;
+      function Is_Looking return boolean is
+      begin
+         return looking;
+      end Is_Looking;
+      procedure Check(the_character : character) is
+      begin
+         if looking then  -- only check if looking
+            last_two(1) := last_two(2);
+            last_two(2) := the_character;
+         end if;
+      end Check;
+      function Found_Prompt_End return boolean is
+      begin
+         return last_two = standard_prompt or last_two = root_prompt;
+      end Found_Prompt_End;
+      function Current_String return string is
+      begin
+         return last_two;
+      end Current_String;
+   --   private
+      -- looking : boolean := false;
+      -- last_two : string(1..2) := "  ";
+   end check_for_command_prompt_end;
+
+   -------------------------
+   -- Terminal Management --
+   -------------------------
    
    -- The built-in Gtk.Text_Buffer Insert and Insert_at_Cursor procedures do
    -- not take into account the Overwrite status and Insert whether in Insert
@@ -1065,7 +1141,9 @@ package body Gtk.Terminal is
       -- Respond to whenever a key is pressed by the user and ensure that it
       -- is appropriately acted upon, usually by passing it on to the terminal
       -- client.  It will also inhibit editing before the current terminal
-      -- input point (i.e., before the prompt).
+      -- input point (i.e., before the prompt).  This edition of Key_Pressed is
+      -- for the main buffer, but it is called by the Key_Pressed procedure for
+      -- the alternative buffer to process its key pressed events.
       use Gtk.Text_Iter;
       procedure Process_Keys(for_string : in UTF8_String;
                              over_range_start, 
@@ -1151,7 +1229,7 @@ package body Gtk.Terminal is
             end if;
             -- Update the line count
             for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
-            Switch_The_Light(for_buffer, 7, false, for_buffer.line_number'Image);
+            Switch_The_Light(for_buffer, 6, false, for_buffer.line_number'Image);
          elsif for_string'Length > 0 and then 
             (history_text and for_buffer.use_buffer_editing)
          then  -- some other key pressed to modify a history line
@@ -1218,6 +1296,31 @@ package body Gtk.Terminal is
          null;  -- do nothing
       end if;
    end Key_Pressed;
+
+   procedure Alt_Key_Pressed(for_buffer : access Gtk_Text_Buffer_Record'Class) is
+      -- Respond to whenever a key is pressed by the user and ensure that it
+      -- is appropriately acted upon, usually by passing it on to the terminal
+      -- client.  It will also inhibit editing before the current terminal
+      -- input point (i.e., before the prompt).  This edition of Key_Pressed is
+      -- for the alternative buffer.
+      use Buffer_Arrays;
+      use Ada.Strings.UTF_Encoding.Wide_Strings;
+      the_buffer   : Gtk_Terminal_Buffer;
+      alt_buffer   : Gtk_Text_Buffer := Gtk_Text_Buffer(for_buffer);
+   begin
+      Error_Log.Debug_Data(at_level => 9, with_details => "Alt_Key_Pressed: Start.");
+      if not Is_Empty(display_output_handling_buffer) then
+         for cntr in display_output_handling_buffer.First_Index .. 
+                     display_output_handling_buffer.Last_Index loop
+            the_buffer := display_output_handling_buffer(cntr);
+            if the_buffer.alt_buffer = alt_buffer
+            then  -- found it
+               Key_Pressed(for_buffer => the_buffer);
+               exit;
+            end if;
+         end loop;
+      end if;
+   end Alt_Key_Pressed;
   
    -------------
    -- Methods --
@@ -1471,7 +1574,7 @@ package body Gtk.Terminal is
       Get_End_Iter(terminal.buffer, end_iter);
       terminal.buffer.line_number := 
                       line_numbers(Get_Line_Count(terminal.buffer));
-      Switch_The_Light(terminal.buffer, 7, false, 
+      Switch_The_Light(terminal.buffer, 6, false, 
                        terminal.buffer.line_number'Image);
       history_tag := terminal.buffer.Create_Tag("history_text");
       Set_Property(history_tag, Editable_Property, false);
@@ -1760,6 +1863,8 @@ package body Gtk.Terminal is
    procedure Set_ID(for_terminal : access Gtk_Terminal_Record'Class; 
                     to : natural) is
        -- Set the terminal's Identifier (which can be any positive number).
+      the_buffer : Gtk_Terminal_Buffer renames for_terminal.buffer;
+      alt_buffer : Gtk.Text_Buffer.Gtk_Text_Buffer renames the_buffer.alt_buffer;
    begin
       for_terminal.id := to;
    end Set_ID;
@@ -1782,4 +1887,3 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
-

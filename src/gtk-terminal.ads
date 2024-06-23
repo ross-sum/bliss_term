@@ -303,6 +303,26 @@ package Gtk.Terminal is
        -- get the absolute string length (i.e. including parts of characters)
    function As_String(the_number : in natural) return UTF8_String;
        -- provide the (non-negative) number as a compact string
+       
+   protected type check_for_command_prompt_end is
+      -- Monitor input for the end of the command prompt.  This can be either
+      -- the "$ " string or the "# " string, depending on whether it is root or
+      -- an ordinary user.  It only looks when switched to bracketed paste mode
+      -- as this seems to be always the case just prior to the command prompt.
+      -- This operation is used to determine where to put the last point of the
+      -- history buffer.
+      procedure Start_Looking;  -- at bracketed paste mode
+      procedure Stop_Looking;   -- not bracketed paste mode or at pass through text
+      function Is_Looking return boolean;
+      procedure Check(the_character : character);
+      function Found_Prompt_End return boolean;
+      function Current_String return string;
+     private
+      looking : boolean := false;
+      last_two : string(1..2) := "  ";
+   end check_for_command_prompt_end;
+   type check_for_command_prompt_end_access is 
+        access check_for_command_prompt_end;
 
    -------------------------
    -- Gtk Terminal Buffer --
@@ -314,10 +334,15 @@ package Gtk.Terminal is
    max_utf_char_count : constant positive := 4;
    subtype utf_chars is positive range 1..max_utf_char_count;
    protected type input_monitor_type is
+      -- A buffer to contain the character stream coming from the virtual
+      -- terminal 'client' (id est from the system).
+      -- Input from the system is monitored by a task.  This buffers the task's
+      -- output and allows the virtual terminal display (the 'server') to
+      -- operate in the main task body (which, for Gtk to work, it must do).
       entry Put(the_character : in character);
       entry Get(the_character : out wide_character);
       function Has_Data return boolean;
-      private
+   private
       buffer  : buffer_type;
       char    : string(utf_chars'range);
       char_pos: utf_chars := 1;
@@ -350,6 +375,9 @@ package Gtk.Terminal is
                  -- are we reviewing command line (usually Bash) history?
                  -- If so, then that affects editing positions and anchor_point
                  -- movement.
+         cmd_prompt_check    : check_for_command_prompt_end_access;
+                 -- check for the end of the command prompt so that we know
+                 -- where the end point of the history_review is.
          waiting_for_response: boolean := false;  -- from the terminal
          in_response         : boolean := false; -- from the terminal
          just_wrapped        : boolean := false; -- is output at next line?
@@ -383,7 +411,7 @@ package Gtk.Terminal is
          parent              : Gtk.Text_View.Gtk_Text_View;
          -- The alternative buffer (to emulate an xterm)
          alt_buffer          : Gtk.Text_Buffer.Gtk_Text_Buffer;
-         switch_light_cb     : Switch_Light_Callback;
+         switch_light_cb     : Switch_Light_Callback;  -- terminal's monitor
       end record;
    type Gtk_Terminal_Buffer is access all Gtk_Terminal_Buffer_Record'Class;
    
@@ -403,9 +431,9 @@ package Gtk.Terminal is
                         for_printable_characters_only : boolean := true)
      return natural;
        -- Get the line length for the line that the at_iter is currently on.
-   function Get_Line_Length(for_buffer : in Gtk_Terminal_Buffer;
-                            at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
-                            for_printable_characters_only : boolean := true)
+   function Get_Whole_Line(for_buffer : in Gtk_Terminal_Buffer;
+                           at_iter : in Gtk.Text_Iter.Gtk_Text_Iter;
+                           for_printable_characters_only : boolean := true)
      return UTF8_String;
        -- Get the whole line that the at_iter is currently on.
    function Get_Line_From_Start(for_buffer : in Gtk_Terminal_Buffer;
@@ -459,7 +487,15 @@ package Gtk.Terminal is
       -- Respond to whenever a key is pressed by the user and ensure that it
       -- is appropriately acted upon, usually by passing it on to the terminal
       -- client.  It will also inhibit editing before the current terminal
-      -- input point (i.e., before the prompt).
+      -- input point (i.e., before the prompt).  This edition of Key_Pressed is
+      -- for the main buffer, but it is called by the Key_Pressed procedure for
+      -- the alternative buffer to process its key pressed events.
+   procedure Alt_Key_Pressed(for_buffer : access Gtk_Text_Buffer_Record'Class);
+      -- Respond to whenever a key is pressed by the user and ensure that it
+      -- is appropriately acted upon, usually by passing it on to the terminal
+      -- client.  It will also inhibit editing before the current terminal
+      -- input point (i.e., before the prompt).  This edition of Key_Pressed is
+      -- for the alternative buffer.
 
     -- Ideally, here we should use the Hyper Quantum dynamic_lists generic
     -- library, but that is quite specific to Hyper Quantum applications (at

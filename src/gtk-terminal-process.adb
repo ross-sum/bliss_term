@@ -288,6 +288,7 @@ separate (Gtk.Terminal)
                            if on_buffer.bracketed_paste_mode
                            then  -- sequence following not commands
                               on_buffer.pass_through_characters := true;
+                              on_buffer.cmd_prompt_check.Stop_Looking;
                               Switch_The_Light(on_buffer, 4, true);
                            end if;
                         when 201 => -- may not treat characters as command?
@@ -664,10 +665,12 @@ separate (Gtk.Terminal)
                               if for_sequence(chr_pos) = 'h'
                               then  -- switch on echo if config allows
                                  on_buffer.bracketed_paste_mode := true;
+                                 on_buffer.cmd_prompt_check.Start_Looking;
                                  Switch_The_Light(on_buffer, 3, true);
                               elsif for_sequence(chr_pos) = 'l'
                               then  -- switch off keyboard echo + paste in
                                  on_buffer.bracketed_paste_mode := false;
+                                 on_buffer.cmd_prompt_check.Stop_Looking;
                                  Get_End_Iter(on_buffer, cursor_iter);
                                  Move_Mark_By_Name(on_buffer, "end_paste", 
                                                    cursor_iter);
@@ -952,6 +955,7 @@ begin  -- Process
    end if;
    Get_End_Iter(for_buffer, end_iter);
    Error_Log.Debug_Data(at_level => 9, with_details => "Process : '" & Ada.Characters.Conversions.To_Wide_String(the_input) & ''');
+   for_buffer.cmd_prompt_check.Check(the_character => the_input(ist));
    if for_buffer.escape_sequence(escape_str_range'First) = Esc_str(1) then
       -- add in and process the escape sequence
       for_buffer.escape_sequence(for_buffer.escape_position) := the_input(ist);
@@ -1025,7 +1029,7 @@ begin  -- Process
          Place_Cursor(for_buffer, where => end_iter);
          Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);
          for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
-         Switch_The_Light(for_buffer, 7, false, for_buffer.line_number'Image);
+         Switch_The_Light(for_buffer, 6, false, for_buffer.line_number'Image);
       else  -- Just wrapped, so ignore this LF and reset just_wrapped
          for_buffer.just_wrapped := false;
       end if;
@@ -1051,15 +1055,6 @@ begin  -- Process
       -- We use the Process_Escape procedure as that works (but doing it here
       -- doesn't for some very strange reason).
       Process_Escape(for_sequence => esc_str & "[D", on_buffer => for_buffer);
-   --    -- Now lock only this portion of text from editing
-      -- if (not for_buffer.history_review) then
-         -- Get_Start_Iter(for_buffer, start_iter);
-         -- cursor_mark := Get_Insert(for_buffer);   
-         -- Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
-         -- Backward_Line(end_iter, res);
-         -- Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : BS - modified history_text tag start and end.");
-      -- end if;
    else  -- An ordinary character
       if for_buffer.markup_text = Null_Ptr
       then  -- not in some kind of mark-up so just add the text
@@ -1075,51 +1070,46 @@ begin  -- Process
    -- then adjust the editing of the displayed text and adjust the anchor
    -- point.
    -- if (not for_buffer.bracketed_paste_mode) and (not for_buffer.history_review)
-   if (not for_buffer.history_review) -- and not (SOMETHING THAT SAYS WE ARE IN AN APPLICATION LIKE LESS OR VI)
-   then  -- can lock down uneditable region and set anchor_point
+   if not for_buffer.alternative_screen_buffer -- (not for_buffer.history_review) -- and not (SOMETHING THAT SAYS WE ARE IN AN APPLICATION LIKE LESS OR VI)
+   then  -- can set anchor_point (otherwise no point)
       -- Ensure this displayed text cannot be edited
-      Get_Start_Iter(for_buffer, start_iter);
-      cursor_mark := Get_Insert(for_buffer);
-      Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
-      if the_input /= BS_str then  -- don't lock if in back space
-         Backward_Line(end_iter, res);
-         Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
-         Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);  -- restore it
-      end if;
-      -- and move the anchor_point where reading can commence from forward
+      -- Get_Start_Iter(for_buffer, start_iter);
+      Get_Iter_At_Mark(for_buffer, end_iter, Get_Insert(for_buffer));
       Get_Iter_At_Line(for_buffer, start_iter,
                        Glib.Gint(for_buffer.line_number-1));
       for_buffer.anchor_point := 
                   UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
       Switch_The_Light(for_buffer, 8, false, for_buffer.anchor_point'Image);
       Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
-   elsif for_buffer.history_review
-   then  -- Command line (e.g. Bash) history scrolling taking place
+   -- elsif for_buffer.history_review
+   -- then  -- Command line (e.g. Bash) history scrolling taking place
+      -- Get_Iter_At_Mark(for_buffer, end_iter, Get_Insert(for_buffer));
+   --    -- Move the anchor_point where the cursor currently is
+      -- Get_Iter_At_Line(for_buffer, start_iter,
+         --               Glib.Gint(for_buffer.line_number-1));
+      -- for_buffer.anchor_point := 
+         --          UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
+      -- Switch_The_Light(for_buffer, 8, false, for_buffer.anchor_point'Image);
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
+   -- else  -- Must be an application operating in the terminal
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.history_review is set. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
+   end if;
+   -- Check for history_text end point
+   if for_buffer.cmd_prompt_check.Is_Looking and then
+      for_buffer.cmd_prompt_check.Found_Prompt_End
+   then
+      Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.cmd_prompt_check.Is_Looking AND for_buffer.cmd_prompt_check.Found_Prompt_End. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
       declare
          unedit_mark : Gtk.Text_Mark.Gtk_Text_Mark;  -- End of uneditable zone
          unedit_iter : Gtk.Text_Iter.Gtk_Text_Iter;
       begin
-         cursor_mark := Get_Insert(for_buffer);
-         Get_Iter_At_Mark(for_buffer, end_iter, cursor_mark);
+         Get_Start_Iter(for_buffer, start_iter);
+         Get_Iter_At_Mark(for_buffer, end_iter, Get_Insert(for_buffer));
+         Apply_Tag_By_Name(for_buffer, "history_text", start_iter, end_iter);
          unedit_mark := Get_Mark(for_buffer, "end_unedit");
-         Get_Iter_At_Mark(for_buffer, unedit_iter, unedit_mark);
-         if Compare(unedit_iter, end_iter) > 0
-         then  -- Bash moved back a line, so move the editable region
-            Get_Start_Iter(for_buffer, start_iter);
-            Apply_Tag_By_Name(for_buffer, "history_text", 
-                              start_iter, end_iter);
-            Move_Mark(for_buffer, unedit_mark, end_iter);
-         end if;
+         Move_Mark(for_buffer, unedit_mark, end_iter);
+         for_buffer.cmd_prompt_check.Stop_Looking;
       end;
-      -- and move the anchor_point where the cursor currently is
-      Get_Iter_At_Line(for_buffer, start_iter,
-                       Glib.Gint(for_buffer.line_number-1));
-      for_buffer.anchor_point := 
-                  UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
-      Switch_The_Light(for_buffer, 8, false, for_buffer.anchor_point'Image);
-      Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
-   else  -- Must be an application operating in the terminal
-      Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.history_review is set. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    end if;
    -- Scroll if required to make it visible
    if not for_buffer.in_esc_sequence then
@@ -1130,7 +1120,7 @@ begin  -- Process
    Get_Iter_At_Mark(for_buffer, start_iter,
                     Get_Mark(for_buffer, "end_paste"));
    if (not for_buffer.bracketed_paste_mode) and then
-      Get_Text(for_buffer, start_iter, end_iter) = "exit" & LF_str
+      Get_Text(for_buffer, start_iter, end_iter) = "exit" & LF_str  -- ************* FIX ME - shuts down terminal even when exiting 'su'
    then  -- got an exit command
       Gtk_Terminal(Get_Parent(for_buffer.parent)).closed_callback(
                                   Gtk_Terminal(Get_Parent(for_buffer.parent)));
