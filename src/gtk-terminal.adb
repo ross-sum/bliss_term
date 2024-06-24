@@ -603,6 +603,35 @@ package body Gtk.Terminal is
          when others =>
             null;
       end case;
+      -- In the event of there being a history_review key press, need to
+      -- make sure that an actual insert takes place
+      if Get_Overwrite(the_terminal.terminal)
+      then  -- capture the character under cursor for potential future use
+         declare
+            cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
+            cursor_end  : Gtk.Text_Iter.Gtk_Text_Iter;
+            the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
+            res : boolean;
+         begin
+            if the_terminal.buffer.alternative_screen_buffer
+            then  -- using the alternative buffer for display
+               the_buf := the_terminal.buffer.alt_buffer;
+            else  -- using the main buffer for display
+               the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(the_terminal.buffer);
+            end if;
+            Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
+            cursor_end := cursor_iter;
+            Gtk.Text_Iter.Forward_Chars(cursor_end, 1, res);
+            if res
+            then
+               the_terminal.buffer.old_key_at_cursor :=
+                     Ada.Strings.UTF_Encoding.Wide_Strings.Decode(
+                                   Get_Text(the_buf, cursor_iter, cursor_end));
+            else
+               the_terminal.buffer.old_key_at_cursor := " ";
+            end if;
+         end;
+      end if;
       if the_terminal.buffer.bracketed_paste_mode and the_key /= esc_start
       then  -- at command prompt: we have set it to pass to the write routine
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
@@ -1189,6 +1218,11 @@ package body Gtk.Terminal is
                exit when res > 0 and then the_fds.revents = POLLOUT;
                delay 0.05;  -- seconds
             end loop;
+            -- Put ourselves into a 'waiting for response' mode
+            -- This stops responses to the buffer changes in the following
+            if for_buffer.bracketed_paste_mode then
+               for_buffer.waiting_for_response := true;
+            end if;
             if history_text and for_buffer.use_buffer_editing
             then  -- terminal client is just expecting an Enter key here
                -- we need to assume the terminal client (i.e. the system's
@@ -1221,12 +1255,6 @@ package body Gtk.Terminal is
                   Delete(for_buffer, start_iter, line_2_iter);
                end;
             end if;
-            Switch_The_Light(for_buffer, 6, false, 
-                              Get_Line_Count(for_buffer)'Image);
-            -- Put ourselves into a 'waiting for response' mode
-            if for_buffer.bracketed_paste_mode then
-               for_buffer.waiting_for_response := true;
-            end if;
             -- Update the line count
             for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
             Switch_The_Light(for_buffer, 6, false, for_buffer.line_number'Image);
@@ -1243,20 +1271,32 @@ package body Gtk.Terminal is
                exit when res > 0 and then the_fds.revents = POLLOUT;
                delay 0.05;  -- seconds
             end loop;
-            -- First, undo the key press in the buffer
+            -- Put ourselves into a 'waiting for response' mode
+            -- This stops responses to the buffer changes in the following
+            if for_buffer.bracketed_paste_mode then
+               for_buffer.waiting_for_response := true;
+            end if;
+            -- Then, undo the key press in the buffer
             declare
                cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
                res : boolean;
             begin
                Get_Iter_At_Mark(for_buffer, cursor_iter, Get_Insert(for_buffer));
+               -- get rid of the character just typed from the terminal
                res := Backspace(for_buffer, cursor_iter, false, true);
+               if Get_Overwrite(for_buffer.parent)
+               then  -- replace character under cursor with original
+                  Gtk.Text_Buffer.
+                     Insert(Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer),
+                            cursor_iter,
+                            Ada.Strings.UTF_Encoding.Wide_Strings.Encode(
+                                                for_buffer.old_key_at_cursor));
+                  Gtk.Text_Iter.Backward_Chars(cursor_iter, 1, res);
+                  Place_Cursor(for_buffer, where => cursor_iter);
+               end if;
             end;
             -- Now output that key that was pressed
             Write(fd => for_buffer.master_fd, Buffer => for_string);
-            -- Put ourselves into a 'waiting for response' mode
-            if for_buffer.bracketed_paste_mode then
-               for_buffer.waiting_for_response := true;
-            end if;
          end if;
       end Process_Keys;
       start_iter : Gtk.Text_Iter.Gtk_Text_Iter;

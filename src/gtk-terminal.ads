@@ -381,6 +381,7 @@ package Gtk.Terminal is
          waiting_for_response: boolean := false;  -- from the terminal
          in_response         : boolean := false; -- from the terminal
          just_wrapped        : boolean := false; -- is output at next line?
+         old_key_at_cursor   : wide_string(1..1); -- captured when in overwrite
          -- Escape sequences alter the display of text, so need to be trapped
          -- and acted upon.
          -- Hold escape sequences over multiple display characters by storing

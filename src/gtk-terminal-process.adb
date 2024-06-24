@@ -269,14 +269,13 @@ separate (Gtk.Terminal)
                         param(1) := 1;
                      end if;
                      -- Insert the spaces, leaving the cursor where it is
-                     Gtk.Text_Buffer.Insert_At_Cursor(Gtk_Text_Buffer(on_buffer), 
+                     Gtk.Text_Buffer.Insert_At_Cursor(the_buf, 
                                                       text => (param(1)*' '));
                      -- Get the current cursor position
-                     Get_Iter_At_Mark(on_buffer, cursor_iter,
-                                      Get_Insert(on_buffer));
+                     Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
                      -- Move the cursor back to the starting point
                      Backward_Chars(cursor_iter, Glib.Gint(param(1)), res);
-                     Place_Cursor(on_buffer, where => cursor_iter);
+                     Place_Cursor(the_buf, where => cursor_iter);
                   when '~' =>  -- Non-standard, but used for going to end (VT)
                      case param(1) is
                         when 4 => -- VT sequence for End [non-standard]
@@ -1069,11 +1068,8 @@ begin  -- Process
    -- being at a command prompt and we are navigating through Bash history,
    -- then adjust the editing of the displayed text and adjust the anchor
    -- point.
-   -- if (not for_buffer.bracketed_paste_mode) and (not for_buffer.history_review)
-   if not for_buffer.alternative_screen_buffer -- (not for_buffer.history_review) -- and not (SOMETHING THAT SAYS WE ARE IN AN APPLICATION LIKE LESS OR VI)
+   if not for_buffer.alternative_screen_buffer
    then  -- can set anchor_point (otherwise no point)
-      -- Ensure this displayed text cannot be edited
-      -- Get_Start_Iter(for_buffer, start_iter);
       Get_Iter_At_Mark(for_buffer, end_iter, Get_Insert(for_buffer));
       Get_Iter_At_Line(for_buffer, start_iter,
                        Glib.Gint(for_buffer.line_number-1));
@@ -1081,18 +1077,11 @@ begin  -- Process
                   UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
       Switch_The_Light(for_buffer, 8, false, for_buffer.anchor_point'Image);
       Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
-   -- elsif for_buffer.history_review
-   -- then  -- Command line (e.g. Bash) history scrolling taking place
-      -- Get_Iter_At_Mark(for_buffer, end_iter, Get_Insert(for_buffer));
-   --    -- Move the anchor_point where the cursor currently is
-      -- Get_Iter_At_Line(for_buffer, start_iter,
-         --               Glib.Gint(for_buffer.line_number-1));
-      -- for_buffer.anchor_point := 
-         --          UTF8_Length(Get_Text(for_buffer, start_iter, end_iter));
-      -- Switch_The_Light(for_buffer, 8, false, for_buffer.anchor_point'Image);
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
-   -- else  -- Must be an application operating in the terminal
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.history_review is set. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
+   else  -- am in the alternative screen bufer
+      if for_buffer.cmd_prompt_check.Is_Looking
+      then  -- shouldn't be 
+         for_buffer.cmd_prompt_check.Stop_Looking;
+      end if;
    end if;
    -- Check for history_text end point
    if for_buffer.cmd_prompt_check.Is_Looking and then
