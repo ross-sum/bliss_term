@@ -134,7 +134,9 @@ package Gtk.Terminal is
                                                    at_light_number : natural;
                                                    to_on : boolean := false;
                                                    with_status:UTF8_String:="");
-      -- This call-back is to display status switch lights and values.
+      -- This call-back is to display status switch lights and values.  It is
+      -- provided mainly for fault finding purposes.  The statuses are what the
+      -- system 'thinks' is the case.
       -- "at_light_number" has the following possible values:
       --    1: whether or not the main screen buffer (and not the auxiliary
       --       buffer) is active.
@@ -146,13 +148,18 @@ package Gtk.Terminal is
       --       mode is on and this is on, programs running in the terminal
       --       (e.g. Vi) should not treat characters as commands.
       --    5: whether the terminal is in 'Insert' (and not 'Overwrite') mode.
-      --    6: total number of history lines in the buffer, including those
+      --    6: whether the terminal is at the command line waiting for command
+      --       entry.
+      --    7: total number of history lines in the buffer, including those
       --       currently being displayed on screen and those above the top of
       --       the screen.  This number is passed as text in the 'with_status'
       --       field (so is technically not a light).
-      --    7: current line number, that is, the line number that the cursor is
-      --       on.
-      --    8: column number where the cursor is.
+      --    8: current line number, that is, the line number that the cursor is
+      --       on for the currently active buffer. It would be the same as 7 if
+      --       the currently active buffer is the main buffer, otherwise it
+      --       will most likely be different (i.e. if it is the alternative
+      --       buffer).
+      --    9: column number where the cursor is.
 
    type Cb_Gtk_Terminal_Void is access 
                            procedure (Self : access Gtk_Terminal_Record'Class);
@@ -368,7 +375,9 @@ package Gtk.Terminal is
          child_pid           : Glib.Spawn.GPid;
          child_name          : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
          line_number         : line_numbers := unassigned_line_number;
-                                     -- current row number in the buffer
+                                     -- current row number in the main buffer
+         buf_line_num        : line_numbers := 0;
+                 -- current row number in the current buffer (which may be alt)
          anchor_point        : natural := 0;
                  -- placed at the end of the command prompt on line_number line
          history_review      : boolean := false;
@@ -378,9 +387,14 @@ package Gtk.Terminal is
          cmd_prompt_check    : check_for_command_prompt_end_access;
                  -- check for the end of the command prompt so that we know
                  -- where the end point of the history_review is.
+          entering_command    : boolean := false;
+                 -- is the system waiting for us to enter a command? If not,
+                 -- then send each key stroke through to the virtual terminal
+                 -- client.  Otherwise respond to keystrokes depending on
+                 -- whether we are in use_buffer_editing or not.
          waiting_for_response: boolean := false;  -- from the terminal
-         in_response         : boolean := false; -- from the terminal
-         just_wrapped        : boolean := false; -- is output at next line?
+         in_response         : boolean := false;  -- from the terminal
+         just_wrapped        : boolean := false;  -- is output at next line?
          old_key_at_cursor   : wide_string(1..1); -- captured when in overwrite
          -- Escape sequences alter the display of text, so need to be trapped
          -- and acted upon.

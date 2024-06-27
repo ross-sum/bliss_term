@@ -600,6 +600,13 @@ package body Gtk.Terminal is
                the_key(1) := Ada.Characters.Latin_1.BS;
                the_key(2) := ' ';
             end if;
+         when GDK_Tab =>  --16#FF09# / 10#65289#
+            -- if in command line, but not history_review, put it in that state
+            if (the_terminal.buffer.use_buffer_editing and
+                not the_terminal.buffer.history_review) -- and then in command line
+            then
+               null;
+            end if;
          when others =>
             null;
       end case;
@@ -726,11 +733,18 @@ package body Gtk.Terminal is
      return UTF8_String is
        -- Get the whole line that the at_iter is currently on.
       use Gtk.Text_Iter;
+      buffer     : Gtk.Text_Buffer.Gtk_Text_Buffer;
       line_start : Gtk.Text_Iter.Gtk_Text_Iter;
       line_end   : Gtk.Text_Iter.Gtk_Text_Iter;
       result     : boolean;
       line_number: natural;
    begin
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
       -- Get pointers to the start and end of the current line
       line_start := at_iter;
       line_number := natural(Get_Line(line_start));
@@ -742,7 +756,7 @@ package body Gtk.Terminal is
       line_end := at_iter;
       Forward_To_Line_End(line_end, result);
       -- Calculate and return the line between iterators
-      return Get_Slice(for_buffer, line_start, line_end, 
+      return Get_Slice(buffer, line_start, line_end, 
                        not for_printable_characters_only);
    end Get_Whole_Line;
        
@@ -753,10 +767,17 @@ package body Gtk.Terminal is
        -- Get the line that the at_iter is currently on, starting with the
        -- first character and going up to up_to_iter.
       use Gtk.Text_Iter;
+      buffer     : Gtk.Text_Buffer.Gtk_Text_Buffer;
       line_start : Gtk.Text_Iter.Gtk_Text_Iter;
       result     : boolean;
       line_number: natural;
    begin
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
       -- Get pointers to the start and end of the current line
       line_start := up_to_iter;
       line_number := natural(Get_Line(line_start));
@@ -766,7 +787,7 @@ package body Gtk.Terminal is
          Forward_Line(line_start, result);
       end if;
       -- Calculate and return the line between iterators
-      return Get_Slice(for_buffer, line_start, up_to_iter, 
+      return Get_Slice(buffer, line_start, up_to_iter, 
                        not for_printable_characters_only);
    end Get_Line_From_Start;
        
@@ -777,14 +798,21 @@ package body Gtk.Terminal is
        -- Get the line that the at_iter is currently on, starting with the
        -- first character and going up to up_to_iter.
       use Gtk.Text_Iter;
+      buffer     : Gtk.Text_Buffer.Gtk_Text_Buffer;
       line_end   : Gtk.Text_Iter.Gtk_Text_Iter;
       result     : boolean;
    begin
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
       -- Get pointers to the start and end of the current line
       line_end := starting_from_iter;
       Forward_To_Line_End(line_end, result);
       -- Calculate and return the length of the line between iterators
-      return Get_Slice(for_buffer, starting_from_iter, line_end, 
+      return Get_Slice(buffer, starting_from_iter, line_end, 
                        not for_printable_characters_only);
    end Get_Line_To_End;
    
@@ -1174,7 +1202,8 @@ package body Gtk.Terminal is
       -- for the main buffer, but it is called by the Key_Pressed procedure for
       -- the alternative buffer to process its key pressed events.
       use Gtk.Text_Iter;
-      procedure Process_Keys(for_string : in UTF8_String;
+      procedure Process_Keys(for_buffer : access Gtk_Terminal_Buffer_Record'Class;
+                             for_string : in UTF8_String;
                              over_range_start, 
                              and_end : in out Gtk.Text_Iter.Gtk_Text_Iter) is
          use Gtk.Terminal.CInterface, Interfaces.C;
@@ -1188,24 +1217,37 @@ package body Gtk.Terminal is
          enter_text     : constant UTF8_String(1..1) := 
                                    (1 => Ada.Characters.Latin_1.LF);
          the_terminal   : Gtk_Terminal := Gtk_Terminal(Get_Parent(for_buffer.parent));
+         the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
       begin
+         if for_buffer.alternative_screen_buffer
+         then  -- using the alternative buffer for display
+            the_buf := for_buffer.alt_buffer;
+         else  -- using the main buffer for display
+            the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+         end if;
          -- Check for end of line (i.e. the Return/Enter key is pressed) or
          -- alternatively User has buffer_editing (i.e. use the virtual
          -- terminal's editing) not set, and then set flags and potentially
          -- enable update of the line count.
          if for_string'Length > 0 and then 
-            ((for_string(for_string'Last) = Ada.Characters.Latin_1.LF and
-              (not(for_string'Length > 1 and then
-                   for_string(for_string'Last-1) = '\'))) or
-             ((not for_buffer.use_buffer_editing) ))--or 
-              --(not for_buffer.bracketed_paste_mode)))
-         then  -- Return/Enter key has been pressed + not line continuation
+            ( (for_string(for_string'Last) = Ada.Characters.Latin_1.LF and
+               (not(for_string'Length > 1 and then             -- not carry-
+                    for_string(for_string'Last-1) = '\') and   -- over line in
+                    for_buffer.entering_command)) or           -- command line
+              ((not for_buffer.use_buffer_editing) or -- process each char for
+               (not for_buffer.entering_command)) )   -- system edits or apps
+         then  -- Return/Enter key has been pressed + not cmd line continuation
+               -- or otherwise not using the buffer's editing or is in an app
             -- Reset the history processing indicator value
             if for_string(for_string'Last) = Ada.Characters.Latin_1.LF then
                for_buffer.history_review := false;
                Switch_The_Light(for_buffer, 2, false);
-               Set_Overwrite(for_buffer.parent, false);
-               Switch_The_Light(for_buffer, 5, true);
+               if not for_buffer.alternative_screen_buffer then
+                  Set_Overwrite(for_buffer.parent, false);
+                  Switch_The_Light(for_buffer, 5, true);
+               end if;
+               for_buffer.entering_command := false;  -- command now entered
+               Switch_The_Light(for_buffer, 6, false);
             end if;
             Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
             -- Process the keys through to the terminal
@@ -1232,15 +1274,15 @@ package body Gtk.Terminal is
                   cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
                   res : boolean;
                begin
-                  Get_Iter_At_Mark(for_buffer, cursor_iter, Get_Insert(for_buffer));
-                  res := Backspace(for_buffer, cursor_iter, false, true);
+                  Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
+                  res := Backspace(the_buf, cursor_iter, false, true);
                end;
                -- Now output that enter key
                Write(fd => for_buffer.master_fd, Buffer => enter_text);
             else -- not history, normal keyboard command entry
                -- Delete the text from the buffer so that the terminal may write
                -- it back and then write that deleted text out to the termnal
-               Delete(for_buffer, over_range_start, and_end);  -------------******************FIX: causes a subsequent Gtk-WARNING **: 21:48:00.652: Invalid text buffer iterator: either the iterator is uninitialized... 
+               Delete(the_buf, over_range_start, and_end);  -------------******************FIX: causes a subsequent Gtk-WARNING **: 21:48:00.652: Invalid text buffer iterator: either the iterator is uninitialized... 
                Write(fd => for_buffer.master_fd, Buffer => for_string);
             end if;
             -- Check that the buffer length is not exceeded (remove line if so)
@@ -1257,7 +1299,9 @@ package body Gtk.Terminal is
             end if;
             -- Update the line count
             for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
-            Switch_The_Light(for_buffer, 6, false, for_buffer.line_number'Image);
+            for_buffer.buf_line_num := line_numbers(Get_Line_Count(the_buf));
+            Switch_The_Light(for_buffer, 7, false, for_buffer.line_number'Image);
+            Switch_The_Light(for_buffer, 8, false, for_buffer.buf_line_num'Image);
          elsif for_string'Length > 0 and then 
             (history_text and for_buffer.use_buffer_editing)
          then  -- some other key pressed to modify a history line
@@ -1281,18 +1325,17 @@ package body Gtk.Terminal is
                cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
                res : boolean;
             begin
-               Get_Iter_At_Mark(for_buffer, cursor_iter, Get_Insert(for_buffer));
+               Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
                -- get rid of the character just typed from the terminal
-               res := Backspace(for_buffer, cursor_iter, false, true);
+               res := Backspace(the_buf, cursor_iter, false, true);
                if Get_Overwrite(for_buffer.parent)
                then  -- replace character under cursor with original
                   Gtk.Text_Buffer.
-                     Insert(Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer),
-                            cursor_iter,
+                     Insert(the_buf, cursor_iter,
                             Ada.Strings.UTF_Encoding.Wide_Strings.Encode(
                                                 for_buffer.old_key_at_cursor));
                   Gtk.Text_Iter.Backward_Chars(cursor_iter, 1, res);
-                  Place_Cursor(for_buffer, where => cursor_iter);
+                  Place_Cursor(the_buf, where => cursor_iter);
                end if;
             end;
             -- Now output that key that was pressed
@@ -1301,8 +1344,15 @@ package body Gtk.Terminal is
       end Process_Keys;
       start_iter : Gtk.Text_Iter.Gtk_Text_Iter;
       end_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
+      the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
    begin     -- Key_Pressed
       Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed: Start.");
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         the_buf := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
       if (for_buffer.line_number > unassigned_line_number) and
          (not for_buffer.waiting_for_response) and
          (not for_buffer.in_response)
@@ -1311,23 +1361,23 @@ package body Gtk.Terminal is
          -- Get the key(s) pressed
          if for_buffer.history_review
          then  -- use the cursor position to copy up to
-            Get_Iter_At_Mark(for_buffer, end_iter, Get_Insert(for_buffer));
+            Get_Iter_At_Mark(the_buf, end_iter, Get_Insert(the_buf));
          else  -- getting entire line (so the end point
-            Get_End_Iter(for_buffer, end_iter);
+            Get_End_Iter(the_buf, end_iter);
          end if;
          if for_buffer.anchor_point = 0
          then  -- start_iter is at the start of the line
-            Get_Iter_At_Line(for_buffer, start_iter,
-                             Glib.Gint(for_buffer.line_number-1));
+            Get_Iter_At_Line(the_buf, start_iter,
+                             Glib.Gint(for_buffer.buf_line_num-1));
          else  -- start_iter is at anchor_point in the current line(s)
-            Get_Iter_At_Line_Index(for_buffer, start_iter, 
-                                   Glib.Gint(for_buffer.line_number-1),
+            Get_Iter_At_Line_Index(the_buf, start_iter, 
+                                   Glib.Gint(for_buffer.buf_line_num-1),
                                    Glib.Gint(for_buffer.anchor_point));
          end if;
          if (not Equal(end_iter, start_iter))
-         then  -- There is actually some input
-            -- Get the string and act upon it
-            Process_Keys(for_string => Get_Text(for_buffer,start_iter,end_iter),
+         then  -- There is actually some input - get the string and act upon it
+            Process_Keys(for_buffer, 
+                         for_string => Get_Text(the_buf, start_iter, end_iter),
                          over_range_start => start_iter, and_end => end_iter);
          else  -- Nothing to do here
             null;  -- do nothing
@@ -1614,8 +1664,11 @@ package body Gtk.Terminal is
       Get_End_Iter(terminal.buffer, end_iter);
       terminal.buffer.line_number := 
                       line_numbers(Get_Line_Count(terminal.buffer));
-      Switch_The_Light(terminal.buffer, 6, false, 
+      terminal.buffer.buf_line_num := terminal.buffer.line_number;
+      Switch_The_Light(terminal.buffer, 7, false, 
                        terminal.buffer.line_number'Image);
+      Switch_The_Light(terminal.buffer, 8, false, 
+                       terminal.buffer.buf_line_num'Image);
       history_tag := terminal.buffer.Create_Tag("history_text");
       Set_Property(history_tag, Editable_Property, false);
       Apply_Tag(terminal.buffer, history_tag,
@@ -1626,7 +1679,7 @@ package body Gtk.Terminal is
                        Glib.Gint(terminal.buffer.line_number));
       terminal.buffer.anchor_point := 
                   UTF8_Length(Get_Text(terminal.buffer, start_iter, end_iter));
-      Switch_The_Light(terminal.buffer, 8, false, 
+      Switch_The_Light(terminal.buffer, 9, false, 
                        terminal.buffer.anchor_point'Image);
       Place_Cursor(terminal.buffer, end_iter);
       end_mark := Create_Mark(terminal.buffer, "end_paste", end_iter, 
@@ -1706,7 +1759,7 @@ package body Gtk.Terminal is
       default_vert_size: constant natural := 32;
       horizontal_scale : constant natural := 15;
       vertical_scale   : constant natural := 
-                   natural(1.3*float(Get_Size(terminal.current_font))/1000.0);
+                   natural(1.31*float(Get_Size(terminal.current_font))/1000.0);
       col_size : Glib.Gint := Glib.Gint(columns * horizontal_scale);
       row_size : Glib.Gint := Glib.Gint(rows * vertical_scale);
       term_size: aliased win_size := (0, 0, 0, 0);
