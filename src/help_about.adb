@@ -171,9 +171,11 @@ package body Help_About is
             the_status := Gtk_Label(the_builder.Get_Object("status_label_5"));
             the_status.Set_Label(with_status);
          when 6 => 
-            the_entry := gtk_entry(Get_Object(the_builder, 
-                                          "status_entry_6"));
-            Set_Text(the_entry, with_status);
+            the_light := gtk_check_button(Get_Object(the_builder, 
+                                          "status_checkbox_6"));
+            Set_Active(the_light, to_on);
+            the_status := Gtk_Label(the_builder.Get_Object("status_label_6"));
+            the_status.Set_Label(with_status);
          when 7 => 
             the_entry := gtk_entry(Get_Object(the_builder, 
                                           "status_entry_7"));
@@ -181,6 +183,10 @@ package body Help_About is
          when 8 => 
             the_entry := gtk_entry(Get_Object(the_builder, 
                                           "status_entry_8"));
+            Set_Text(the_entry, with_status);
+         when 9 => 
+            the_entry := gtk_entry(Get_Object(the_builder, 
+                                          "status_entry_9"));
             Set_Text(the_entry, with_status);
          when others => null;  -- ignore
       end case;

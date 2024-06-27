@@ -896,7 +896,7 @@ The  other main difference is the use Glade for the  graphical  user interface.
               </packing>
             </child>
             <child>
-              <!-- n-columns=2 n-rows=8 -->
+              <!-- n-columns=2 n-rows=9 -->
               <object class="GtkGrid" id="status_grid">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -1032,40 +1032,15 @@ The  other main difference is the use Glade for the  graphical  user interface.
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkLabel" id="status_label_7">
+                  <object class="GtkLabel" id="status_label_8">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes"> Current line number</property>
+                    <property name="label" translatable="yes"> Current buffer's line number</property>
                   </object>
                   <packing>
                     <property name="left-attach">0</property>
-                    <property name="top-attach">6</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkEntry" id="status_entry_6">
-                    <property name="visible">True</property>
-                    <property name="can-focus">True</property>
-                    <property name="editable">False</property>
-                    <property name="caps-lock-warning">False</property>
-                  </object>
-                  <packing>
-                    <property name="left-attach">1</property>
-                    <property name="top-attach">5</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkLabel" id="status_label_6">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="tooltip-text" translatable="yes">Includes the total number of lines visible as well as the total history above the top of the display.</property>
-                    <property name="halign">start</property>
-                    <property name="label" translatable="yes"> Total number of history lines in buffer</property>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">5</property>
+                    <property name="top-attach">7</property>
                   </packing>
                 </child>
                 <child>
@@ -1077,6 +1052,19 @@ The  other main difference is the use Glade for the  graphical  user interface.
                   </object>
                   <packing>
                     <property name="left-attach">1</property>
+                    <property name="top-attach">6</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="status_label_7">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="tooltip-text" translatable="yes">Includes the total number of lines visible as well as the total history above the top of the display.</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes"> Total number of history lines in buffer</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
                     <property name="top-attach">6</property>
                   </packing>
                 </child>
@@ -1093,15 +1081,53 @@ The  other main difference is the use Glade for the  graphical  user interface.
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkLabel" id="status_label_8">
+                  <object class="GtkEntry" id="status_entry_9">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="editable">False</property>
+                    <property name="caps-lock-warning">False</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">8</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="status_label_9">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                     <property name="halign">start</property>
-                    <property name="label" translatable="yes">Current column number</property>
+                    <property name="label" translatable="yes">Current column number (in curent buf)</property>
                   </object>
                   <packing>
                     <property name="left-attach">0</property>
-                    <property name="top-attach">7</property>
+                    <property name="top-attach">8</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkCheckButton" id="status_checkbox_6">
+                    <property name="label" translatable="yes">At command line waiting for entry</property>
+                    <property name="visible">True</property>
+                    <property name="sensitive">False</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">False</property>
+                    <property name="tooltip-text" translatable="yes">Terminal is in Insert mode (and not in Overwrite mode).</property>
+                    <property name="draw-indicator">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">5</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="status_label_6">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">    </property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">5</property>
                   </packing>
                 </child>
               </object>
