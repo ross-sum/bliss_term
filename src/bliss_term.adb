@@ -148,6 +148,7 @@ begin  -- Bliss_Term
    Error_Log.Set_Debug_Level
          (to => Parameter(with_flag => flag_type'('d')) );
    Gtk.Terminal.Set_The_Error_Handler(to => Error_Log.Put'access);
+   Gtk.Terminal.Set_The_Log_Handler(to => Error_Log.Debug_Data'access);
    Error_Log.Debug_Data(at_level => 1, 
                         with_details => "----------------------------");
    Error_Log.Debug_Data(at_level => 1, 

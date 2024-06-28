@@ -172,7 +172,7 @@ package body Gtk.Terminal is
       std_err : Interfaces.C.int := 2;
    begin
       if the_error_handler /= null
-          then
+      then
          the_error_handler(the_error, error_intro, error_message);
       else
          Write(std_err, Ada.Characters.Conversions.To_String(
@@ -180,6 +180,21 @@ package body Gtk.Terminal is
                         " - Message is " & error_message));
       end if;
    end Handle_The_Error;
+
+   procedure Set_The_Log_Handler(to : log_handler) is
+   begin
+      the_log_handler := to;
+   end Set_The_Log_Handler;
+
+   procedure Log_Data(at_level : in natural; with_details : in wide_string) is
+       -- For the logging display, if the_log_handler is assigned, then call
+       -- that function with the two parameters, otherwise ignore the message.
+   begin
+      if the_log_handler /= null
+      then
+         the_log_handler(at_level, with_details);
+      end if;
+   end Log_Data;
       
    ------------------
    -- Constructors --
@@ -561,11 +576,16 @@ package body Gtk.Terminal is
       -- passed to the terminal emulator and not to the buffer for processing.
       use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
       esc_start   : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ ";
+      app_esc_st  : constant string(1..3) := Ada.Characters.Latin_1.Esc & "O ";
       the_term    : Gtk_Text_View := Gtk_Text_View(for_terminal);
       the_terminal: Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
       the_key     : string(1..3) := esc_start;
    begin
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ".");
+      if the_terminal.buffer.cursor_keys_in_app_mode
+      then  -- substitute the '[' for a 'O'
+         the_key := app_esc_st;
+      end if;
       case for_event.keyval is
          when GDK_Up => 
             the_key(3) := 'A';
@@ -583,13 +603,15 @@ package body Gtk.Terminal is
             end if;
          when GDK_Left =>
             if the_terminal.buffer.history_review or
-               not the_terminal.buffer.use_buffer_editing
+               (not the_terminal.buffer.use_buffer_editing) or
+               the_terminal.buffer.cursor_keys_in_app_mode
             then
                the_key(3) := 'D';
             end if;
          when GDK_Right =>
             if the_terminal.buffer.history_review or
-               not the_terminal.buffer.use_buffer_editing
+               (not the_terminal.buffer.use_buffer_editing) or
+               the_terminal.buffer.cursor_keys_in_app_mode
             then
                the_key(3) := 'C';
             end if;
@@ -607,8 +629,63 @@ package body Gtk.Terminal is
             then
                null;
             end if;
+         when GDK_KP_0 | GDK_KP_Insert =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               null;
+            end if;
+         when GDK_KP_1 | GDK_KP_End =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               the_key(3) := '4';
+            end if;
+         when GDK_KP_2 | GDK_KP_Down =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               the_key(3) := 'B';
+            end if;
+         when GDK_KP_3 | GDK_KP_Page_Down =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               null;
+            end if;
+         when GDK_KP_4 | GDK_KP_Left =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               the_key(3) := 'D';
+            end if;
+         when GDK_KP_5 =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               null;
+            end if;
+         when GDK_KP_6 | GDK_KP_Right =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               the_key(3) := 'C';
+            end if;
+         when GDK_KP_7 | GDK_KP_Home =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               the_key(3) := 'G';
+            end if;
+         when GDK_KP_8 | GDK_KP_Up =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               the_key(3) := 'A';
+            end if;
+         when GDK_KP_9 | GDK_KP_Page_Up =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               null;
+            end if;
+         when GDK_KP_Decimal | GDK_KP_Delete =>
+            if the_terminal.buffer.keypad_keys_in_app_mode
+            then  -- send the control sequence for this key
+               the_key(3) := 'P';
+            end if;
          when others =>
-            null;
+            null;  -- Don't do anything
       end case;
       -- In the event of there being a history_review key press, need to
       -- make sure that an actual insert takes place
@@ -639,7 +716,8 @@ package body Gtk.Terminal is
             end if;
          end;
       end if;
-      if the_terminal.buffer.bracketed_paste_mode and the_key /= esc_start
+      if the_terminal.buffer.bracketed_paste_mode and 
+         (the_key /= esc_start and the_key /= app_esc_st)
       then  -- at command prompt: we have set it to pass to the write routine
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
          if for_event.keyval = GDK_BackSpace
@@ -656,7 +734,8 @@ package body Gtk.Terminal is
             Switch_The_Light(the_terminal.buffer, 5, false);
          end if;
          return true;
-      elsif (not the_terminal.buffer.bracketed_paste_mode) and the_key /= esc_start
+      elsif (not the_terminal.buffer.bracketed_paste_mode) and 
+            (the_key /= esc_start and the_key /= app_esc_st)
       then  -- in an app: we have set it to pass to the write routine
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
          if for_event.keyval = GDK_End
@@ -1596,6 +1675,7 @@ package body Gtk.Terminal is
       start_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
       end_iter    : Gtk.Text_Iter.Gtk_Text_Iter;
       history_tag : Gtk.Text_Tag.Gtk_Text_Tag;
+      hypertext   : Gtk.Text_Tag.Gtk_Text_Tag;
       end_mark    : Gtk.Text_Mark.Gtk_Text_Mark;
       unedit_mark : Gtk.Text_Mark.Gtk_Text_Mark;
       window_size : aliased win_size := 
@@ -1673,6 +1753,9 @@ package body Gtk.Terminal is
       Set_Property(history_tag, Editable_Property, false);
       Apply_Tag(terminal.buffer, history_tag,
                 start_iter, end_iter);
+      hypertext := terminal.buffer.Create_Tag("hypertext");
+      Set_Property(hypertext, Gtk.Text_Tag.Underline_Set_Property, true);
+      Set_Property(hypertext, Gtk.Text_Tag.Underline_Rgba_Property, Blue_RGBA);
       unedit_mark := Create_Mark(terminal.buffer, "end_unedit", end_iter, 
                                  left_gravity=>true);
       Get_Iter_At_Line(terminal.buffer, start_iter,

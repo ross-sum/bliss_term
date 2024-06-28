@@ -76,6 +76,14 @@ package Gtk.Terminal is
    type error_handler is access 
    procedure (the_error:in integer; error_intro,error_message:in wide_string);
    procedure Set_The_Error_Handler(to : error_handler);
+   -- Logging for key pieces of information, almost exclusively around
+   -- unhandled ANSI escape codes can be via a call-back.  In the absence of a
+   -- call-back, no logging will occur.
+   -- This logging handler works package wide, for all terminals creatated and
+   -- in operation.
+   type log_handler is access
+   procedure (at_level : in natural; with_details : in wide_string);
+   procedure Set_The_Log_Handler(to : log_handler);
 
    type encoding_types is (default, utf8, utf16);
    type Gtk_Terminal_Record is new 
@@ -296,15 +304,20 @@ package Gtk.Terminal is
    private
    ----------------------------------------------------------------------------
    
+   Blue_RGBA   : constant Gdk.RGBA.Gdk_RGBA := (0.0, 0.0, 01.0, 1.0);
    nowrap_size : constant natural := 1000;
        -- number of column characters that represents a no-wrap screen
    service_initialised : boolean := false;
    the_error_handler : error_handler := null;
+   the_log_handler   : log_handler := null;
    procedure Handle_The_Error(the_error : in integer;
                               error_intro, error_message : in wide_string);
        -- For the error display, if the_error_handler is assigned, then call
        -- that function with the three parameters, otherwise formulate an
        -- output and write it out to Standard Error using the Write procedure.
+   procedure Log_Data(at_level : in natural; with_details : in wide_string);
+       -- For the logging display, if the_log_handler is assigned, then call
+       -- that function with the two parameters, otherwise ignore the message.
 
    function UTF8_Length(of_string : in UTF8_String) return natural;
        -- get the absolute string length (i.e. including parts of characters)
@@ -387,7 +400,7 @@ package Gtk.Terminal is
          cmd_prompt_check    : check_for_command_prompt_end_access;
                  -- check for the end of the command prompt so that we know
                  -- where the end point of the history_review is.
-          entering_command    : boolean := false;
+         entering_command    : boolean := false;
                  -- is the system waiting for us to enter a command? If not,
                  -- then send each key stroke through to the virtual terminal
                  -- client.  Otherwise respond to keystrokes depending on
@@ -411,6 +424,8 @@ package Gtk.Terminal is
          alternative_screen_buffer: boolean := false;
          reporting_focus_enabled  : boolean := false;
          saved_cursor_pos         : Gtk.Text_Mark.Gtk_Text_Mark;
+         cursor_keys_in_app_mode  : boolean := false;
+         keypad_keys_in_app_mode  : boolean := false;
          -- Escape character handling
          markup_text         : Gtkada.Types.Chars_Ptr := Null_Ptr;
          modifier_array      : font_modifier_array := (others => 0);

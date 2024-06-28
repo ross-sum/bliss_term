@@ -37,12 +37,15 @@ separate (Gtk.Terminal)
          green,
          blue      : Hex_String;
          function Put_Into_String(item : in natural) return Hex_String is
-            zero : constant character := '0';
-            radix : constant integer := 16#10#;
+            subtype hex_range is natural range 16#0# .. 16#F#;
+            type hex_array is array (hex_range) of character;
+            zero  : constant character := '0';
+            hexnum: constant hex_array := "0123456789ABCDEF";
+            radix : constant natural := 16#10#;
             number_string : Hex_String;
-            unit : natural;
-            strip_number : natural;
-            char_pos : Hex_Size := 1;
+            unit          : hex_range;
+            strip_number  : natural;
+            char_pos      : Hex_Size := 1;
          begin
             number_string := "00";
             if item /= 0
@@ -52,10 +55,9 @@ separate (Gtk.Terminal)
                -- point into the temporary string, number_string 
                -- (NB: actually no decimal point)
                while strip_number > 0 loop
-                  unit := (strip_number - (strip_number / radix) * radix) +
-                                           character'Pos(zero);
+                  unit:= hex_range(strip_number - (strip_number/radix)* radix);
                   strip_number := strip_number / radix;
-                  number_string(char_pos) := character'Val(unit);
+                  number_string(char_pos) := hexnum(unit);
                   if char_pos < Hex_Size'last then
                      char_pos := char_pos + 1;
                   end if;
@@ -87,10 +89,18 @@ separate (Gtk.Terminal)
                temp_markup:= New_String(Value(for_buffer.markup_text) & 
                                         "<span " & the_text &
                                         To_RGB_String(or_rgb_colour) & " >");
-            else  -- it's there, delete the '>', add the_text + cap with ' >'
-               temp_markup:= 
-                  New_String(Value(mkTxt)(Value(mkTxt)'First..Value(mkTxt)'Last-1)&
-                             the_text & To_RGB_String(or_rgb_colour) & " >");
+            else  -- it's there, append as appropriate
+               if Value(mkTxt)(Value(mkTxt)'Last) = '>'
+               then  --delete the '>', add the_text + cap with ' >'
+                  temp_markup:= 
+                     New_String(Value(mkTxt)
+                                    (Value(mkTxt)'First..Value(mkTxt)'Last-1) &
+                                the_text & To_RGB_String(or_rgb_colour)& " >");
+               else  -- just add the_text + cap with ' >'
+                  temp_markup:= 
+                     New_String(Value(mkTxt) &
+                                the_text & To_RGB_String(or_rgb_colour)& " >");
+               end if;
             end if;
             Free(for_buffer.markup_text);
             for_buffer.markup_text := temp_markup;
@@ -212,6 +222,8 @@ separate (Gtk.Terminal)
      --                                           virtual-terminal-sequences.md
      -- This stuff is also available here:
      --    http://xtermjs.org/docs/api/vtfeatures/
+     --    https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-PC-Style-
+     --                                                           Function-Keys
       use Gtk.Enums, Gdk.Color, Gdk.RGBA;
       ist : constant integer := for_sequence'First;
       num_params : constant natural := 5;
@@ -236,7 +248,7 @@ separate (Gtk.Terminal)
       else  -- using the main buffer for display
          the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(on_buffer);
       end if;
-      if for_sequence'Length<=2
+      if for_sequence'Length<2
       then  -- this cannot be a valid control sequence
          Handle_The_Error(the_error => 1, 
                           error_intro=> "Process_Escape: Control string error",
@@ -497,7 +509,11 @@ separate (Gtk.Terminal)
                      -- with a tab stop. If there are no more tab stops, move
                      -- to the last column in the row. If the cursor is in the
                      -- last column, move to the first column of the next row.
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                     Log_Data(at_level => 9, 
+                              with_details => "Process_Escape: Escape '" & 
+                                              Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                              "' not yet implemented.");
                   when 'J' =>   -- Erase in Display <param> type of erase
                      Window_To_Buffer_Coords(on_buffer.parent, 
                                              Gtk.Enums.Text_Window_Text, 
@@ -548,7 +564,7 @@ separate (Gtk.Terminal)
                                              Get_Line(cursor_iter), 20000);
                      case param(1) is
                         when 0 =>   -- Clear from cursor to end of line
-                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 0 'K' - cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(the_buf, cursor_iter, dest_iter)) & "'.");
+                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 0 'K' - cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting from cursor to end of line '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(the_buf, cursor_iter, dest_iter)) & "'.");
                            Delete(the_buf, cursor_iter, dest_iter);
                         when 1 =>   -- Clear from cursor to beginning of line
                            Get_Iter_At_Line_Offset(the_buf, dest_iter,
@@ -615,7 +631,11 @@ separate (Gtk.Terminal)
                      -- row) with a tab stop. If there are no more tab stops,
                      -- moves the cursor to the first column. If the cursor is
                      -- in the first column, doesn’t move the cursor.
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                     Log_Data(at_level => 9, 
+                               with_details=> "Process_Escape: Escape '" & 
+                                              Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                              "' not yet implemented.");
                   when '?' => -- private sequences
                      if param(1) = 0 then
                         -- extract the number, if any
@@ -628,10 +648,24 @@ separate (Gtk.Terminal)
                            chr_pos := chr_pos + 1;
                         end loop;
                         case param(1) is
-                           when 1 => null;  -- DECCKM send ESC O prefix, not ESC [
-                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                           when 1 => null;  -- DECCKM Cursor Keys App Mode
+                              -- Enable Cursor Keys Application Mode where 
+                              -- Keypad keys will emit their Application Mode
+                              -- sequences (on=h) or their Numeric Mode
+                              -- sequences (off=l).
+                              if for_sequence(chr_pos) = 'h'
+                              then  -- Application Mode
+                                 on_buffer.cursor_keys_in_app_mode := true;
+                              elsif for_sequence(chr_pos) = 'l'
+                              then  -- Numeric Mode
+                                 on_buffer.cursor_keys_in_app_mode := false;
+                              end if;
                            when 12 => null;  -- cursor blinking/not blinking
-                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                              Log_Data(at_level => 9, 
+                                       with_details=>"Process_Escape: Escape '"&
+                                                     Ada.Characters.Conversions.
+                                                     To_Wide_String(for_sequence)&
+                                                       "' not yet implemented.");
                            when 25 =>   -- show/hide cursor
                               if for_sequence(chr_pos) = 'h'
                               then
@@ -711,7 +745,11 @@ separate (Gtk.Terminal)
                   when 'g' => null;  -- Tab Clear
                      -- Clear tab stops at current position (0) or all (3)
                      -- (default=0)
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                     Log_Data(at_level => 9, 
+                              with_details=> "Process_Escape: Escape '" & 
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                             "' not yet implemented.");
                   when 'm' => -- set or reset font colouring and styles
                      while count <= pnum loop
                         case param(count) is
@@ -729,11 +767,12 @@ separate (Gtk.Terminal)
                               Max(on_buffer.modifier_array, underline);
                            when 5 => null;  -- show blink
                            when 6 => null;  -- rapid blink
-                           when 7 => null;  -- reverse video
+                           when 7 =>   -- reverse video
                               Append_To_Markup(on_buffer, "foreground=", 
                                                on_buffer.background_colour);
                               Append_To_Markup(on_buffer, "background=", 
                                                on_buffer.text_colour);
+                              Max(on_buffer.modifier_array, span);
                            when 8 =>   -- conceal or hide
                               -- by setting foreground to background colour
                               Append_To_Markup(on_buffer, "foreground=", 
@@ -756,7 +795,19 @@ separate (Gtk.Terminal)
                               end if;
                            when 25 => null; -- Not blinking
                            when 26 => null; -- Proportional spacing
-                           when 27 => null; -- Not reversed
+                           when 27 =>  -- Not reversed
+                              if on_buffer.markup_text /= Null_Ptr
+                              and then -- check for '<span' already being there
+                              Ada.Strings.Fixed.Count
+                                       (Value(on_buffer.markup_text),"<span")>0
+                              then
+                                 Append_To_Markup(on_buffer, "</span><span ");
+                              end if;
+                              Append_To_Markup(on_buffer, "foreground=", 
+                                               on_buffer.text_colour);
+                              Append_To_Markup(on_buffer, "background=", 
+                                               on_buffer.background_colour);
+                              Finish_Markup(on_buffer);
                            when 28 => null; -- Reveal
                            when 29 => null; -- Not crossed out
                               if on_buffer.modifier_array(strikethrough) > 0 then
@@ -863,7 +914,11 @@ separate (Gtk.Terminal)
                         count := count + 1;
                      end loop;
                   when 'i' => null;  -- Serial port control (media copy)
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                     Log_Data(at_level => 9, 
+                              with_details=> "Process_Escape : Escape '" &
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                             "' not yet implemented.");
                   when 'n' =>   -- Device status request
                      if param(1) = 5
                      then  -- Status Report "OK" '0n'
@@ -885,8 +940,15 @@ separate (Gtk.Terminal)
                      end if;
                   when 's' =>  -- Save cursor position
                      on_buffer.saved_cursor_pos:= Get_Mark(on_buffer,"insert");
-                  when 't' => null;  -- ??? format is <Esc>[nn;0;0t (e.g. nn=22 or nn=23)
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                  when 't' => null;  -- Window manipulation (XTWINOPS)
+                     -- format is <Esc>[nn;0;0t (e.g. nn=22 or nn=23)
+                     -- nn=22;0 : Save xterm icon and window title on stack.
+                     -- nn=22;0 : Restore xterm icon + window title from stack.
+                     Log_Data(at_level => 9, 
+                              with_details=>"Process_Escape: Escape XTWINOPS '"&
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                             "' not yet implemented.");
                   when 'u' =>  -- Restore cursor position
                      Get_Iter_At_Mark(the_buf, cursor_iter, 
                                       on_buffer.saved_cursor_pos);
@@ -910,13 +972,29 @@ separate (Gtk.Terminal)
                end case;
             when 'H' => null;  -- Horizontal Tab Set
                -- Sets a tab stop in the current column the cursor is in.
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape HTS '" & 
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when 'N' => null;  -- Single Shift Two
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" & 
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when 'O' => null;  -- Single Shift Three
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" &
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when 'P' => null;  -- Device Control String 
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" &
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when '\' => null;  -- String Terminator (terminates other commands)
                -- Handled elsewhere
             when ']' =>   -- Operating System Command (seems terminate by ^G)
@@ -933,30 +1011,60 @@ separate (Gtk.Terminal)
                elsif param(1) = 8 and param(2) =0 and param(3) = 0 
                then  -- hyperlink
                   null;
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                  Log_Data(at_level => 9, 
+                           with_details=> "Process_Escape : Escape '" &
+                                          Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                          "' not yet implemented.");
                elsif for_sequence(chr_pos) = 'P'
                then  -- change the Linux Console's palette
                   -- palette is of the form 'RRGGBB'
                   null;
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+                  Log_Data(at_level => 9, 
+                           with_details=> "Process_Escape : Escape '" &
+                                          Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                          "' not yet implemented.");
                end if;
             when 'X' => null;  -- Start of String
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" &
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when '^' => null;  -- Privacy Message
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" &
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when '_' => null;  -- Application Program Command
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" &
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when '#' => null;  -- Test
                -- If for_sequence(chr_pos) = '8' then -- DEC screen alignment test.
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" &
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when '%' => null;  -- UTF8
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               Log_Data(at_level => 9, 
+                        with_details=> "Process_Escape : Escape '" &
+                                       Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                       "' not yet implemented.");
             when '=' => null;  -- DECPAM -- Application keypad
                -- Keypad keys will emit their Application Mode sequences.
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               -- This means the virtual terminal client gets control sequences
+               on_buffer.keypad_keys_in_app_mode := true;
             when '>' => null;  -- DECPNM -- Normal keypad
                -- Keypad keys will emit their Numeric Mode sequences.
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Escape '" & Ada.Characters.Conversions.To_Wide_String(for_sequence) & "' not yet implemented.");
+               -- This means the virtual terminal client gets normal numbers.
+               on_buffer.keypad_keys_in_app_mode := false;
             when others =>  null; -- unrecognised control sequence - log+ignore
                Handle_The_Error(the_error => 3, 
                           error_intro=> "Process_Escape: Control string error",
