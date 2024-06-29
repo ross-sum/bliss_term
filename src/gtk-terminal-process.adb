@@ -1117,6 +1117,9 @@ begin  -- Process
          -- reset the buffer and pointer
          for_buffer.escape_sequence := (escape_str_range => ' ');
          for_buffer.escape_position := escape_str_range'First;
+         -- reset the flag that says we are in an escape sequence to 'off'
+         for_buffer.in_esc_sequence := false;
+         Switch_The_Light(for_buffer, 7, false);
          -- And reset the terminal back to being in 'Insert' mode
          if (not for_buffer.history_review) and 
             (not for_buffer.alternative_screen_buffer)
@@ -1140,6 +1143,9 @@ begin  -- Process
             Set_Overwrite(for_buffer.parent, false);
             Switch_The_Light(for_buffer, 5, true);
          end if;
+         -- And note we are exiting the escape sequence
+         for_buffer.in_esc_sequence := false;
+         Switch_The_Light(for_buffer, 7, false);
       end if;
    elsif the_input = Esc_str then
       -- Starting a new escape string sequence
@@ -1149,7 +1155,9 @@ begin  -- Process
       for_buffer.escape_position := escape_str_range'First;
       for_buffer.escape_sequence(for_buffer.escape_position) := Esc_str(1);
       for_buffer.escape_position := for_buffer.escape_position + 1;
+      -- Switch the flag to say that we are now in an escape sequence
       for_buffer.in_esc_sequence := true;
+      Switch_The_Light(for_buffer, 7, true);
       -- Once escape sequence is initiated, need to be in overwrite mode
       Set_Overwrite(for_buffer.parent, true);
       Switch_The_Light(for_buffer, 5, false);
@@ -1170,8 +1178,8 @@ begin  -- Process
          Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);
          for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
          for_buffer.buf_line_num := line_numbers(Get_Line_Count(the_buf));
-         Switch_The_Light(for_buffer, 7, false, for_buffer.line_number'Image);
-         Switch_The_Light(for_buffer, 8, false, for_buffer.buf_line_num'Image);
+         Switch_The_Light(for_buffer, 8, false, for_buffer.line_number'Image);
+         Switch_The_Light(for_buffer, 9, false, for_buffer.buf_line_num'Image);
       else  -- Just wrapped, so ignore this LF and reset just_wrapped
          for_buffer.just_wrapped := false;
       end if;
@@ -1230,7 +1238,7 @@ begin  -- Process
    Get_Iter_At_Line(the_buf, start_iter,
                        Glib.Gint(for_buffer.buf_line_num-1));
    for_buffer.anchor_point:=UTF8_Length(Get_Text(the_buf,start_iter,end_iter));
-   Switch_The_Light(for_buffer, 9, false, for_buffer.anchor_point'Image);
+   Switch_The_Light(for_buffer, 10, false, for_buffer.anchor_point'Image);
    Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    if for_buffer.alternative_screen_buffer and
       then  -- am in the alternative screen bufer
@@ -1254,6 +1262,8 @@ begin  -- Process
          Move_Mark(for_buffer, unedit_mark, end_iter);
          for_buffer.entering_command := true;  -- this is now the case
          Switch_The_Light(for_buffer, 6, true);
+         for_buffer.in_esc_sequence := false;
+         Switch_The_Light(for_buffer, 7, false);
          for_buffer.cmd_prompt_check.Stop_Looking;
       end;
    end if;
