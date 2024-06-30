@@ -623,16 +623,29 @@ package body Gtk.Terminal is
                the_key(2) := ' ';
             end if;
          when GDK_Tab =>  --16#FF09# / 10#65289#
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: tab key = pressed.");
             -- if in command line, but not history_review, put it in that state
             if (the_terminal.buffer.use_buffer_editing and
-                not the_terminal.buffer.history_review) -- and then in command line
-            then
-               null;
+                not the_terminal.buffer.history_review) and then 
+                the_terminal.buffer.entering_command
+            then  -- should be in command line entry
+               -- First, set a flag to flush the buffer
+               the_terminal.buffer.flush_buffer := true;
+               -- now output any already entered text
+               Key_Pressed(for_buffer => the_terminal.buffer);
+               -- reset the flush command
+               the_terminal.buffer.flush_buffer := false;
+               -- simulate going into handling stroke by stroke by switching on
+               -- history_review
+               the_terminal.buffer.history_review := true;
+               -- then just let the Tab key pass on through...
+               the_key(1) := Ada.Characters.Latin_1.HT;
+               the_key(2) := ' ';
             end if;
          when GDK_KP_0 | GDK_KP_Insert =>
             if the_terminal.buffer.keypad_keys_in_app_mode
             then  -- send the control sequence for this key
-               null;
+               the_key(3) := '2';
             end if;
          when GDK_KP_1 | GDK_KP_End =>
             if the_terminal.buffer.keypad_keys_in_app_mode
@@ -723,6 +736,9 @@ package body Gtk.Terminal is
          if for_event.keyval = GDK_BackSpace
          then  -- Actually a single back-space character
             Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
+         elsif for_event.keyval = GDK_Tab
+         then  -- Actually a single tab character
+            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
          else  -- standard sequence
             Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
          end if;
@@ -738,7 +754,7 @@ package body Gtk.Terminal is
             (the_key /= esc_start and the_key /= app_esc_st)
       then  -- in an app: we have set it to pass to the write routine
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
-         if for_event.keyval = GDK_End
+         if the_key(3) = '2' or the_key(3) = '4'
          then  -- Actually a 4 character non-standard sequence
             Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key & '~');
          elsif for_event.keyval = GDK_BackSpace
@@ -816,7 +832,6 @@ package body Gtk.Terminal is
       line_start : Gtk.Text_Iter.Gtk_Text_Iter;
       line_end   : Gtk.Text_Iter.Gtk_Text_Iter;
       result     : boolean;
-      line_number: natural;
    begin
       if for_buffer.alternative_screen_buffer
        then  -- using the alternative buffer for display
@@ -826,11 +841,9 @@ package body Gtk.Terminal is
       end if;
       -- Get pointers to the start and end of the current line
       line_start := at_iter;
-      line_number := natural(Get_Line(line_start));
-      Backward_Line(line_start, result);
-      if line_number > 0 and result
-      then  -- was not on the first line
-         Forward_Line(line_start, result);
+      if Get_Line_Offset(line_start) > 0
+      then  -- not at the start of the line
+         Set_Line_Offset(line_start, 0);
       end if;
       line_end := at_iter;
       Forward_To_Line_End(line_end, result);
@@ -848,8 +861,6 @@ package body Gtk.Terminal is
       use Gtk.Text_Iter;
       buffer     : Gtk.Text_Buffer.Gtk_Text_Buffer;
       line_start : Gtk.Text_Iter.Gtk_Text_Iter;
-      result     : boolean;
-      line_number: natural;
    begin
       if for_buffer.alternative_screen_buffer
        then  -- using the alternative buffer for display
@@ -859,11 +870,9 @@ package body Gtk.Terminal is
       end if;
       -- Get pointers to the start and end of the current line
       line_start := up_to_iter;
-      line_number := natural(Get_Line(line_start));
-      Backward_Line(line_start, result);
-      if line_number > 0 and result
-      then  -- was not on the first line
-         Forward_Line(line_start, result);
+      if Get_Line_Offset(line_start) > 0
+      then  -- not at the start of the line
+         Set_Line_Offset(line_start, 0);
       end if;
       -- Calculate and return the line between iterators
       return Get_Slice(buffer, line_start, up_to_iter, 
@@ -912,13 +921,11 @@ package body Gtk.Terminal is
       Window_To_Buffer_Coords(for_terminal, Gtk.Enums.Text_Window_Text, 0, 0, 
                               buf_x, buf_y);
       result:= Get_Iter_At_Position(for_terminal, first_line'access, null, 
-                                 buf_x, buf_y);
+                                    buf_x, buf_y);
        -- Get the start of the current line
-      line_number := natural(Get_Line(current_line));
-      Backward_Line(current_line, result);
-      if line_number > 0 and result
-      then  -- was not on the first line, so move back to the line
-         Forward_Line(current_line, result);  -- now at first character
+      if Get_Line_Offset(current_line) > 0
+      then  -- not at the start of the line
+         Set_Line_Offset(current_line, 0);
       end if;
       -- Move the first_line pointer until it matches the current line
       line_number := 1;
@@ -1314,7 +1321,8 @@ package body Gtk.Terminal is
                     for_string(for_string'Last-1) = '\') and   -- over line in
                     for_buffer.entering_command)) or           -- command line
               ((not for_buffer.use_buffer_editing) or -- process each char for
-               (not for_buffer.entering_command)) )   -- system edits or apps
+               (not for_buffer.entering_command)) or  -- system edits or apps
+              for_buffer.flush_buffer )  -- tab key must have been pressed
          then  -- Return/Enter key has been pressed + not cmd line continuation
                -- or otherwise not using the buffer's editing or is in an app
             -- Reset the history processing indicator value
@@ -1379,8 +1387,8 @@ package body Gtk.Terminal is
             -- Update the line count
             for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
             for_buffer.buf_line_num := line_numbers(Get_Line_Count(the_buf));
-            Switch_The_Light(for_buffer, 7, false, for_buffer.line_number'Image);
-            Switch_The_Light(for_buffer, 8, false, for_buffer.buf_line_num'Image);
+            Switch_The_Light(for_buffer,8, false, for_buffer.line_number'Image);
+            Switch_The_Light(for_buffer, 9, false, for_buffer.buf_line_num'Image);
          elsif for_string'Length > 0 and then 
             (history_text and for_buffer.use_buffer_editing)
          then  -- some other key pressed to modify a history line
@@ -1426,17 +1434,18 @@ package body Gtk.Terminal is
       the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
    begin     -- Key_Pressed
       Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed: Start.");
-      if for_buffer.alternative_screen_buffer
-       then  -- using the alternative buffer for display
-         the_buf := for_buffer.alt_buffer;
-      else  -- using the main buffer for display
-         the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
-      end if;
       if (for_buffer.line_number > unassigned_line_number) and
          (not for_buffer.waiting_for_response) and
          (not for_buffer.in_response)
       then  -- Spawn_Shell has been run for this terminal buffer
+         if for_buffer.alternative_screen_buffer
+         then  -- using the alternative buffer for display
+            the_buf := for_buffer.alt_buffer;
+         else  -- using the main buffer for display
+            the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+         end if;
          for_buffer.in_esc_sequence := false;
+         Switch_The_Light(for_buffer, 7, false);
          -- Get the key(s) pressed
          if for_buffer.history_review
          then  -- use the cursor position to copy up to
@@ -1745,9 +1754,9 @@ package body Gtk.Terminal is
       terminal.buffer.line_number := 
                       line_numbers(Get_Line_Count(terminal.buffer));
       terminal.buffer.buf_line_num := terminal.buffer.line_number;
-      Switch_The_Light(terminal.buffer, 7, false, 
-                       terminal.buffer.line_number'Image);
       Switch_The_Light(terminal.buffer, 8, false, 
+                       terminal.buffer.line_number'Image);
+      Switch_The_Light(terminal.buffer, 9, false, 
                        terminal.buffer.buf_line_num'Image);
       history_tag := terminal.buffer.Create_Tag("history_text");
       Set_Property(history_tag, Editable_Property, false);
@@ -1762,7 +1771,7 @@ package body Gtk.Terminal is
                        Glib.Gint(terminal.buffer.line_number));
       terminal.buffer.anchor_point := 
                   UTF8_Length(Get_Text(terminal.buffer, start_iter, end_iter));
-      Switch_The_Light(terminal.buffer, 9, false, 
+      Switch_The_Light(terminal.buffer, 10, false, 
                        terminal.buffer.anchor_point'Image);
       Place_Cursor(terminal.buffer, end_iter);
       end_mark := Create_Mark(terminal.buffer, "end_paste", end_iter, 
@@ -1842,7 +1851,7 @@ package body Gtk.Terminal is
       default_vert_size: constant natural := 32;
       horizontal_scale : constant natural := 15;
       vertical_scale   : constant natural := 
-                   natural(1.31*float(Get_Size(terminal.current_font))/1000.0);
+                   natural(1.33*float(Get_Size(terminal.current_font))/1000.0);
       col_size : Glib.Gint := Glib.Gint(columns * horizontal_scale);
       row_size : Glib.Gint := Glib.Gint(rows * vertical_scale);
       term_size: aliased win_size := (0, 0, 0, 0);

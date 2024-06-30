@@ -158,16 +158,20 @@ package Gtk.Terminal is
       --    5: whether the terminal is in 'Insert' (and not 'Overwrite') mode.
       --    6: whether the terminal is at the command line waiting for command
       --       entry.
-      --    7: total number of history lines in the buffer, including those
+      --    7: whether or not the terminal is handling an escape code sequence.
+      --       Escape code sequences are used to do things to the display, such
+      --       as move the cursor about or change the colour of the text or
+      --       background or handle the title bar.
+      --    8: total number of history lines in the buffer, including those
       --       currently being displayed on screen and those above the top of
       --       the screen.  This number is passed as text in the 'with_status'
       --       field (so is technically not a light).
-      --    8: current line number, that is, the line number that the cursor is
+      --    9: current line number, that is, the line number that the cursor is
       --       on for the currently active buffer. It would be the same as 7 if
       --       the currently active buffer is the main buffer, otherwise it
       --       will most likely be different (i.e. if it is the alternative
       --       buffer).
-      --    9: column number where the cursor is.
+      --    10: column number where the cursor is.
 
    type Cb_Gtk_Terminal_Void is access 
                            procedure (Self : access Gtk_Terminal_Record'Class);
@@ -436,8 +440,12 @@ package Gtk.Terminal is
          input_monitor       : input_monitor_type_access;
          use_buffer_editing  : boolean := true;
             -- indicates to use the buffer's editing capabilities wherever
-            -- possible or, alternatively, always use the terminal emulator's
-            -- editor.
+            -- possible or, alternatively if false, always use the terminal
+            -- emulator's editor.
+         flush_buffer        : boolean := false;
+            -- this is like a one-shot 'use_buffer_editing' and is done when
+            -- the tab key is pressed in order to get the terminal emulator's
+            -- editor to process the tab key as a auto-completion operation.
          parent              : Gtk.Text_View.Gtk_Text_View;
          -- The alternative buffer (to emulate an xterm)
          alt_buffer          : Gtk.Text_Buffer.Gtk_Text_Buffer;
@@ -583,6 +591,8 @@ package Gtk.Terminal is
          master_fd        : Interfaces.C.int;
          id               : natural := 0;
          title            : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
+         saved_title      : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
+            -- used in window manipulation (XTWINOPS) number 22 and 23
          scrollback_size  : natural := 0;
          current_font     : Pango.Font.Pango_Font_Description := Pango.Font.
                              To_Font_Description("Monospace Regular",size=>10);
