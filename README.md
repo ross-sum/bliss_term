@@ -67,7 +67,7 @@ not.  If just using Bliss Term for a language like English (or, perhaps, most
 European languages), then this need not be specified.  If using it for a language
 like Blissymbolics, then it should be specified, but in that case, you must view
 the log file with an editor that can view in the language specified.  The built-in
-less doesn't cut it.
+less doesn't cut it unless it is used within Bliss_Term.
 
 Execute via something like:
 bliss_term --log /tmp/cellwriter.log --format WCEM=8,ctrl --debug 5
@@ -130,15 +130,51 @@ needs a bit of work right now.
 
 Outstanding features required of the application and other work required are as 
 follows:
+* The cursor is not displayed or active when the application first opens. The
+  cause has yet to be found but appears to be some issue with Gtk.Text_View.
+  The work-around is to press the Down Arrow when you first open the first
+  terminal.  It will be visible for all terminals, new or already created, from
+  there on in.
 * Error repair including for window resize when changing lines or column.
 * Allow editing and update of the CSS in the Setup dialogue box and make the 
-changes take effect straight away.  See Gtk.Text_Buffer for the hooks for 
-editing (e.g. cut, copy, paste, selection and iterators).
+  changes take effect straight away.  See Gtk.Text_Buffer for the hooks for 
+  editing (e.g. cut, copy, paste, selection and iterators).
 * Modify Bliss Term so that all components of the system, including hints, 
-about text and help, use the selected language in the selected font.
+  about text and help, use the selected language in the selected font.
 * Get window docking to work.
 * Display the Manual using a mark-up to highlight headings and the like.  At the 
-moment it does not do that, rather it just displays plain text (with the 
-mark-up/mark-down displayed as plain text).
+  moment it does not do that, rather it just displays plain text (with the 
+  mark-up/mark-down displayed as plain text).
 * Code linting and automated testing is required.
+* Cut, copy and paste needs some more work.  Selection is not done well as it
+  is the native selection supplied by the Gtk.Text_Buffer/Gtk.Text_View, which
+  is not always obvious.  Paste does not yet work properly when in command
+  history mode (mostly a display issue).
+* The codes for Page Up and Page Down are clearly not correct.  There is a
+  work-around in place, but it is probably not optimal.
+* 'exit' needs fixing: it exits the currently active terminal (and the
+  application if it is the only terminal remaining) even when exiting a
+  shell (which it shouldn't).
+* The delete operation in the Process_Keys sub-procedure throws an error
+  warning into the terminal that this terminal is called from.  The error
+  warning is harmless, but is ugly.  There is another similar error that occurs
+  when in the alternative buffer (which is the case when using something like
+  less or vi) that also needs identifying and somehow removing. 
+* The cursor shapes cannot be changed.  This is an issue with the Gtk.Text_View
+  and would require Gtk.Text_View/Gtk.Text_Buffer to be modified or rewritten.
+  If someone with C++ skills would like to do that, ... :-)
+* Not all Escape commands have been implemented.  Finishing those off would be
+  potentially useful for those applications that have yet be tested with
+  Bliss_Term.
+* Word wrap is yet to be implemented.  At the moment, the terminal assumes an
+  'endless' (1000 character) line length.  It should enforce word wrap when
+  the user requests it.
+
+There are probably numerous other errors that I have yet to discover.  I am
+actively using this terminal emulator whenever it is safe for me to do so, so I
+hope to discover most of them myself.  My current challenge is to get it to
+edit a document using vi without any issues.  I have already tested less and it
+is satisfactory.  I have seen some strange behaviour from time to time when
+scrolling through the history buffer, but have yet to identify exact causes of
+issues.
 
