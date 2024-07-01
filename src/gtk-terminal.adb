@@ -592,14 +592,28 @@ package body Gtk.Terminal is
          when GDK_Down =>
             the_key(3) := 'B';
          when GDK_Home =>
-            if not the_terminal.buffer.use_buffer_editing
+            if (not the_terminal.buffer.use_buffer_editing) or
+               the_terminal.buffer.cursor_keys_in_app_mode
             then
                the_key(3) := 'G';
             end if;
          when GDK_End =>
-            if not the_terminal.buffer.use_buffer_editing
+            if (not the_terminal.buffer.use_buffer_editing) or
+               the_terminal.buffer.cursor_keys_in_app_mode
             then
                the_key(3) := '4';
+            end if;
+         when GDK_Page_Up =>
+            if (not the_terminal.buffer.use_buffer_editing) or
+               the_terminal.buffer.cursor_keys_in_app_mode
+            then
+               the_key(3) := '5';
+            end if;
+         when GDK_Page_Down =>
+            if (not the_terminal.buffer.use_buffer_editing) or
+               the_terminal.buffer.cursor_keys_in_app_mode
+            then
+               the_key(3) := '6';
             end if;
          when GDK_Left =>
             if the_terminal.buffer.history_review or
@@ -660,7 +674,7 @@ package body Gtk.Terminal is
          when GDK_KP_3 | GDK_KP_Page_Down =>
             if the_terminal.buffer.keypad_keys_in_app_mode
             then  -- send the control sequence for this key
-               null;
+               the_key(3) := '6';
             end if;
          when GDK_KP_4 | GDK_KP_Left =>
             if the_terminal.buffer.keypad_keys_in_app_mode
@@ -690,7 +704,7 @@ package body Gtk.Terminal is
          when GDK_KP_9 | GDK_KP_Page_Up =>
             if the_terminal.buffer.keypad_keys_in_app_mode
             then  -- send the control sequence for this key
-               null;
+               the_key(3) := '5';
             end if;
          when GDK_KP_Decimal | GDK_KP_Delete =>
             if the_terminal.buffer.keypad_keys_in_app_mode
@@ -729,8 +743,11 @@ package body Gtk.Terminal is
             end if;
          end;
       end if;
-      if the_terminal.buffer.bracketed_paste_mode and 
-         (the_key /= esc_start and the_key /= app_esc_st)
+      if the_terminal.buffer.bracketed_paste_mode and then
+         (((not the_terminal.buffer.cursor_keys_in_app_mode) and 
+           the_key /= esc_start) or 
+          (the_terminal.buffer.cursor_keys_in_app_mode and 
+           the_key /= app_esc_st))
       then  -- at command prompt: we have set it to pass to the write routine
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
          if for_event.keyval = GDK_BackSpace
@@ -750,13 +767,29 @@ package body Gtk.Terminal is
             Switch_The_Light(the_terminal.buffer, 5, false);
          end if;
          return true;
-      elsif (not the_terminal.buffer.bracketed_paste_mode) and 
-            (the_key /= esc_start and the_key /= app_esc_st)
+      elsif (not the_terminal.buffer.bracketed_paste_mode) and then
+            (((not the_terminal.buffer.cursor_keys_in_app_mode) and 
+              the_key /= esc_start) or 
+             (the_terminal.buffer.cursor_keys_in_app_mode and 
+              the_key /= app_esc_st))
       then  -- in an app: we have set it to pass to the write routine
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
-         if the_key(3) = '2' or the_key(3) = '4'
+         -- According to https://invisible-island.net/xterm/ctlseqs/
+         --                         ctlseqs.html#h2-The-Alternate-Screen-Buffer
+         -- the following codes in the form of "CSI n ~" should work.  But, for
+         -- Page Up and Page Down at least, they do not.  Hence the work-arounds
+         -- below.
+         if the_key(3) = '2' or the_key(3) = '4' 
+            -- or the_key(3) = '5' or the_key(3) = '6'
          then  -- Actually a 4 character non-standard sequence
             Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key & '~');
+         elsif the_key(3) = '5' or the_key(3) = '6'  -- Page Up, Page Down
+         then
+            if the_key(3) = '5' then the_key(3) := 'A'; end if;
+            if the_key(3) = '6' then the_key(3) := 'B'; end if;
+            for cntr in 1 .. (the_terminal.rows / 2) + 1 loop  -- half screen
+               Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
+            end loop;
          elsif for_event.keyval = GDK_BackSpace
          then  -- Actually a single back-space character
             Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));

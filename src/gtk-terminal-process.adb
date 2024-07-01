@@ -316,6 +316,28 @@ separate (Gtk.Terminal)
                                             Get_Insert(the_buf));
                            Forward_To_Line_End(cursor_iter, res);
                            Place_Cursor(the_buf, where => cursor_iter);
+                        when 5 => -- VT sequence for Page Up [non-standard]
+                           Get_Iter_At_Mark(the_buf, cursor_iter,
+                                            Get_Insert(the_buf));
+                           Backward_Lines(cursor_iter, 
+                                          Glib.Gint(Gtk_Terminal(
+                                           Get_Parent(on_buffer.parent)).rows/
+                                           2 + 1),  -- half a screen
+                                          res);
+                           Place_Cursor(the_buf, where => cursor_iter);
+                           Scroll_Mark_Onscreen(on_buffer.parent, 
+                                                Get_Insert(the_buf));
+                        when 6 => -- VT sequence for Page Down [non-standard]
+                           Get_Iter_At_Mark(the_buf, cursor_iter,
+                                            Get_Insert(the_buf));
+                           Forward_Lines(cursor_iter, 
+                                         Glib.Gint(Gtk_Terminal(
+                                           Get_Parent(on_buffer.parent)).rows/
+                                           2 + 1),  -- half a screen
+                                         res);
+                           Place_Cursor(the_buf, where => cursor_iter);
+                           Scroll_Mark_Onscreen(on_buffer.parent, 
+                                                Get_Insert(the_buf));
                         when 7 => -- VT sequence for Home [non-standard]
                            Get_Iter_At_Mark(the_buf, cursor_iter,
                                             Get_Insert(the_buf));
@@ -511,6 +533,7 @@ separate (Gtk.Terminal)
                      end if;
                      -- Now make this the new cursor location in current buffer
                      Place_Cursor(the_buf, where => cursor_iter);
+                     Scroll_Mark_Onscreen(on_buffer.parent, Get_Insert(the_buf));
                   when 'I' => null;  -- Cursor Horizontal (Forward) Tab
                      -- Advance the cursor to the next column (in the same row)
                      -- with a tab stop. If there are no more tab stops, move
