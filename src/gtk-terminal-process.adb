@@ -15,7 +15,7 @@ separate (Gtk.Terminal)
    Esc_num : constant UTF8_String := Esc_str & "[01;";
    Tab_chr : constant UTF8_String(1..Tab_length) := (1..Tab_length => ' ');
    Esc_Rng : constant Character_Ranges := (('@','K'),('M','P'),('S','T'),
-                                           ('f','i'),('l','n'),('s','u'),
+                                           ('f','i'),('l','n'),('r','u'),
                                            ('#','#'),('%','%'),('=','='),
                                            ('^','^'),('_','_'),('>','>'));
    Esc_Term: constant Character_Set := To_Set(Esc_Rng);
@@ -222,9 +222,11 @@ separate (Gtk.Terminal)
      --                                           virtual-terminal-sequences.md
      -- This stuff is also available here:
      --    http://xtermjs.org/docs/api/vtfeatures/
-     --    https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-PC-Style-
-     --                                                           Function-Keys
+     --    https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+     --    man 4 console_codes
       use Gtk.Enums, Gdk.Color, Gdk.RGBA;
+      use Modifier_Sets;
+      the_sequence : UTF8_String := for_sequence;
       ist : constant integer := for_sequence'First;
       num_params : constant natural := 5;
       type params is array(1..num_params) of natural;
@@ -266,7 +268,12 @@ separate (Gtk.Terminal)
       else  -- for_sequence(ist)=Esc_str and rest is control sequence
          if for_sequence(ist+1) = '[' or for_sequence(ist+1) = ']'
          then  -- extract the number(s), if any
-            chr_pos := ist + 2;
+            if for_sequence(ist+2) = '>' or for_sequence(ist+2) = '?'
+            then
+               chr_pos := ist + 3;
+            else
+               chr_pos := ist + 2;
+            end if;
             loop
                while for_sequence'Length > chr_pos + ist - 1 and then
                         for_sequence(chr_pos) in '0'..'9' loop
@@ -283,10 +290,91 @@ separate (Gtk.Terminal)
                chr_pos := chr_pos + 1;  -- get past the ';'
             end loop;
          end if;
-         case for_sequence(ist+1) is
+         case the_sequence(ist+1) is
             when '[' =>  -- it is a Control Sequence Introducer (CSI) sequence
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI sequence - there are" & pnum'Wide_Image & " parameters, being " & param(1)'Wide_Image & "," & param(2)'Wide_Image & "," & param(3)'Wide_Image & " and next sequence is '" & Ada.Characters.Conversions.To_Wide_String(for_sequence(chr_pos..chr_pos)) & "'.");
-               case for_sequence(chr_pos) is
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI sequence - there are" & pnum'Wide_Image & " parameters, being " & param(1)'Wide_Image & "," & param(2)'Wide_Image & "," & param(3)'Wide_Image & " and next sequence is the_sequence(" & chr_pos'wide_image & ")= '" & Ada.Characters.Conversions.To_Wide_String(the_sequence(chr_pos..chr_pos)) & "'.");
+               if the_sequence(ist+2) = '>'
+               then  -- It is an evil variation for xterm
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[>...x' - evil sequence.");
+                  case the_sequence(chr_pos) is
+                     when 'm' => null;  -- key modifier options XTMODKEYS
+                        case param(1) is
+                           when 0 => null;  -- modifyKeyboard
+                           when 1 => null;  -- modifyCursorKeys
+                           when 2 => null;  -- modifyFunctionKeys
+                           when 4 => null;  -- modifyOtherKeys
+                              case param(2) is
+                                 when 0 => null;  -- disable the feature
+                                    if Contains(on_buffer.modifiers, 
+                                                special_keys)
+                                    then
+                                       Delete(on_buffer.modifiers, 
+                                              special_keys);
+                                    end if;
+                                    if Contains(on_buffer.modifiers, all_keys)
+                                    then
+                                       Delete(on_buffer.modifiers, all_keys);
+                                    end if;
+                                 when 1 => null;  -- enable with exceptions
+                                    if not Contains(on_buffer.modifiers, 
+                                                    special_keys)
+                                    then
+                                       Insert(on_buffer.modifiers,special_keys);
+                                    end if;
+                                 when 2 => null;  -- enable without exceptions
+                                    if not Contains(on_buffer.modifiers, 
+                                                    all_keys)
+                                    then
+                                       Insert(on_buffer.modifiers, all_keys);
+                                    end if;
+                                 when others => null;  -- ignore
+                              end case;
+                           when others => null;  -- ignore
+                        end case;
+                     when 'n' => null;  -- 
+                     when others => null;
+                  end case;
+                  null;  -- Not yet implemented
+                  Log_Data(at_level => 9, 
+                           with_details => "Process_Escape: Escape '"&
+                                           Ada.Characters.Conversions.
+                                                  To_Wide_String(the_sequence)&
+                                           "' not yet fully implemented.");
+                  the_sequence(chr_pos) := '!';  -- Dummy to exit further ops
+               elsif the_sequence(ist+2) = '?'
+               then  -- It is an evil variation for xterm
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[?...x' - evil sequence.");
+                  case the_sequence(chr_pos) is
+                     when 'm' => null;  -- query key modifier options XTQMODKEYS
+                        case param(1) is
+                           when 0 => null;  -- modifyKeyboard
+                           when 1 => null;  -- modifyCursorKeys
+                           when 2 => null;  -- modifyFunctionKeys
+                           when 4 => null;  -- modifyOtherKeys
+                           when others => null;  -- ignore
+                        end case;
+                        Log_Data(at_level => 9, 
+                           with_details => "Process_Escape: Escape '"&
+                                           Ada.Characters.Conversions.
+                                                  To_Wide_String(the_sequence)&
+                                           "' not yet implemented.");
+                        the_sequence(chr_pos) := '!';  -- Dummy to exit further ops
+                     when 'n' => null;  -- 
+                        Log_Data(at_level => 9, 
+                           with_details => "Process_Escape: Escape '"&
+                                           Ada.Characters.Conversions.
+                                                  To_Wide_String(the_sequence)&
+                                           "' not yet implemented.");
+                        the_sequence(chr_pos) := '!';  -- Dummy to exit further ops
+                     when others => -- processed below, so
+                        chr_pos := ist + 2;  -- reset back for furthur processing
+                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[?...x' - evil sequence resetting chr_pos to the_sequence(" & chr_pos'wide_image & ")= '" & Ada.Characters.Conversions.To_Wide_String(the_sequence(chr_pos..chr_pos)) & "'.");
+                  end case;
+                  null;  -- Not yet implemented
+               end if;
+               case the_sequence(chr_pos) is
+                  when '!' => null;  -- Ignore (to exit further operations)
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[>/?...x' - evil sequence bail signal given.");
                   when '@' =>   -- Insert (param) space chars ahead of cursor
                      if param(1) = 0
                      then
@@ -503,28 +591,68 @@ separate (Gtk.Terminal)
                      end if;
                      Place_Cursor(the_buf, where => cursor_iter);
                   when 'H' | 'f' =>   -- Move cursor to row <param>, column <param>
-                     -- find top left corner
-                     Window_To_Buffer_Coords(on_buffer.parent, 
-                                                Gtk.Enums.Text_Window_Text, 
-                                                0, 0, buf_x, buf_y);
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - top LH corner = (" & buf_x'Wide_Image & "," & buf_y'Wide_Image & ").");
-                     res:= Get_Iter_At_Position(on_buffer.parent,
-                                                cursor_iter'access, null, 
-                                                buf_x, buf_y);
+                        -- Tried both:
+                        --    Get_Visible_Rect(on_buffer.parent, buf_rect); and
+                        --    Window_To_Buffer_Coords(on_buffer.parent, 
+                        --                            Gtk.Enums.Text_Window_Text, 
+                       --                             0, 0, buf_x, buf_y);
+                        -- to get the top left hand corner and then tried all:
+                        --    Get_Line_At_Y(on_buffer.parent, the_iter, 
+                        --             buf_rect.Y + buf_rect.Height, line_top);
+                        --    res:= Get_Iter_At_Location(on_buffer.parent,
+                        --                        cursor_iter'access, --null, 
+                        --                        buf_x, buf_y);
+                        --    res:= Get_Iter_At_Position(on_buffer.parent,
+                        --                        cursor_iter'access, --null, 
+                        --                        buf_x, buf_y);
+                        -- to position the cursor in the TLH corner of the
+                        -- screen but for a short buffer, they always returned
+                        -- the same as Get_End_Iter, even if a random buf_y/
+                        -- buf_rect.Y was substituted in.
+                     declare
+                        the_term  : Gtk_Text_View := for_buffer.parent;
+                        the_terminal : Gtk_Terminal := 
+                                            Gtk_Terminal(Get_Parent(the_term));
+                     begin
+                        if on_buffer.scroll_region_bottom > 0
+                        then  -- the top of the buffer is the correct home
+                              -- position in this case
+                           Get_Start_Iter(the_buf, cursor_iter);
+                           -- Also, can't go past the bottom of screen, wrap it
+                           -- if needs be
+                           if param(1) > on_buffer.scroll_region_bottom -
+                                         on_buffer.scroll_region_top + 1
+                           then
+                              param(1) := (on_buffer.scroll_region_bottom -
+                                           on_buffer.scroll_region_top + 1) mod
+                                          param(1);
+                           end if;
+                        else  -- Get the home position
+                           cursor_iter := 
+                                     Home_Iterator(for_terminal=>the_terminal);
+                        end if;
+                        -- Place_Cursor(the_buf, where => cursor_iter);
+                        -- Scroll_Mark_Onscreen(for_buffer.parent, 
+                           --                   Get_Insert(the_buf));
+                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - from Get_Start_Iter or Home_Iterator: Cursor_Iter is at (col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ", row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ").");
+                     end;
                      -- now move to the offset from the top left corner
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moving from top LH corner row (i.e. line)" & Get_Line(cursor_iter)'Wide_Image & " to (row,col) position (" & param(1)'Wide_Image & "," & param(2)'Wide_Image & ").");
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moving from top LH corner row (i.e. line i.d.)" & Get_Line(cursor_iter)'Wide_Image & " to (row,col) position (" & param(1)'Wide_Image & "," & param(2)'Wide_Image & ").  Cursor is at (row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ", col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ").");
                      if param(1) > 1 then
-                        Forward_Lines(cursor_iter, Gint(param(1)-1), res);
+                        Set_Line_Offset(cursor_iter, 0);  -- to be sure to be sure
+                        for line in 1 .. param(1) - 1 loop
+                           Forward_Line(cursor_iter, res);
+                           if not res then -- no more lines, so add one in
+                              Gtk.Text_Buffer.Insert(the_buf, cursor_iter, LF_str);
+                           end if;
+                        end loop;
                      end if;
                      if param(2) > 1 then
                         for col in 1 .. param(2)-1 loop
-                           Forward_Char(cursor_iter, res);
-                           if not res then  -- no more characters right
-                              if Starts_Display_Line(on_buffer.parent, 
-                                                     cursor_iter)
-                              then  -- go back to previous position
-                                 Backward_Char(cursor_iter, res);
-                              end if;
+                           if not Ends_Line(cursor_iter)
+                           then  -- line long enough - move forward
+                              Forward_Char(cursor_iter, res);
+                           else  -- line not long enough
                               -- Pad out with a space character
                               Insert(on_buffer, at_iter=>cursor_iter,
                                      the_text=>" ");
@@ -534,6 +662,8 @@ separate (Gtk.Terminal)
                      -- Now make this the new cursor location in current buffer
                      Place_Cursor(the_buf, where => cursor_iter);
                      Scroll_Mark_Onscreen(on_buffer.parent, Get_Insert(the_buf));
+                     Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moved to (row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ", col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ").");
                   when 'I' => null;  -- Cursor Horizontal (Forward) Tab
                      -- Advance the cursor to the next column (in the same row)
                      -- with a tab stop. If there are no more tab stops, move
@@ -668,6 +798,7 @@ separate (Gtk.Terminal)
                                               "' not yet implemented.");
                   when '?' => -- private sequences
                      if param(1) = 0 then
+                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?...' - Private sequence extracting param(1).");
                         -- extract the number, if any
                         chr_pos := ist + 3;
                         while for_sequence'Length > chr_pos + ist - 1 and then
@@ -677,8 +808,15 @@ separate (Gtk.Terminal)
                                        Character'Pos('0');
                            chr_pos := chr_pos + 1;
                         end loop;
-                        case param(1) is
-                           when 1 => null;  -- DECCKM Cursor Keys App Mode
+                     elsif chr_pos + ist - 1 < for_sequence'Length
+                     then  -- advance to the end character
+                        chr_pos := for_sequence'Length - ist + 1;
+                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?...' - Private sequence chr_pos set to" & chr_pos'wide_image & ".");
+                     end if;
+                     for param_num in 1..num_params loop
+                        case param(param_num) is
+                           when 0 => null;  -- ignore this
+                           when 1 =>   -- DECCKM Cursor Keys App Mode
                               -- Enable Cursor Keys Application Mode where 
                               -- Keypad keys will emit their Application Mode
                               -- sequences (on=h) or their Numeric Mode
@@ -695,7 +833,7 @@ separate (Gtk.Terminal)
                                        with_details=>"Process_Escape: Escape '"&
                                                      Ada.Characters.Conversions.
                                                      To_Wide_String(for_sequence)&
-                                                       "' not yet implemented.");
+                                                     "' not yet implemented.");
                            when 25 =>   -- show/hide cursor
                               if for_sequence(chr_pos) = 'h'
                               then
@@ -704,6 +842,27 @@ separate (Gtk.Terminal)
                               then
                                  on_buffer.cursor_is_visible := false;
                               end if;
+                              Set_Cursor_Visible(on_buffer.parent, 
+                                                 on_buffer.cursor_is_visible);
+                           when 1000 => null;  -- Send Mouse X & Y on button
+                                               -- press and release
+                              on_buffer.mouse_config.x10_mouse := 
+                                                   for_sequence(chr_pos) = 'h';
+                              Log_Data(at_level => 9, 
+                                       with_details=>"Process_Escape: Escape "&
+                                                     "SET_X10_MOUSE ;" &
+                                                     Ada.Characters.Conversions.
+                                                     To_Wide_String(for_sequence)&
+                                                     "' not yet fully implemented.");
+                           when 1002 => null;  --Use Cell Motion Mouse Tracking
+                              on_buffer.mouse_config.btn_event := 
+                                                   for_sequence(chr_pos) = 'h';
+                              Log_Data(at_level => 9, 
+                                       with_details=>"Process_Escape: Escape "&
+                                                     "SET_BTN_EVENT_MOUSE ;" &
+                                                     Ada.Characters.Conversions.
+                                                     To_Wide_String(for_sequence)&
+                                                     "' not yet fully implemented.");
                            when 1004 =>  -- reporting focus enable/disable
                               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1004' - Setting on_buffer.reporting_focus_enabled.");
                               if for_sequence(chr_pos) = 'h'
@@ -713,6 +872,15 @@ separate (Gtk.Terminal)
                               then
                                  on_buffer.reporting_focus_enabled := false;
                               end if;
+                           when 1006 => null;  -- SGR Mouse Mode enable/disable
+                              on_buffer.mouse_config.ext_mode := 
+                                                   for_sequence(chr_pos) = 'h';
+                              Log_Data(at_level => 9, 
+                                       with_details=>"Process_Escape: Escape "&
+                                                     "SET_EXT_MODE_MOUSE ;" &
+                                                     Ada.Characters.Conversions.
+                                                     To_Wide_String(for_sequence)&
+                                                     "' not yet fully implemented.");
                            when 1049 =>  -- alternative screen buffer
                               declare
                                  the_term : Gtk_Terminal := 
@@ -741,6 +909,9 @@ separate (Gtk.Terminal)
                                     Gtk.Text_View.Set_Buffer
                                                (view  => the_term.terminal,
                                                 buffer=> on_buffer);
+                                    -- reset key values
+                                    on_buffer.scroll_region_top    := 0;
+                                    on_buffer.scroll_region_bottom := 0;
                                     -- and make sure we are at the cursor point
                                     Scroll_Mark_Onscreen(the_term.terminal, 
                                                         Get_Insert(on_buffer));
@@ -773,7 +944,7 @@ separate (Gtk.Terminal)
                                                   To_Wide_String(for_sequence)&
                                                        "'.");
                         end case;
-                     end if;
+                     end loop;
                   when 'g' => null;  -- Tab Clear
                      -- Clear tab stops at current position (0) or all (3)
                      -- (default=0)
@@ -959,33 +1130,51 @@ separate (Gtk.Terminal)
                      then  -- Report Cursor Position (CPR) "<row>;<column>R"
                         Get_Iter_At_Mark(the_buf, cursor_iter,
                                          Get_Insert(the_buf));
-                        Write(fd => on_buffer.master_fd, 
-                              Buffer => Esc_str & "[" & 
+                        declare
+                           CSI : UTF8_string(1..1) := "[";
+                           utf8_line: UTF8_String := 
+                                         Get_Line_From_Start
+                                                  (for_buffer => on_buffer, 
+                                                   up_to_iter => cursor_iter);
+                           cur_line : wide_string :=
+                                         Ada.Strings.UTF_Encoding.Wide_Strings.
+                                         Decode(utf8_line);
+                        begin
+                           Write(fd => on_buffer.master_fd, 
+                              Buffer => Esc_str & CSI & 
                                         As_String(Get_Line_Number
                                            (for_terminal=> on_buffer.parent, 
                                             at_iter => cursor_iter)) & ";" & 
-                                        As_String(UTF8_Length(
-                                           Get_Line_From_Start
-                                              (for_buffer => on_buffer, 
-                                               up_to_iter => cursor_iter))) & 
+                                        -- As_String(cur_line'Length) & 
+                                        As_String(UTF8_Length(utf8_line)) & 
                                         "R");
+                        end;
                      end if;
+                  when 'r' =>  -- Set scrolling region DECSTBM
+                     -- parameters are top and bottom row.
+                     on_buffer.scroll_region_top    := param(1);
+                     on_buffer.scroll_region_bottom := param(2);
                   when 's' =>  -- Save cursor position
                      on_buffer.saved_cursor_pos:= Get_Mark(on_buffer,"insert");
                   when 't' => null;  -- Window manipulation (XTWINOPS)
-                     -- format is <Esc>[nn;0;0t (e.g. nn=22 or nn=23)
+                     -- format is <Esc>[nn;a;0t (e.g. nn=22 or nn=23)
                      -- nn=22;0 : Save xterm icon and window title on stack.
-                     -- nn=22;0 : Restore xterm icon + window title from stack.
+                     -- nn=23;0 : Restore xterm icon + window title from stack.
+                     -- a=0     : both xterm icon and window title
+                     -- a=1     : xterm icon title
+                     -- a=2     : xterm window title
                      declare
                         the_term : Gtk_Terminal := 
                                     Gtk_Terminal(Get_Parent(on_buffer.parent));
                      begin
-                        if param(1) = 22 and param(2) = 0 and param(3) = 0
+                        if param(1) = 22 and (param(2) = 0 or param(2) =2) and 
+                           param(3) = 0
                         then
                            Free(the_term.saved_title);
                            the_term.saved_title := 
                                              New_String(Value(the_term.title));
-                        elsif param(1) = 23 and param(2) = 0 and param(3) = 0
+                        elsif param(1) = 23 and (param(2) = 0 or param(2) = 2)
+                              and param(3) = 0
                         then
                            Free(the_term.title);
                            the_term.title :=
@@ -1198,7 +1387,9 @@ begin  -- Process
           for_buffer.escape_sequence(for_buffer.escape_position-1)=Esc_str(1))
           or else
          (for_buffer.escape_sequence(escape_str_range'First+1) /= ']' and then
-          Is_In(element => the_input(ist), set => Esc_Term))
+          (Is_In(element => the_input(ist), set => Esc_Term) and not
+           (the_input(ist) = '>' and 
+            for_buffer.escape_sequence(1..for_buffer.escape_position) = Esc_str & "[>")))
       then  -- escape sequence is complete - process it
          Error_Log.Debug_Data(at_level => 9, with_details => "Process : Escape sequence finished with '" & Ada.Characters.Conversions.To_Wide_String(for_buffer.escape_sequence(1..for_buffer.escape_position)) & "'; Set_Overwrite(for_buffer.parent) to true");
          -- Make sure that terminal is in overwrite mode as the escape sequence
@@ -1274,14 +1465,28 @@ begin  -- Process
       then  -- do a new line
          if for_buffer.alternative_screen_buffer
          then  -- in Alternative buffer, do  the LF at the end of current line
-            Get_Iter_At_Mark(the_buf, end_iter, Get_Insert(the_buf));
-            if not Ends_Line(end_iter) then -- (don't want to go to next line)
-               Forward_To_Line_End(end_iter, res);
+            if for_buffer.scroll_region_bottom = 0 or else
+               (for_buffer.scroll_region_bottom > 0 and then
+                natural(Get_Line_Count(for_buffer)) <
+                                            (for_buffer.scroll_region_bottom - 
+                                             for_buffer.scroll_region_top + 1))
+            then  -- but only if within range of the screen
+               Get_Iter_At_Mark(the_buf, end_iter, Get_Insert(the_buf));
+               if not Ends_Line(end_iter)
+               then -- (don't want to go to next line)
+                  Forward_To_Line_End(end_iter, res);
+               end if;
+               res := true;
+            else 
+               res := false;
             end if;
-         -- otherwise only place cursor at the end if not in alternative buffer
+         else  -- otherwise as we only place cursor at the line end if not in
+            res := true;  --  alternative buffer, do nothing here
          end if;
-         Place_Cursor(the_buf, where => end_iter);
-         Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);
+         if res  then  -- only do if allowed
+            Place_Cursor(the_buf, where => end_iter);
+            Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);
+         end if;
          for_buffer.line_number := line_numbers(Get_Line_Count(for_buffer));
          for_buffer.buf_line_num := line_numbers(Get_Line_Count(the_buf));
          Switch_The_Light(for_buffer, 8, false, for_buffer.line_number'Image);

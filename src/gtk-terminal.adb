@@ -35,7 +35,7 @@
 --  without even the implied warranty of MERCHANTABILITY or FITNESS  --
 --  FOR  A PARTICULAR PURPOSE. See the GNU General  Public  Licence  --
 --  for  more details.  You should have received a copy of the  GNU  --
---  General Public Licence distributed with  Cell Writer.            --
+--  General Public Licence distributed with  Bliss Term.             --
 --  If  not,  write to the Free Software  Foundation,  51  Franklin  --
 --  Street, Fifth Floor, Boston, MA 02110-1301, USA.                 --
 --                                                                   --
@@ -154,8 +154,8 @@ package body Gtk.Terminal is
    --       title_callback   : Spawn_Title_Callback
    --       closed_callback  : Spawn_Closed_Callback;
    --       term_input       : Terminal_Handling_Access;
-   --       cols             : natural := 80;  -- default number of columns
-   --       rows             : natural := 25;  -- default number of rows
+   --       cols             : natural := default_columns;  -- number of columns
+   --       rows             : natural := default_rows;  -- number of rows
    -- end record;
    -- type Gtk_Terminal is access all Gtk_Terminal_Record'Class;
 
@@ -195,6 +195,24 @@ package body Gtk.Terminal is
          the_log_handler(at_level, with_details);
       end if;
    end Log_Data;
+      
+   ----------------------
+   -- Set Constructors --
+   ----------------------
+   
+   -- type modifier_types is (none, special_keys, all_keys, 
+   --                         legacy_vt220, numeric_keypad, editing_keypad, 
+   --                         function_keys, other_special_keys);
+   function Equals(left, right : modifier_types) return boolean is
+   begin
+      return left = right;
+   end Equals;
+   function Less_Than(left, right : modifier_types) return boolean is
+   begin
+      return modifier_types'Pos(left) < modifier_types'Pos(right);
+   end Less_Than;
+   -- package Modifier_Sets is new Ada.Containers.Ordered_Sets
+   --     (modifier_types, Equals, Less_than);
       
    ------------------
    -- Constructors --
@@ -275,9 +293,12 @@ package body Gtk.Terminal is
          Add(the_terminal, the_terminal.terminal);
          On_Key_Press_Event(self=>the_terminal.terminal, 
                             call=>Scroll_Key_Press_Check'access, after=>false);
+         On_Motion_Notify_Event(self=>the_terminal.terminal, 
+                            call=>Motion_Notify_CB'access, after=>false);
          -- Give an initial default dimension of nowrap_size (1000) characters
-         -- wide x 25 lines (i.e. no wrap)
-         Set_Size (terminal => the_terminal, columns => nowrap_size, rows => 25);
+         -- wide x default_rows (25) lines (i.e. no wrap)
+         Set_Size (terminal => the_terminal, 
+                   columns => nowrap_size, rows => default_rows);
          -- Ensure the terminal's cursor is visible when it is shown
       --    On_Show(self=>the_terminal.terminal, call=>Show'access, after=>false);
       end if;
@@ -567,240 +588,75 @@ package body Gtk.Terminal is
          when E : others => Process_Exception (E);
    end Marsh_Gtk_Terminal_Allocation_Void;
 
+   function Cb_To_Address is new Ada.Unchecked_Conversion
+     (Cb_Gtk_Terminal_Clicked_Void, System.Address);
+   function Address_To_Cb is new Ada.Unchecked_Conversion
+     (System.Address, Cb_Gtk_Terminal_Clicked_Void);
+
+   procedure Connect(Object  : access Gtk_Terminal_Record'Class;
+                     C_Name  : Glib.Signal_Name;
+                     Handler : Cb_Gtk_Terminal_Clicked_Void;
+                     After   : Boolean);
+
+   procedure On_Clicked (Self  : access Gtk_Terminal_Record;
+                         Call  : Cb_Gtk_Terminal_Clicked_Void;
+                         After : Boolean := False)
+   is
+   begin
+      Connect (Self, "clicked" & ASCII.NUL, Call, After);
+   end On_Clicked;
+
+   procedure Marsh_Gtk_Terminal_Clicked_Void
+      (Closure         : GClosure;
+       Return_Value    : Glib.Values.GValue;
+       N_Params        : Glib.Guint;
+       Params          : Glib.Values.C_GValues;
+       Invocation_Hint : System.Address;
+       User_Data       : System.Address);
+   pragma Convention (C, Marsh_Gtk_Terminal_Clicked_Void);
+   
+   procedure Connect(Object  : access Gtk_Terminal_Record'Class;
+                     C_Name  : Glib.Signal_Name;
+                     Handler : Cb_Gtk_Terminal_Clicked_Void;
+                     After   : Boolean)
+   is
+   begin
+      Unchecked_Do_Signal_Connect
+         (Object      => Object,
+         C_Name      => C_Name,
+         Marshaller  => Marsh_Gtk_Terminal_Clicked_Void'Access,
+         Handler     => Cb_To_Address (Handler),--  Set in the closure
+         After       => After);
+   end Connect;
+   
+   procedure Marsh_Gtk_Terminal_Clicked_Void
+      (Closure         : GClosure;
+       Return_Value    : Glib.Values.GValue;
+       N_Params        : Glib.Guint;
+       Params          : Glib.Values.C_GValues;
+       Invocation_Hint : System.Address;
+       User_Data       : System.Address)
+   is
+      pragma Unreferenced (Return_Value, N_Params, Invocation_Hint, User_Data);
+      H   : constant Cb_Gtk_Terminal_Clicked_Void := 
+                         Address_To_Cb (Get_Callback (Closure));
+      Obj : constant Gtk_Terminal := 
+                         Gtk_Terminal (Unchecked_To_Object (Params, 0));
+   begin
+      -- See https://stackoverflow.com/questions/63834897/is-it-possible-to-get-cursor-coordinates-in-textview-gtk for getting mouse pointer position.
+      -- use Gtk.Text_View.Get_Iter_At_Position here to do local processing 1st?
+      H (Obj);
+      exception 
+         when E : others => Process_Exception (E);
+   end Marsh_Gtk_Terminal_Clicked_Void;
+
    function Scroll_Key_Press_Check(for_terminal : access Gtk_Widget_Record'Class;
                                    for_event : Gdk.Event.Gdk_Event_Key)
-   return boolean is
+   return boolean is separate;
       -- Respond to any key press events to check if an up arrow, down arrow
       -- or, in the case of terminal emulator controlled editing, left and
       -- right arrow and backspace key has been been pressed.  If so, it gets
       -- passed to the terminal emulator and not to the buffer for processing.
-      use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
-      esc_start   : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ ";
-      app_esc_st  : constant string(1..3) := Ada.Characters.Latin_1.Esc & "O ";
-      the_term    : Gtk_Text_View := Gtk_Text_View(for_terminal);
-      the_terminal: Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
-      the_key     : string(1..3) := esc_start;
-   begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ".");
-      if the_terminal.buffer.cursor_keys_in_app_mode
-      then  -- substitute the '[' for a 'O'
-         the_key := app_esc_st;
-      end if;
-      case for_event.keyval is
-         when GDK_Up => 
-            the_key(3) := 'A';
-         when GDK_Down =>
-            the_key(3) := 'B';
-         when GDK_Home =>
-            if (not the_terminal.buffer.use_buffer_editing) or
-               the_terminal.buffer.cursor_keys_in_app_mode
-            then
-               the_key(3) := 'G';
-            end if;
-         when GDK_End =>
-            if (not the_terminal.buffer.use_buffer_editing) or
-               the_terminal.buffer.cursor_keys_in_app_mode
-            then
-               the_key(3) := '4';
-            end if;
-         when GDK_Page_Up =>
-            if (not the_terminal.buffer.use_buffer_editing) or
-               the_terminal.buffer.cursor_keys_in_app_mode
-            then
-               the_key(3) := '5';
-            end if;
-         when GDK_Page_Down =>
-            if (not the_terminal.buffer.use_buffer_editing) or
-               the_terminal.buffer.cursor_keys_in_app_mode
-            then
-               the_key(3) := '6';
-            end if;
-         when GDK_Left =>
-            if the_terminal.buffer.history_review or
-               (not the_terminal.buffer.use_buffer_editing) or
-               the_terminal.buffer.cursor_keys_in_app_mode
-            then
-               the_key(3) := 'D';
-            end if;
-         when GDK_Right =>
-            if the_terminal.buffer.history_review or
-               (not the_terminal.buffer.use_buffer_editing) or
-               the_terminal.buffer.cursor_keys_in_app_mode
-            then
-               the_key(3) := 'C';
-            end if;
-         when GDK_BackSpace =>  --16#FF08# / 10#65288#
-            if the_terminal.buffer.history_review or
-               not the_terminal.buffer.use_buffer_editing
-            then
-               the_key(1) := Ada.Characters.Latin_1.BS;
-               the_key(2) := ' ';
-            end if;
-         when GDK_Tab =>  --16#FF09# / 10#65289#
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: tab key = pressed.");
-            -- if in command line, but not history_review, put it in that state
-            if (the_terminal.buffer.use_buffer_editing and
-                not the_terminal.buffer.history_review) and then 
-                the_terminal.buffer.entering_command
-            then  -- should be in command line entry
-               -- First, set a flag to flush the buffer
-               the_terminal.buffer.flush_buffer := true;
-               -- now output any already entered text
-               Key_Pressed(for_buffer => the_terminal.buffer);
-               -- reset the flush command
-               the_terminal.buffer.flush_buffer := false;
-               -- simulate going into handling stroke by stroke by switching on
-               -- history_review
-               the_terminal.buffer.history_review := true;
-               -- then just let the Tab key pass on through...
-               the_key(1) := Ada.Characters.Latin_1.HT;
-               the_key(2) := ' ';
-            end if;
-         when GDK_KP_0 | GDK_KP_Insert =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := '2';
-            end if;
-         when GDK_KP_1 | GDK_KP_End =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := '4';
-            end if;
-         when GDK_KP_2 | GDK_KP_Down =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := 'B';
-            end if;
-         when GDK_KP_3 | GDK_KP_Page_Down =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := '6';
-            end if;
-         when GDK_KP_4 | GDK_KP_Left =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := 'D';
-            end if;
-         when GDK_KP_5 =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               null;
-            end if;
-         when GDK_KP_6 | GDK_KP_Right =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := 'C';
-            end if;
-         when GDK_KP_7 | GDK_KP_Home =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := 'G';
-            end if;
-         when GDK_KP_8 | GDK_KP_Up =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := 'A';
-            end if;
-         when GDK_KP_9 | GDK_KP_Page_Up =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := '5';
-            end if;
-         when GDK_KP_Decimal | GDK_KP_Delete =>
-            if the_terminal.buffer.keypad_keys_in_app_mode
-            then  -- send the control sequence for this key
-               the_key(3) := 'P';
-            end if;
-         when others =>
-            null;  -- Don't do anything
-      end case;
-      -- In the event of there being a history_review key press, need to
-      -- make sure that an actual insert takes place
-      if Get_Overwrite(the_terminal.terminal)
-      then  -- capture the character under cursor for potential future use
-         declare
-            cursor_iter : Gtk.Text_Iter.Gtk_Text_Iter;
-            cursor_end  : Gtk.Text_Iter.Gtk_Text_Iter;
-            the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
-            res : boolean;
-         begin
-            if the_terminal.buffer.alternative_screen_buffer
-            then  -- using the alternative buffer for display
-               the_buf := the_terminal.buffer.alt_buffer;
-            else  -- using the main buffer for display
-               the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(the_terminal.buffer);
-            end if;
-            Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
-            cursor_end := cursor_iter;
-            Gtk.Text_Iter.Forward_Chars(cursor_end, 1, res);
-            if res
-            then
-               the_terminal.buffer.old_key_at_cursor :=
-                     Ada.Strings.UTF_Encoding.Wide_Strings.Decode(
-                                   Get_Text(the_buf, cursor_iter, cursor_end));
-            else
-               the_terminal.buffer.old_key_at_cursor := " ";
-            end if;
-         end;
-      end if;
-      if the_terminal.buffer.bracketed_paste_mode and then
-         (((not the_terminal.buffer.cursor_keys_in_app_mode) and 
-           the_key /= esc_start) or 
-          (the_terminal.buffer.cursor_keys_in_app_mode and 
-           the_key /= app_esc_st))
-      then  -- at command prompt: we have set it to pass to the write routine
-         Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
-         if for_event.keyval = GDK_BackSpace
-         then  -- Actually a single back-space character
-            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-         elsif for_event.keyval = GDK_Tab
-         then  -- Actually a single tab character
-            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-         else  -- standard sequence
-            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
-         end if;
-         if for_event.keyval = GDK_Up or for_event.keyval = GDK_Down
-         then  -- these keys are about starting/continuing history review
-            the_terminal.buffer.history_review := true;
-            Switch_The_Light(the_terminal.buffer, 2, true);
-            Set_Overwrite(the_terminal.terminal, true);
-            Switch_The_Light(the_terminal.buffer, 5, false);
-         end if;
-         return true;
-      elsif (not the_terminal.buffer.bracketed_paste_mode) and then
-            (((not the_terminal.buffer.cursor_keys_in_app_mode) and 
-              the_key /= esc_start) or 
-             (the_terminal.buffer.cursor_keys_in_app_mode and 
-              the_key /= app_esc_st))
-      then  -- in an app: we have set it to pass to the write routine
-         Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
-         -- According to https://invisible-island.net/xterm/ctlseqs/
-         --                         ctlseqs.html#h2-The-Alternate-Screen-Buffer
-         -- the following codes in the form of "CSI n ~" should work.  But, for
-         -- Page Up and Page Down at least, they do not.  Hence the work-arounds
-         -- below.
-         if the_key(3) = '2' or the_key(3) = '4' 
-            -- or the_key(3) = '5' or the_key(3) = '6'
-         then  -- Actually a 4 character non-standard sequence
-            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key & '~');
-         elsif the_key(3) = '5' or the_key(3) = '6'  -- Page Up, Page Down
-         then
-            if the_key(3) = '5' then the_key(3) := 'A'; end if;
-            if the_key(3) = '6' then the_key(3) := 'B'; end if;
-            for cntr in 1 .. (the_terminal.rows / 2) + 1 loop  -- half screen
-               Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
-            end loop;
-         elsif for_event.keyval = GDK_BackSpace
-         then  -- Actually a single back-space character
-            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-         else  -- standard sequence
-            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
-         end if;
-         return true;
-      else  -- at command prompt and not a terminal history action key press
-         return false;
-      end if;
-   end Scroll_Key_Press_Check;
 
    procedure Switch_The_Light (for_buffer : access Gtk_Terminal_Buffer_Record'Class;
                                at_light_number : natural;
@@ -827,6 +683,54 @@ package body Gtk.Terminal is
 --       Set_Cursor_Visible(this_terminal.terminal, true);
 --       res := Place_Cursor_Onscreen(this_terminal.terminal);
 --    end Show;
+   
+   function Motion_Notify_CB (for_terminal_view: access Gtk_Widget_Record'Class;
+                              event : Gdk_Event_Motion) return boolean is
+      -- If mouse moves, then this records the character (as a row and column)
+      -- that the mouse is over.  That information is stored in the mouse_
+      -- configuration_parameters for this terminal's buffer.
+      use Gdk.Rectangle, Gdk.Types;
+      the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
+      the_rect     : Gdk.Rectangle.Gdk_Rectangle;
+      screen_length: natural renames the_terminal.rows;
+      screen_width : natural renames the_terminal.cols;
+      mouse_details: mouse_configuration_parameters renames 
+                                              the_terminal.buffer.mouse_config;
+      x_scale_factor: float;
+      y_scale_factor: float;
+      -- The following adjustment and offset constants were determined through
+      -- trial and error (and a spreadsheet) using the Blissymbolics fixed
+      -- (i.e. mono-spaced) courier font.
+      xadj : constant float := 0.995;
+      yadj : constant float := 0.97;
+      xofs : constant float := -0.001;
+      yofs : constant float := -0.004;
+   begin
+      -- Get our boundary for scaling purposes
+      Get_Visible_Rect(Gtk_Text_View(for_terminal_view), the_rect);
+      -- calculate the scale factor for each of row and column (y and x)
+      if screen_width >= nowrap_size
+      then
+         x_scale_factor := xadj* float(default_columns)/float(the_rect.Width);
+      else
+         x_scale_factor := xadj * float(screen_width) / float(the_rect.Width);
+      end if;
+      if the_terminal.buffer.scroll_region_bottom > 0
+      then  -- Defined screen range
+         y_scale_factor := yadj * 
+                           float(the_terminal.buffer.scroll_region_bottom - 
+                           the_terminal.buffer.scroll_region_top + 1) / 
+                           float(the_rect.Height);
+      else
+         y_scale_factor := yadj * float(screen_length)/ float(the_rect.Height);
+      end if;
+      -- calculate the row and column number, given location and scale factor
+      -- Note that the row and column for mouse are 1 based, so add 1 to them
+      mouse_details.row := natural((float(event.Y)+yofs) * y_scale_factor) + 1;
+      mouse_details.col := natural((float(event.X)+xofs) * x_scale_factor) + 1;
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Motion_Notify_CB: the_rect:(H=" & the_rect.Height'Wide_Image & ",W=" & the_rect.Width'Wide_Image & ", X=" & the_rect.X'Wide_Image & ",Y=" & the_rect.X'Wide_Image & "), scale_factor (x=" & x_scale_factor'Wide_Image & ",y=" & y_scale_factor'Wide_Image & "), event: (X=" & event.X'Wide_Image & ",Y=" & event.Y'Wide_Image & ") and mouse_details: (col=" & mouse_details.col'Wide_Image & ", row=" & mouse_details.row'Wide_Image & ").");
+      return true;
+   end Motion_Notify_CB;
 
    -------------------------------
    -- Terminal Support Routines --
@@ -874,12 +778,15 @@ package body Gtk.Terminal is
       end if;
       -- Get pointers to the start and end of the current line
       line_start := at_iter;
-      if Get_Line_Offset(line_start) > 0
+      if not Starts_Line(line_start)
       then  -- not at the start of the line
          Set_Line_Offset(line_start, 0);
       end if;
-      line_end := at_iter;
-      Forward_To_Line_End(line_end, result);
+      line_end := line_start;
+      if not Ends_Line(line_end)
+      then -- not at the end of the line
+         Forward_To_Line_End(line_end, result);
+      end if;
       -- Calculate and return the line between iterators
       return Get_Slice(buffer, line_start, line_end, 
                        not for_printable_characters_only);
@@ -903,7 +810,7 @@ package body Gtk.Terminal is
       end if;
       -- Get pointers to the start and end of the current line
       line_start := up_to_iter;
-      if Get_Line_Offset(line_start) > 0
+      if not Starts_Line(line_start)
       then  -- not at the start of the line
          Set_Line_Offset(line_start, 0);
       end if;
@@ -931,7 +838,10 @@ package body Gtk.Terminal is
       end if;
       -- Get pointers to the start and end of the current line
       line_end := starting_from_iter;
-      Forward_To_Line_End(line_end, result);
+      if not Ends_Line(line_end)
+      then -- not at the end of the line
+         Forward_To_Line_End(line_end, result);
+      end if;
       -- Calculate and return the length of the line between iterators
       return Get_Slice(buffer, starting_from_iter, line_end, 
                        not for_printable_characters_only);
@@ -944,17 +854,13 @@ package body Gtk.Terminal is
       -- specified at_iter.
       use Gtk.Text_Iter;
       result      : boolean;
-      buf_x       : Glib.Gint := 0;
-      buf_y       : Glib.Gint := 0;
       line_number : natural;
-      first_line  : aliased Gtk.Text_Iter.Gtk_Text_Iter;
+      first_line  : Gtk.Text_Iter.Gtk_Text_Iter;
       current_line: Gtk.Text_Iter.Gtk_Text_Iter := at_iter;
+      the_terminal : Gtk_Terminal := Gtk_Terminal(Get_Parent(for_terminal));
    begin
       -- Get the top left hand corner point in the buffer
-      Window_To_Buffer_Coords(for_terminal, Gtk.Enums.Text_Window_Text, 0, 0, 
-                              buf_x, buf_y);
-      result:= Get_Iter_At_Position(for_terminal, first_line'access, null, 
-                                    buf_x, buf_y);
+      first_line := Home_Iterator(for_terminal => the_terminal);
        -- Get the start of the current line
       if Get_Line_Offset(current_line) > 0
       then  -- not at the start of the line
@@ -1368,8 +1274,8 @@ package body Gtk.Terminal is
                end if;
                for_buffer.entering_command := false;  -- command now entered
                Switch_The_Light(for_buffer, 6, false);
+               Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
             end if;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
             -- Process the keys through to the terminal
             the_fds := new Gtk.Terminal.CInterface.poll_fd;
             the_fds.fd      := for_buffer.master_fd;
@@ -1880,22 +1786,21 @@ package body Gtk.Terminal is
                        columns, rows : natural) is
       -- Set the terminal's size to the specified number of columns and rows.
       use Gtk.Terminal.CInterface, Interfaces.C;
-      default_columns  : constant natural := 80;
       default_vert_size: constant natural := 32;
-      horizontal_scale : constant natural := 15;
-      vertical_scale   : constant natural := 
-                   natural(1.33*float(Get_Size(terminal.current_font))/1000.0);
+      horizontal_scale : constant natural := 10;
+      vertical_scale   : constant float := 
+                            1.342*float(Get_Size(terminal.current_font))/1000.0;
       col_size : Glib.Gint := Glib.Gint(columns * horizontal_scale);
-      row_size : Glib.Gint := Glib.Gint(rows * vertical_scale);
+      row_size : Glib.Gint := Glib.Gint(float(rows) * vertical_scale);
       term_size: aliased win_size := (0, 0, 0, 0);
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Set_Size :  Font size =" &  Get_Size(terminal.current_font)'Wide_Image & ", vertical_scale =" & vertical_scale'Wide_Image & ".");
+      Error_Log.Debug_Data(at_level => 9, with_details => "Set_Size :  Font size =" &  Get_Size(terminal.current_font)'Wide_Image & ", Font Stretch =" & Get_Stretch(terminal.current_font)'Wide_Image & ", vertical_scale =" & vertical_scale'Wide_Image & " and row size =" & row_size'Wide_Image & ".");
       if natural(row_size) < rows
       then  -- it could be that the font has yet to be set
          row_size := Glib.Gint(rows * default_vert_size);
       end if;
       if columns >= nowrap_size
-      then  -- Assume no wrapping, so set the displayed size to 80 characters
+      then  -- Assume no wrapping, set displayed size to default_columns chars
          col_size := Glib.Gint(default_columns * horizontal_scale);
          -- and set wrapping to off for the screen
          Set_Wrap_Mode(terminal.terminal, Gtk.Enums.Wrap_None);
@@ -1948,7 +1853,9 @@ package body Gtk.Terminal is
 
    function Get_Text (from_terminal : access Gtk_Terminal_Record'Class) 
    return UTF8_string is
-     -- Get all the text in the visibilbe part of the terminal's display.
+     -- Get all the text in the visibile part of the terminal's display, that
+     -- is, don't get any hidden (formatting) text, but do get all other text,
+     -- including that outside the displayed region (normally the history).
       buf_start  : Gtk.Text_Iter.Gtk_Text_Iter;
       buf_end    : Gtk.Text_Iter.Gtk_Text_Iter;
    begin
@@ -2077,6 +1984,98 @@ package body Gtk.Terminal is
          return "";
       end if;
    end Get_Path;
+
+   function Home_Iterator(for_terminal : access Gtk_Terminal_Record'Class)
+    return Gtk.Text_Iter.Gtk_Text_Iter is
+       -- Return the home position (that is, the top left hand corner) of the
+       -- currently displayed buffer area in the terminal.
+       -- This function is provided because neither Get_Iter_At_Location,
+       -- Get_Iter_At_Position or Get_Line_At_Y appear to be able to do
+       -- anything other than provide the result that you get when calling
+       -- Get_End_Iter, irrespective of whether the X and Y buffer coordinates
+       -- are provided from Get_Visible_Rect or Window_To_Buffer_Coords or
+       -- whether any other random value of Y is used.
+       -- The output of this function is essentially a calculation based on the
+       -- terminal's understanding of the number of lines it is displaying
+       -- (which, if resized by mouse dragging rather than by command, may be
+       -- incorrect).
+      use Gtk.Text_Iter, Gtk.Text_Mark;
+      the_buf      : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      homed_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
+      cursor_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
+      last_line    : Gtk.Text_Iter.Gtk_Text_Iter;
+      cursor_line  : natural;
+      total_lines  : natural;
+      res          : boolean := true;
+      screen_length: natural renames for_terminal.rows;
+   begin
+      -- The assumption here is that the current cursor position is in the
+      -- visible region of the terminal.  So, finding the home position will
+      -- find the position based on the cursor being visible and will assume
+      -- that the cursor is at the bottom of the screen if there is more than
+      -- one screen-full of text and if it is at the end of the text.  This
+      -- assumption is made because Gtk.Text_Buffer will not allow blank space
+      -- beneath it.  When not within the first screen ful of text, then the
+      -- Get_Line_At_Y is used as it does work outside of the first page.
+      -- First up, work out which buffer, the main or the alternative buffer
+      -- that the top left hand corner of the screen is to be found for
+      if for_terminal.buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         the_buf := for_terminal.buffer.alt_buffer;
+      else  -- using the main buffer for display
+         the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_terminal.buffer);
+      end if;
+      -- Then, get the cursor and it's line number
+      Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
+      -- Work out the line number for the cursor and the total number of lines
+      cursor_line := Natural(Get_Line(cursor_iter)) + 1; -- Get_Ln is 0 based
+      total_lines := Natural(Get_Line_Count(the_buf));
+      -- Work out if the cursor is on the last line
+      Get_End_Iter(the_buf, last_line);
+      if not Starts_Line(cursor_iter) then
+         Set_Line_Offset(cursor_iter, 0);
+      end if;
+      if not Starts_Line(last_line) then
+         Set_Line_Offset(last_line, 0);
+      end if;
+      if Equal(cursor_iter, last_line)
+      then  -- cursor is on the last line
+         -- cursor must be at the bottom of the screen or there aren't that
+         -- many lines in the screen page
+         if cursor_line <= screen_length
+         then  -- not a full screen of text to deal with
+            Get_Start_Iter(the_buf, homed_iter);
+         else  -- greater, so work out page boundary and go there
+            -- boundary will be screen_length (SL) lines back, so we back up
+            -- one less than that
+            homed_iter := cursor_iter;
+            Backward_Lines(homed_iter, Glib.Gint(screen_length)-1, res);
+         end if;
+      else  -- cursor is not on the last line
+         -- work out how far up the screen page it is and go there
+         if total_lines <= screen_length
+         then  -- basically dist to top = SL-(TL-CL) so we go back one less
+            homed_iter := cursor_iter;  -- than that
+            Backward_Lines(homed_iter, 
+                           Glib.Gint(screen_length-(total_lines-cursor_line))-1,
+                           res);
+         else  -- more than a page full and not on last line
+            declare
+               use Gdk.Rectangle;
+               the_view : Gtk_Text_View renames for_terminal.terminal;
+               buf_x, buf_y : GLib.GInt;
+               line_top     : Glib.GInt;
+            begin
+               -- Get_Visible_Rect(the_view, buf_rect);
+               Window_To_Buffer_Coords(the_view, Gtk.Enums.Text_Window_Text, 
+                                       0, 0, buf_x, buf_y);
+               Get_Line_At_Y(the_view, homed_iter,  buf_y, line_top);
+            end;
+         end if;
+      end if;
+      Error_Log.Debug_Data(at_level => 9, with_details => "Home_Iterator: cursor_line =" & cursor_line'Wide_Image & ", homed_iter line =" & Get_Line(homed_iter)'Wide_Image & ", total_lines =" & total_lines'Wide_Image & ", screen_length =" & screen_length'Wide_Image & " and res = " & res'Wide_Image & ".");
+      return homed_iter;
+   end Home_Iterator;
     
    procedure Set_ID(for_terminal : access Gtk_Terminal_Record'Class; 
                     to : natural) is

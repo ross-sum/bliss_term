@@ -78,6 +78,7 @@ project Bliss_Term is
 
    for Source_Files use (
       "gtk-terminal.ads", "gtk-terminal.adb", "gtk-terminal-process.adb",
+      "gtk-terminal-scroll_key_press_check.adb",
       "gtk-terminal-cinterface.ads", "gtk_terminal_io.h", "gtk_terminal_io.c",
       "bliss_term_version.ads",
       "help_about.ads", "help_about.adb", "setup.ads", "setup.adb",

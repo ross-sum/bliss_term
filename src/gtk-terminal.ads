@@ -35,7 +35,7 @@
 --  without even the implied warranty of MERCHANTABILITY or FITNESS  --
 --  FOR  A PARTICULAR PURPOSE. See the GNU General  Public  Licence  --
 --  for  more details.  You should have received a copy of the  GNU  --
---  General Public Licence distributed with  Cell Writer.            --
+--  General Public Licence distributed with  Bliss Term.             --
 --  If  not,  write to the Free Software  Foundation,  51  Franklin  --
 --  Street, Fifth Floor, Boston, MA 02110-1301, USA.                 --
 --                                                                   --
@@ -44,6 +44,7 @@ pragma Warnings (Off, "*is already use-visible*");
 with System;
 with Interfaces.C, Interfaces.C.Strings;
 with Ada.Containers.Vectors;
+with Ada.Containers.Ordered_Sets;
 with Glib;                    use Glib;
 with Glib.Spawn;              use Glib.Spawn;
 with GLib.Main;
@@ -187,10 +188,18 @@ package Gtk.Terminal is
                                Call  : Cb_Gtk_Terminal_Allocation_Void;
                                After : Boolean := False);
 
+   type Cb_Gtk_Terminal_Clicked_Void is access 
+                           procedure (Self : access Gtk_Terminal_Record'Class);
+   Signal_Clicked : constant Glib.Signal_Name := "clicked";
+   procedure On_Clicked (Self  : access Gtk_Terminal_Record;
+                         Call  : Cb_Gtk_Terminal_Clicked_Void;
+                         After : Boolean := False);
+       
    -------------
    -- Methods --
    -------------
      
+   -- Terminal Setup and Tear-Down Management
    type timeout_period is new integer range -1 .. integer'Last;
    procedure Spawn_Shell (terminal : access Gtk_Terminal_Record'Class; 
                           working_directory : UTF8_String := "";
@@ -226,10 +235,19 @@ package Gtk.Terminal is
       --   "switch_light": An optional call-back procedure that displays the
       --                   internal status of various parts of the virtual
       --                   terminal as a series of 'lights' or other values.
+   procedure Shut_Down(the_terminal : access Gtk_Terminal_Record'Class);
+       -- Finalise everything, shutting down any tasks.
    procedure Set_Encoding (for_terminal : access Gtk_Terminal_Record'Class; 
                            to : in UTF8_string := "UTF8");
       -- Set the terminal's encoding method.  If not UTF-8, then it must be a
       -- valid GIConv target.
+   procedure Set_ID(for_terminal : access Gtk_Terminal_Record'Class; 
+                    to : natural);
+       -- Set the terminal's Identifier (which can be any positive number).
+    
+   function Get_ID(for_terminal : access Gtk_Terminal_Record'Class) 
+   return natural;
+       -- Get the terminal's Identifier (which been previously set via Set_ID).
    procedure Set_Size (terminal : access Gtk_Terminal_Record'Class; 
                        columns, rows : natural);
       -- Set the terminal's size to the specified number of columns and rows.  
@@ -271,7 +289,9 @@ package Gtk.Terminal is
      -- command to handle in some way.  If it's 'cat', they should be the same.
    function Get_Text (from_terminal : access Gtk_Terminal_Record'Class) 
      return UTF8_string;
-     -- Get all the text in the visibilbe part of the terminal's display.
+     -- Get all the text in the visibile part of the terminal's display, that
+     -- is, don't get any hidden (formatting) text, but do get all other text,
+     -- including that outside the displayed region (normally the history).
 
    procedure Set_Scrollback_Lines(terminal: access Gtk_Terminal_Record'Class;
                                     lines : natural);
@@ -292,24 +312,33 @@ package Gtk.Terminal is
        -- extracting it from the title. It assumes that the path is encoded in
        -- the title and that the title is of the form "<pre-bits>:<path>".  If
        -- there is no ":" in the title, then an empty string will be returned.
-    
-   procedure Set_ID(for_terminal : access Gtk_Terminal_Record'Class; 
-                    to : natural);
-       -- Set the terminal's Identifier (which can be any positive number).
-    
-   function Get_ID(for_terminal : access Gtk_Terminal_Record'Class) 
-   return natural;
-       -- Get the terminal's Identifier (which been previously set via Set_ID).
        
-   procedure Shut_Down(the_terminal : access Gtk_Terminal_Record'Class);
-       -- Finalise everything, shutting down any tasks.
+   function Home_Iterator(for_terminal : access Gtk_Terminal_Record'Class)
+    return Gtk.Text_Iter.Gtk_Text_Iter;
+       -- Return the home position (that is, the top left hand corner) of the
+       -- currently displayed buffer area in the terminal.
+       -- This function is provided because neither Get_Iter_At_Location,
+       -- Get_Iter_At_Position or Get_Line_At_Y appear to be able to do
+       -- anything other than provide the result that you get when calling
+       -- Get_End_Iter if within a single screen worth of text, irrespective of
+       -- whether the X and Y buffer coordinates are provided from
+       -- Get_Visible_Rect or Window_To_Buffer_Coords or whether any other
+       -- random value of Y is used.  But otherise, they do work! >:-/
+       -- The output of this function is essentially a calculation based on the
+       -- terminal's understanding of the number of lines it is displaying
+       -- (which, if resized by mouse dragging rather than by command, may be
+       -- incorrect).
+    
     
    ----------------------------------------------------------------------------
    private
    ----------------------------------------------------------------------------
+   use Gdk.Event;
    
-   Blue_RGBA   : constant Gdk.RGBA.Gdk_RGBA := (0.0, 0.0, 01.0, 1.0);
-   nowrap_size : constant natural := 1000;
+   Blue_RGBA       : constant Gdk.RGBA.Gdk_RGBA := (0.0, 0.0, 01.0, 1.0);
+   nowrap_size     : constant natural := 1000;
+   default_columns : constant natural := 120;
+   default_rows    : constant natural := 25;
        -- number of column characters that represents a no-wrap screen
    service_initialised : boolean := false;
    the_error_handler : error_handler := null;
@@ -327,6 +356,10 @@ package Gtk.Terminal is
        -- get the absolute string length (i.e. including parts of characters)
    function As_String(the_number : in natural) return UTF8_String;
        -- provide the (non-negative) number as a compact string
+
+   -------------------------
+   -- Gtk Terminal Buffer --
+   -------------------------
        
    protected type check_for_command_prompt_end is
       -- Monitor input for the end of the command prompt.  This can be either
@@ -347,10 +380,6 @@ package Gtk.Terminal is
    end check_for_command_prompt_end;
    type check_for_command_prompt_end_access is 
         access check_for_command_prompt_end;
-
-   -------------------------
-   -- Gtk Terminal Buffer --
-   -------------------------
    
    buffer_length : constant positive := 255;
    type buf_index is mod buffer_length;
@@ -377,6 +406,23 @@ package Gtk.Terminal is
       result  : wide_string(1..1);
    end input_monitor_type;
    type input_monitor_type_access is access input_monitor_type;
+   
+   type modifier_types is (none, special_keys, all_keys, 
+                           legacy_vt220, numeric_keypad, editing_keypad, 
+                           function_keys, other_special_keys);
+   function Equals(left, right : modifier_types) return boolean;
+   function Less_Than(left, right : modifier_types) return boolean;
+   package Modifier_Sets is new Ada.Containers.Ordered_Sets
+       (modifier_types, Equals, Less_than);
+   use Modifier_Sets;
+   
+   type mouse_configuration_parameters is record
+         x10_mouse : boolean := false;
+         btn_event : boolean := false;
+         ext_mode  : boolean := false;
+         row,
+         col       : natural := 0;
+      end record;
    
    escape_length : constant natural := 100;
    subtype escape_str_range is natural range 1..escape_length;
@@ -449,6 +495,17 @@ package Gtk.Terminal is
          parent              : Gtk.Text_View.Gtk_Text_View;
          -- The alternative buffer (to emulate an xterm)
          alt_buffer          : Gtk.Text_Buffer.Gtk_Text_Buffer;
+         -- Modifiers, a component of xterm, that is required for applications
+         -- like vi.
+         modifiers           : Modifier_Sets.Set;
+         -- Mouse configuration defines how the mouse talks to the application
+         -- that is hosted by the terminal
+         mouse_config        : mouse_configuration_parameters;
+         -- A scrolling region top and bottom may be set (this appears to be
+         -- determined by the window height).  It appears to be important for
+         -- applications such as vi.
+         scroll_region_top,
+         scroll_region_bottom: natural := 0;
          switch_light_cb     : Switch_Light_Callback;  -- terminal's monitor
       end record;
    type Gtk_Terminal_Buffer is access all Gtk_Terminal_Buffer_Record'Class;
@@ -600,8 +657,8 @@ package Gtk.Terminal is
          title_callback   : Spawn_Title_Callback;
          closed_callback  : Spawn_Closed_Callback;
          term_input       : Terminal_Handling_Access;
-         cols             : natural := 80;  -- default number of columns
-         rows             : natural := 25;  -- default number of rows
+         cols             : natural := default_columns;  -- number of columns
+         rows             : natural := default_rows;  -- number of rows
       end record;
        
    function Get_Line_Number(for_terminal : Gtk.Text_View.Gtk_Text_View; 
@@ -621,6 +678,12 @@ package Gtk.Terminal is
       -- or, in the case of terminal emulator controlled editing, left and
       -- right arrow key has been been pressed.  If so, it gets passed to the
       -- terminal emulator and not to the buffer for processing.
+      
+   function Motion_Notify_CB(for_terminal_view: access Gtk_Widget_Record'Class;
+                             event : Gdk_Event_Motion) return boolean;
+      -- Called whenever the mouse moves inside the terminal's Gtk.Text_View,
+      -- but never if it leaves the window.  It also seems to only work when
+      -- the button is pressed.
 --       
    -- procedure Show (the_terminal : access Gtk_Widget_Record'Class);
 --       -- Respond to being shown by ensuring the cursor is visible.

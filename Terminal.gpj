@@ -20,7 +20,7 @@ s#m0src
 s#p0doc
 s#q0test
 s#r0obj_amd64
-!455;g
+!505;g
 %\011src%shelp_about.adb
 %\011src%scss_management.adb
 %\011src%sgtk-terminal.ads
@@ -30,6 +30,7 @@ s#r0obj_amd64
 %\011src%sterminal.adb
 %\011src%sgtk_terminal_io.c
 %\011src%sbliss_term_version.ads
+%\011src%sgtk-terminal-scroll_key_press_check.adb
 %\011src%sgtk-terminal-cinterface.ads
 %\011src%shelp_about.ads
 %\011src%scss_management.ads
@@ -38,7 +39,7 @@ s#r0obj_amd64
 %\011src%sgtk-terminal-process.adb
 %\011src%sterminal.ads
 %\011src%ssetup.ads
-!455;f
+!505;f
 %\011src%shelp_about.adb
 %\011src%scss_management.adb
 %\011src%sgtk-terminal.ads
@@ -48,6 +49,7 @@ s#r0obj_amd64
 %\011src%sterminal.adb
 %\011src%sgtk_terminal_io.c
 %\011src%sbliss_term_version.ads
+%\011src%sgtk-terminal-scroll_key_press_check.adb
 %\011src%sgtk-terminal-cinterface.ads
 %\011src%shelp_about.ads
 %\011src%scss_management.ads

@@ -27,7 +27,7 @@
    --  without even the implied warranty of MERCHANTABILITY or FITNESS  --
    --  FOR  A PARTICULAR PURPOSE. See the GNU General  Public  Licence  --
    --  for  more details.  You should have received a copy of the  GNU  --
-   --  General Public Licence distributed with  Cell Writer.            --
+   --  General Public Licence distributed with  Bliss Term.             --
    --  If  not,  write to the Free Software  Foundation,  51  Franklin  --
    --  Street, Fifth Floor, Boston, MA 02110-1301, USA.                 --
    --                                                                   --
@@ -69,8 +69,8 @@ procedure Bliss_Term is
                  ",log file name with optional path;" &
        "f,format,string," & default_log_file_format &
                  ",log file format (e.g. '' or 'WCEM=8' for UTF-8 or " & 
-                 "'WECM=8‚ctrl' to do UTF-8 and turn control characters into" &
-                 "a readable format);" &
+                 "'WCEM=8,ctrl' (without the single quotes) to do UTF-8 and " &
+                 "turn control characters into a readable format);" &
        "g,glade,string," & default_path_to_glade & 
                  ",path to the Glade (display layout) file for Bliss Term;" &
        "s,css,string," & default_path_to_css & 
