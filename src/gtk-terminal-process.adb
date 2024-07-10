@@ -591,26 +591,8 @@ separate (Gtk.Terminal)
                      end if;
                      Place_Cursor(the_buf, where => cursor_iter);
                   when 'H' | 'f' =>   -- Move cursor to row <param>, column <param>
-                        -- Tried both:
-                        --    Get_Visible_Rect(on_buffer.parent, buf_rect); and
-                        --    Window_To_Buffer_Coords(on_buffer.parent, 
-                        --                            Gtk.Enums.Text_Window_Text, 
-                       --                             0, 0, buf_x, buf_y);
-                        -- to get the top left hand corner and then tried all:
-                        --    Get_Line_At_Y(on_buffer.parent, the_iter, 
-                        --             buf_rect.Y + buf_rect.Height, line_top);
-                        --    res:= Get_Iter_At_Location(on_buffer.parent,
-                        --                        cursor_iter'access, --null, 
-                        --                        buf_x, buf_y);
-                        --    res:= Get_Iter_At_Position(on_buffer.parent,
-                        --                        cursor_iter'access, --null, 
-                        --                        buf_x, buf_y);
-                        -- to position the cursor in the TLH corner of the
-                        -- screen but for a short buffer, they always returned
-                        -- the same as Get_End_Iter, even if a random buf_y/
-                        -- buf_rect.Y was substituted in.
                      declare
-                        the_term  : Gtk_Text_View := for_buffer.parent;
+                        the_term  : Gtk_Text_View := on_buffer.parent;
                         the_terminal : Gtk_Terminal := 
                                             Gtk_Terminal(Get_Parent(the_term));
                      begin
@@ -631,9 +613,6 @@ separate (Gtk.Terminal)
                            cursor_iter := 
                                      Home_Iterator(for_terminal=>the_terminal);
                         end if;
-                        -- Place_Cursor(the_buf, where => cursor_iter);
-                        -- Scroll_Mark_Onscreen(for_buffer.parent, 
-                           --                   Get_Insert(the_buf));
                         Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - from Get_Start_Iter or Home_Iterator: Cursor_Iter is at (col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ", row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ").");
                      end;
                      -- now move to the offset from the top left corner
