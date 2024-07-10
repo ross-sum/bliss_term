@@ -28,7 +28,7 @@
    --  without even the implied warranty of MERCHANTABILITY or FITNESS  --
    --  FOR  A PARTICULAR PURPOSE. See the GNU General  Public  Licence  --
    --  for  more details.  You should have received a copy of the  GNU  --
-   --  General Public Licence distributed with  Cell Writer.            --
+   --  General Public Licence distributed with  Bliss Term.             --
    --  If  not,  write to the Free Software  Foundation,  51  Franklin  --
    --  Street, Fifth Floor, Boston, MA 02110-1301, USA.                 --
    --                                                                   --
