@@ -158,6 +158,10 @@ package body Gtk.Terminal is
    --       rows             : natural := default_rows;  -- number of rows
    -- end record;
    -- type Gtk_Terminal is access all Gtk_Terminal_Record'Class;
+      
+   -----------------------------
+   -- Error and Debug Logging --
+   -----------------------------
 
    procedure Set_The_Error_Handler(to : error_handler) is
    begin
@@ -195,25 +199,7 @@ package body Gtk.Terminal is
          the_log_handler(at_level, with_details);
       end if;
    end Log_Data;
-      
-   ----------------------
-   -- Set Constructors --
-   ----------------------
    
-   -- type modifier_types is (none, special_keys, all_keys, 
-   --                         legacy_vt220, numeric_keypad, editing_keypad, 
-   --                         function_keys, other_special_keys);
-   function Equals(left, right : modifier_types) return boolean is
-   begin
-      return left = right;
-   end Equals;
-   function Less_Than(left, right : modifier_types) return boolean is
-   begin
-      return modifier_types'Pos(left) < modifier_types'Pos(right);
-   end Less_Than;
-   -- package Modifier_Sets is new Ada.Containers.Ordered_Sets
-   --     (modifier_types, Equals, Less_than);
-      
    ------------------
    -- Constructors --
    ------------------
@@ -729,7 +715,7 @@ package body Gtk.Terminal is
       mouse_details.row := natural((float(event.Y)+yofs) * y_scale_factor) + 1;
       mouse_details.col := natural((float(event.X)+xofs) * x_scale_factor) + 1;
       -- Error_Log.Debug_Data(at_level => 9, with_details => "Motion_Notify_CB: the_rect:(H=" & the_rect.Height'Wide_Image & ",W=" & the_rect.Width'Wide_Image & ", X=" & the_rect.X'Wide_Image & ",Y=" & the_rect.X'Wide_Image & "), scale_factor (x=" & x_scale_factor'Wide_Image & ",y=" & y_scale_factor'Wide_Image & "), event: (X=" & event.X'Wide_Image & ",Y=" & event.Y'Wide_Image & ") and mouse_details: (col=" & mouse_details.col'Wide_Image & ", row=" & mouse_details.row'Wide_Image & ").");
-      return true;
+      return false;  -- Allow for further processing of this event
    end Motion_Notify_CB;
 
    -------------------------------
@@ -944,6 +930,21 @@ package body Gtk.Terminal is
       -- "at_iter": a position in the buffer
       -- "the_text": text in UTF-8 format
       use Gtk.Text_Iter;
+      function Modifier_In_Markup
+                        (for_buffer : access Gtk_Terminal_Buffer_Record'Class)
+      return boolean is
+      begin
+         -- The manual way:
+         -- for modifier in font_modifiers loop
+            -- if for_buffer.modifier_array(modifier).n > 0 then
+               -- return true;
+            -- end if;
+         -- end loop;
+         -- return false;  -- If we got here then nothing found
+         -- The one-liner way:
+         return (for some modifier in font_modifiers'Range => 
+                                      for_buffer.modifier_array(modifier).n>0);
+      end Modifier_In_Markup;
       buffer    : Gtk.Text_Buffer.Gtk_Text_Buffer;
       end_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
       delete_ch : Gtk.Text_Iter.Gtk_Text_Iter;
@@ -966,8 +967,41 @@ package body Gtk.Terminal is
          end if;  -- (otherwise delete as many as possible)
          Delete(buffer, at_iter, end_iter);
       end if;
-      -- Now call the inherited Insert operation
-      Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
+      -- Now call the inherited Insert operation as appropriate
+      if into.in_markup or Modifier_In_Markup(for_buffer => into)
+      then  -- either insert the mark-up and reset the mark-up flag or store it
+         if not Modifier_In_Markup(for_buffer => into)
+         then  -- no longer in mark-up, dispense the buffer's contents
+            Insert_Markup(Gtk_Text_Buffer(buffer), at_iter, 
+                          Value(into.markup_text), -1);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert(into): executing Insert_Markup on '" & Ada.Characters.Conversions.To_Wide_String(Value(into.markup_text)) & "'.");
+            into.in_markup := false;
+            Free(into.markup_text);
+            into.markup_text := Null_Ptr;
+            if the_text'Length > 0
+            then  -- need to output that as well
+               Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), 
+                                      at_iter, the_text);
+            end if;
+         else  -- there is a modifier being specified in the mark-up
+            declare
+               temp_markup : Gtkada.Types.Chars_Ptr;
+            begin
+               if into.markup_text /= Null_Ptr
+               then  -- append
+                  temp_markup:= New_String(Value(into.markup_text) & the_text);
+                  Free(into.markup_text);
+                  into.markup_text := temp_markup;
+               else  -- new text
+                  Free(into.markup_text);
+                  into.markup_text := New_String(the_text);
+                  into.in_markup := true;
+               end if;
+            end;
+         end if;
+      else  -- this is ordinary, un-marked-up text, so just display it as is
+         Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
+      end if;
    end Insert;
       
    procedure Insert_At_Cursor (into : access Gtk_Terminal_Buffer_Record'Class;
@@ -1099,7 +1133,7 @@ package body Gtk.Terminal is
       res       : Interfaces.C.int;
    begin
       if fd = -1 then
-         Handle_The_Error(the_error  => 7, 
+         Handle_The_Error(the_error  => 8, 
                           error_intro=> "Read(fd): File error",
                           error_message => "File not opened.");
          buffer := (buffer'First..Buffer'Last => ' ');
@@ -1109,7 +1143,7 @@ package body Gtk.Terminal is
       end if;
       res := C_Read(fd => fd, data => in_buffer, length => int(len));
       if res <= -1 or res > int(len) then
-         Handle_The_Error(the_error  => 8, 
+         Handle_The_Error(the_error  => 9, 
                           error_intro=> "Read(fd): File error",
                           error_message => "Read failed.");
          buffer := (buffer'First..Buffer'Last => ' ');
@@ -1140,7 +1174,7 @@ package body Gtk.Terminal is
    
    begin
       if fd <= 0 then
-         Handle_The_Error(the_error  => 9, 
+         Handle_The_Error(the_error  => 10, 
                           error_intro=> "Write(fd): File error",
                           error_message => "File not opened.");
          Free (out_buffer);
@@ -1152,7 +1186,7 @@ package body Gtk.Terminal is
       Free (out_buffer);
    
       if res <= -1 then
-         Handle_The_Error(the_error  => 10, 
+         Handle_The_Error(the_error  => 11, 
                           error_intro=> "Write(fd): Write error",
                           error_message => "Write Failed  with length " &
                                         Interfaces.C.int'Wide_Image(-res)&".");
@@ -1372,7 +1406,7 @@ package body Gtk.Terminal is
       end_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
       the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
    begin     -- Key_Pressed
-      Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed: Start.");
       if (for_buffer.line_number > unassigned_line_number) and
          (not for_buffer.waiting_for_response) and
          (not for_buffer.in_response)
@@ -1386,13 +1420,22 @@ package body Gtk.Terminal is
          for_buffer.in_esc_sequence := false;
          Switch_The_Light(for_buffer, 7, false);
          -- Get the key(s) pressed
-         if for_buffer.history_review
+         if for_buffer.history_review or for_buffer.alternative_screen_buffer
          then  -- use the cursor position to copy up to
             Get_Iter_At_Mark(the_buf, end_iter, Get_Insert(the_buf));
          else  -- getting entire line (so the end point
             Get_End_Iter(the_buf, end_iter);
          end if;
-         if for_buffer.anchor_point = 0
+         -- Get the start of the current text entered
+         if for_buffer.alternative_screen_buffer
+         then  -- just entered a (Unicode) character
+            start_iter := end_iter;
+            if Get_Line_Offset(start_iter)/= Glib.Gint(for_buffer.anchor_point)
+            then  -- not at the required location
+               Set_Line_Offset(start_iter, 
+                               Glib.Gint(for_buffer.anchor_point));
+            end if;
+         elsif for_buffer.anchor_point = 0
          then  -- start_iter is at the start of the line
             Get_Iter_At_Line(the_buf, start_iter,
                              Glib.Gint(for_buffer.buf_line_num-1));
@@ -1425,7 +1468,7 @@ package body Gtk.Terminal is
       the_buffer   : Gtk_Terminal_Buffer;
       alt_buffer   : Gtk_Text_Buffer := Gtk_Text_Buffer(for_buffer);
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Alt_Key_Pressed: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Alt_Key_Pressed: Start.");
       if not Is_Empty(display_output_handling_buffer) then
          for cntr in display_output_handling_buffer.First_Index .. 
                      display_output_handling_buffer.Last_Index loop
@@ -1647,7 +1690,7 @@ package body Gtk.Terminal is
       Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Did fork.");
       if child_pid = -1
       then -- failed to fork
-         Handle_The_Error(the_error  => 11, 
+         Handle_The_Error(the_error  => 12, 
                           error_intro=> "Spawn_Shell: Fork error",
                           error_message => "Fork_Process failed.");
          raise Terminal_Creation_Error;
@@ -1731,7 +1774,7 @@ package body Gtk.Terminal is
                                 with_terminal_buffer => terminal.buffer);
       -- Final sanity check on the creation of the input handler task
       if terminal.term_input = null then  -- it failed out
-         Handle_The_Error(the_error  => 12, 
+         Handle_The_Error(the_error  => 13, 
                         error_intro=> "Spawn_Shell: Terminal input task error",
                         error_message => "terminal.term_input is unassigned.");
          raise Terminal_Creation_Error;
@@ -1819,7 +1862,7 @@ package body Gtk.Terminal is
          if IO_Control(for_file => terminal.master_fd, request => TIOCGWINSZ, 
                        params => term_size'Address) < 0
          then  -- failed to get the current size :-(
-            Handle_The_Error(the_error => 13, 
+            Handle_The_Error(the_error => 14, 
                           error_intro  => "Set_Size: Terminal resize error",
                           error_message=> "Couldn't get current window size.");
          else  -- Second, set the new number of rows and columns
@@ -1828,7 +1871,7 @@ package body Gtk.Terminal is
             if IO_Control(for_file => terminal.master_fd, request=> TIOCSWINSZ,
                           params => term_size'Address) < 0
             then -- Error in rezizing :-(
-               Handle_The_Error(the_error => 14, 
+               Handle_The_Error(the_error => 15, 
                              error_intro  => "Set_Size: Terminal resize error",
                              error_message=> "Couldn't set window size to " & 
                                              "rows =" & rows'Wide_Image & 
@@ -2104,3 +2147,5 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+
+

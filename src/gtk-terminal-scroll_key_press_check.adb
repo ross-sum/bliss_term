@@ -88,6 +88,9 @@ begin
             the_key(1) := Ada.Characters.Latin_1.HT;
             the_key(2) := ' ';
          end if;
+      when GDK_Escape =>  --16#FF1B#
+         the_key(1) := Ada.Characters.Latin_1.Esc;
+         the_key(2) := ' ';
       when GDK_KP_0 | GDK_KP_Insert =>
          if the_terminal.buffer.keypad_keys_in_app_mode
          then  -- send the control sequence for this key
@@ -175,6 +178,9 @@ begin
          end if;
       end;
    end if;
+   -- Check if modifier keys are in effect and, if so, act upon them
+   null;
+   -- Operate on any key interpretations where required
    if the_terminal.buffer.bracketed_paste_mode and then
       (((not the_terminal.buffer.cursor_keys_in_app_mode) and 
         the_key /= esc_start) or 
@@ -182,7 +188,7 @@ begin
         the_key /= app_esc_st))
    then  -- at command prompt: we have set it to pass to the write routine
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
-      if for_event.keyval = GDK_BackSpace
+      if for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape
       then  -- Actually a single back-space character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
       elsif for_event.keyval = GDK_Tab
@@ -208,7 +214,8 @@ begin
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
       -- According to https://invisible-island.net/xterm/ctlseqs/
       --                         ctlseqs.html#h2-The-Alternate-Screen-Buffer
-      -- the following codes in the form of "CSI n ~" should work.  But, for
+      -- the following codes in the form of "CSI n ~" should work.  That is
+      -- corroborated by the DEC VT240 Programmer Reference Manual.  But, for
       -- Page Up and Page Down at least, they do not.  Hence the work-arounds
       -- below.
       if the_key(3) = '2' or the_key(3) = '4' 

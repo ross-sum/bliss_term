@@ -44,7 +44,6 @@ pragma Warnings (Off, "*is already use-visible*");
 with System;
 with Interfaces.C, Interfaces.C.Strings;
 with Ada.Containers.Vectors;
-with Ada.Containers.Ordered_Sets;
 with Glib;                    use Glib;
 with Glib.Spawn;              use Glib.Spawn;
 with GLib.Main;
@@ -407,14 +406,29 @@ package Gtk.Terminal is
    end input_monitor_type;
    type input_monitor_type_access is access input_monitor_type;
    
-   type modifier_types is (none, special_keys, all_keys, 
-                           legacy_vt220, numeric_keypad, editing_keypad, 
-                           function_keys, other_special_keys);
-   function Equals(left, right : modifier_types) return boolean;
-   function Less_Than(left, right : modifier_types) return boolean;
-   package Modifier_Sets is new Ada.Containers.Ordered_Sets
-       (modifier_types, Equals, Less_than);
-   use Modifier_Sets;
+   type keyboard_modifier_options is 
+           (ctrl_on_fn, numeric_kp, editing_kp, fn_keys, other_special);
+   for keyboard_modifier_options use (0, 1, 2, 4, 8);
+   type cursor_key_modifier_options is
+           (disabled, first_param, prefix_with_CSI, second_param, is_private);
+   for cursor_key_modifier_options use (-1, 0, 1, 2, 3);
+   type function_key_modifier_options is
+           (shift_ctl, first_param, prefix_with_CSI, second_param, is_private);
+   for function_key_modifier_options use (-1, 0, 1, 2, 3);
+   type other_key_modifier_options is
+           (disabled, all_except_special, all_including_special);
+   for other_key_modifier_options use (0, 1, 2);
+   type key_modifier_options is record
+         modify_keyboard      : keyboard_modifier_options;
+         modify_cursor_keys   : cursor_key_modifier_options;
+         modify_function_keys : function_key_modifier_options;
+         modify_other_keys    : other_key_modifier_options;
+      end record;
+   default_modifier_setting : constant key_modifier_options :=
+         (modify_keyboard      => ctrl_on_fn,
+          modify_cursor_keys   => disabled,
+          modify_function_keys => first_param,
+          modify_other_keys    => disabled);
    
    type mouse_configuration_parameters is record
          x10_mouse : boolean := false;
@@ -424,14 +438,29 @@ package Gtk.Terminal is
          col       : natural := 0;
       end record;
    
-   escape_length : constant natural := 100;
+   -- Escape (i.e. command or formatting) strings:
+   escape_length : constant natural := 256;
    subtype escape_str_range is natural range 1..escape_length;
    subtype escape_string is string(escape_str_range);
+   -- LIne numbers:
    type line_numbers is new integer range -1 .. integer'Last;
    unassigned_line_number : constant line_numbers := -1;
-   type font_modifiers is (normal, bold, italic, underline, strikethrough, 
-                           span); --, reversevideo, doubleunderline, coloured);
-   type font_modifier_array is array (font_modifiers) of natural;
+   -- Font modifiers:
+   type font_modifiers is (none, normal, bold, italic, underline, 
+                           strikethrough, mono, span);
+   type linked_list;
+   type linked_list_ptr is access linked_list;
+   type linked_list is record
+         item : natural;
+         next : linked_list_ptr;
+      end record;
+   type font_modifier_detail is record
+         n : natural := 0;  -- number of modifiers in the list 'o'
+         o : linked_list_ptr;
+      end record;
+   type font_modifier_array is array (font_modifiers) of font_modifier_detail;
+   
+   -- GTK Terminal Buffer:
    type Gtk_Terminal_Buffer_Record is new Gtk.Text_Buffer.Gtk_Text_Buffer_Record
       with record
          master_fd           : Interfaces.C.int;
@@ -476,9 +505,13 @@ package Gtk.Terminal is
          saved_cursor_pos         : Gtk.Text_Mark.Gtk_Text_Mark;
          cursor_keys_in_app_mode  : boolean := false;
          keypad_keys_in_app_mode  : boolean := false;
-         -- Escape character handling
+         -- Escape character handling (including for mark-up)
          markup_text         : Gtkada.Types.Chars_Ptr := Null_Ptr;
-         modifier_array      : font_modifier_array := (others => 0);
+         modifier_array      : font_modifier_array;
+            -- An array of mark-up (font) modifiers
+         in_markup            : boolean := false;
+            -- switched on when mark-up text has been commenced and is switched
+            -- off when there is no more mark-up in the markup_text buffer
          background_colour   : Gdk.RGBA.Gdk_RGBA := Gdk.RGBA.Black_RGBA;
          text_colour         : Gdk.RGBA.Gdk_RGBA := Gdk.RGBA.White_RGBA;
          highlight_colour    : Gdk.RGBA.Gdk_RGBA := Gdk.RGBA.Null_RGBA;
@@ -497,7 +530,7 @@ package Gtk.Terminal is
          alt_buffer          : Gtk.Text_Buffer.Gtk_Text_Buffer;
          -- Modifiers, a component of xterm, that is required for applications
          -- like vi.
-         modifiers           : Modifier_Sets.Set;
+         modifiers           : key_modifier_options:= default_modifier_setting;
          -- Mouse configuration defines how the mouse talks to the application
          -- that is hosted by the terminal
          mouse_config        : mouse_configuration_parameters;
