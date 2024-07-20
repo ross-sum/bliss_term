@@ -1288,7 +1288,9 @@ package body Gtk.Terminal is
          -- alternatively User has buffer_editing (i.e. use the virtual
          -- terminal's editing) not set, and then set flags and potentially
          -- enable update of the line count.
-         if for_string'Length > 0 and then 
+         if ( for_string'Length > 0 and 
+              not for_buffer.alternative_screen_buffer )
+            and then 
             ( (for_string(for_string'Last) = Ada.Characters.Latin_1.LF and
                (not(for_string'Length > 1 and then             -- not carry-
                     for_string(for_string'Last-1) = '\') and   -- over line in
@@ -1299,6 +1301,7 @@ package body Gtk.Terminal is
          then  -- Return/Enter key has been pressed + not cmd line continuation
                -- or otherwise not using the buffer's editing or is in an app
             -- Reset the history processing indicator value
+            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys processing '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "' after a line terminator.");
             if for_string(for_string'Last) = Ada.Characters.Latin_1.LF then
                for_buffer.history_review := false;
                Switch_The_Light(for_buffer, 2, false);
@@ -1336,6 +1339,7 @@ package body Gtk.Terminal is
                begin
                   Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
                   res := Backspace(the_buf, cursor_iter, false, true);
+                   Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
                end;
                -- Now output that enter key
                Write(fd => for_buffer.master_fd, Buffer => enter_text);
@@ -1343,6 +1347,7 @@ package body Gtk.Terminal is
                -- Delete the text from the buffer so that the terminal may write
                -- it back and then write that deleted text out to the termnal
                Delete(the_buf, over_range_start, and_end);  -------------******************FIX: causes a subsequent Gtk-WARNING **: 21:48:00.652: Invalid text buffer iterator: either the iterator is uninitialized... 
+               Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done Delete.");
                Write(fd => for_buffer.master_fd, Buffer => for_string);
             end if;
             -- Check that the buffer length is not exceeded (remove line if so)
@@ -1363,8 +1368,10 @@ package body Gtk.Terminal is
             Switch_The_Light(for_buffer,8, false, for_buffer.line_number'Image);
             Switch_The_Light(for_buffer, 9, false, for_buffer.buf_line_num'Image);
          elsif for_string'Length > 0 and then 
-            (history_text and for_buffer.use_buffer_editing)
+            ( (history_text and for_buffer.use_buffer_editing) or
+              for_buffer.alternative_screen_buffer )
          then  -- some other key pressed to modify a history line
+            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys processing '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "' after some other key pressed.");
             -- Process the key(s) through to the terminal
             the_fds := new Gtk.Terminal.CInterface.poll_fd;
             the_fds.fd      := for_buffer.master_fd;
@@ -1388,6 +1395,7 @@ package body Gtk.Terminal is
                Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
                -- get rid of the character just typed from the terminal
                res := Backspace(the_buf, cursor_iter, false, true);
+               Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
                if Get_Overwrite(for_buffer.parent)
                then  -- replace character under cursor with original
                   Gtk.Text_Buffer.
@@ -1395,6 +1403,7 @@ package body Gtk.Terminal is
                             Ada.Strings.UTF_Encoding.Wide_Strings.Encode(
                                                 for_buffer.old_key_at_cursor));
                   Gtk.Text_Iter.Backward_Chars(cursor_iter, 1, res);
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys inserted original character and backed up one character's distance with a result of " & res'Wide_Image & ".");
                   Place_Cursor(the_buf, where => cursor_iter);
                end if;
             end;
@@ -1769,8 +1778,6 @@ package body Gtk.Terminal is
       -- Launch handling of input from the child terminal
       terminal.term_input := new Terminal_Input_Handling;
       terminal.term_input.Start(with_fd => terminal.master_fd, 
-                                -- with_command => command, 
-                                -- with_environment => environment, 
                                 with_terminal_buffer => terminal.buffer);
       -- Final sanity check on the creation of the input handler task
       if terminal.term_input = null then  -- it failed out
@@ -2147,5 +2154,3 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
-
-

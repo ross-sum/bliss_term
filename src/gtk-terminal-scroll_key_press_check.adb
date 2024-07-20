@@ -7,11 +7,13 @@ return boolean is
    -- right arrow and backspace key has been been pressed.  If so, it gets
    -- passed to the terminal emulator and not to the buffer for processing.
    use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
-   esc_start   : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ ";
-   app_esc_st  : constant string(1..3) := Ada.Characters.Latin_1.Esc & "O ";
-   the_term    : Gtk_Text_View := Gtk_Text_View(for_terminal);
-   the_terminal: Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
-   the_key     : string(1..3) := esc_start;
+   use Ada.Strings.UTF_Encoding.Wide_Strings;
+   esc_start     : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ ";
+   app_esc_st    : constant string(1..3) := Ada.Characters.Latin_1.Esc & "O ";
+   the_term      : Gtk_Text_View := Gtk_Text_View(for_terminal);
+   the_terminal  : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
+   the_key       : string(1..3) := esc_start;
+   the_character : wide_string(1..1);
 begin
    Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ".");
    if the_terminal.buffer.cursor_keys_in_app_mode
@@ -91,6 +93,13 @@ begin
       when GDK_Escape =>  --16#FF1B#
          the_key(1) := Ada.Characters.Latin_1.Esc;
          the_key(2) := ' ';
+      when GDK_Return =>
+         if the_terminal.buffer.keypad_keys_in_app_mode and then
+            the_terminal.buffer.alternative_screen_buffer
+         then  -- send the control sequence for this key
+            the_key(1) := Ada.Characters.Latin_1.CR;
+            the_key(2) := ' ';
+         end if;
       when GDK_KP_0 | GDK_KP_Insert =>
          if the_terminal.buffer.keypad_keys_in_app_mode
          then  -- send the control sequence for this key
@@ -149,8 +158,9 @@ begin
       when others =>
          null;  -- Don't do anything
    end case;
-   -- In the event of there being a history_review key press, need to
-   -- make sure that an actual insert takes place
+   -- In the event of there being a history_review key press or in and
+   -- application in the alternative buffer, need to make sure that an actual
+   -- insert takes place
    if Get_Overwrite(the_terminal.terminal)
    then  -- capture the character under cursor for potential future use
       declare
@@ -188,8 +198,9 @@ begin
         the_key /= app_esc_st))
    then  -- at command prompt: we have set it to pass to the write routine
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
-      if for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape
-      then  -- Actually a single back-space character
+      if for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape or
+         for_event.keyval = GDK_Return
+      then  -- Actually a single back-space, Escape or Return character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
       elsif for_event.keyval = GDK_Tab
       then  -- Actually a single tab character
@@ -229,12 +240,19 @@ begin
          for cntr in 1 .. (the_terminal.rows / 2) + 1 loop  -- half screen
             Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
          end loop;
-      elsif for_event.keyval = GDK_BackSpace
-      then  -- Actually a single back-space character
+      elsif for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape or
+            for_event.keyval = GDK_Return
+      then  -- Actually a single back-space, Escape or Return character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
       else  -- standard sequence
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
       end if;
+      return true;
+   elsif the_terminal.buffer.alternative_screen_buffer and then
+         (for_event.keyval>=GDK_space and for_event.keyval<GDK_3270_Duplicate)
+   then  -- when in alaternative buffer and not a cursor movement key, pass on
+      the_character(1) := wide_character'Val(for_event.keyval);
+      Write(fd=> the_terminal.buffer.master_fd, Buffer=>Encode(the_character));
       return true;
    else  -- at command prompt and not a terminal history action key press
       return false;

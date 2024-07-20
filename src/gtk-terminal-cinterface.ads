@@ -199,6 +199,13 @@ package Gtk.Terminal.CInterface is
       -- returns success and the environment remains unchanged.  Success = 0,
       -- Error = -1.
       -- It is a part of libc.
+   function Get_Environment(variable : Gtkada.Types.Chars_Ptr)
+      return Gtkada.Types.Chars_Ptr;
+      pragma Import (C, Get_Environment, "getenv");
+      -- Return the specified environment variable from the environment.
+      -- Get_Environment returns either a pointer to the environment value or,
+      -- in the event of no match, NULL.
+      -- It is a part of libc.
 
    function Open_Device(for_name : Gtkada.Types.Chars_Ptr; 
                         with_flags : Interfaces.C.int) return int;

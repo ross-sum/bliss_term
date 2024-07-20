@@ -2,6 +2,7 @@ separate (Gtk.Terminal)
    procedure Process(the_input : in UTF8_String; for_buffer : Gtk_Terminal_Buffer) is
    use Gtk.Text_Iter, Gtk.Text_Mark;
    use Ada.Strings.Maps;
+   use Gtk.Terminal.CInterface;
    Tab_length : constant natural := 8;
    subtype Tab_range is natural range 0..Tab_length;
    CR_str  : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.CR);
@@ -37,7 +38,7 @@ separate (Gtk.Terminal)
             then
                into := new linked_list;
                into.item := the_number;
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Append_To_Markup: executing Set_Max(Insert) at value '" & into.item'Wide_Image & "'...");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Append_To_Markup: executing Set_Max(Insert) at value" & into.item'Wide_Image & "...");
             else
                Insert(the_number, into.next);
             end if;
@@ -696,7 +697,7 @@ separate (Gtk.Terminal)
                                                      "' not yet implemented." &
                                                        " Missing " & 
                                                        "stop_cursor_blink in" &
-                                                       " Gtk.Ada");
+                                                       " GtkAda");
                               end if;
                            when 25 =>   -- show/hide cursor
                               if for_sequence(chr_pos) = 'h'
@@ -708,6 +709,14 @@ separate (Gtk.Terminal)
                               end if;
                               Set_Cursor_Visible(on_buffer.parent, 
                                                  on_buffer.cursor_is_visible);
+                              if on_buffer.cursor_is_visible then
+                                 -- ensure cursor is on screen if made visible
+                                 Scroll_Mark_Onscreen(on_buffer.parent, 
+                                                      Get_Insert(the_buf));
+                                 -- Scroll_To_Mark(on_buffer.parent,
+                                    --             Get_Insert(the_buf), 0.0, 
+                                    --             false, 0.0, 0.0);
+                              end if;
                            when 1000 => null;  -- Send Mouse X & Y on button
                                                -- press and release
                               on_buffer.mouse_config.x10_mouse := 
@@ -769,7 +778,7 @@ separate (Gtk.Terminal)
                                     Gtk.Text_View.Set_Buffer
                                                (view  => the_term.terminal,
                                                 buffer=> on_buffer);
-                                    -- reset key values
+                                    -- reset key values to no value (i.e. 0)
                                     on_buffer.scroll_region_top    := 0;
                                     on_buffer.scroll_region_bottom := 0;
                                     -- and make sure we are at the cursor point
@@ -780,7 +789,6 @@ separate (Gtk.Terminal)
                                  end if;
                               end;
                            when 2004 =>  -- bracketed paste mode, text pasted in
-                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?2004' - Setting on_buffer.bracketed_paste_mode.");
                               if for_sequence(chr_pos) = 'h'
                               then  -- switch on echo if config allows
                                  on_buffer.bracketed_paste_mode := true;
@@ -795,6 +803,7 @@ separate (Gtk.Terminal)
                                                    cursor_iter);
                                  Switch_The_Light(on_buffer, 3, false);
                               end if;
+                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?2004' - Setting on_buffer.bracketed_paste_mode to " & on_buffer.bracketed_paste_mode'Wide_Image & ".");
                            when others =>  -- not valid and not interpreted
                               Handle_The_Error(the_error => 3, 
                                       error_intro=> "Process_Escape: " & 
@@ -1046,8 +1055,13 @@ separate (Gtk.Terminal)
                         -- Now make this the new cursor location in the current
                         -- buffer
                         Place_Cursor(the_buf, where => cursor_iter);
-                        Scroll_Mark_Onscreen(on_buffer.parent, 
-                                             Get_Insert(the_buf));
+                        if on_buffer.cursor_is_visible
+                        then  -- only move if the cursor is made visible
+                           Scroll_Mark_Onscreen(on_buffer.parent, 
+                                                Get_Insert(the_buf));
+                           Scroll_To_Mark(on_buffer.parent,Get_Insert(the_buf),
+                                          0.0, false, 0.0, 0.0);
+                        end if;
                         Get_Iter_At_Mark(the_buf,cursor_iter,
                                          Get_Insert(the_buf));
                         if saved_markup /= Null_Ptr
@@ -1097,7 +1111,7 @@ separate (Gtk.Terminal)
                            -- Now scroll the cursor to the top
                            Get_Iter_At_Mark(the_buf, cursor_iter,
                                             Get_Insert(the_buf));
-                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - cursor pos =" & Get_Line(cursor_iter)'Wide_Image & ", Scrolling to ensure the screen is clear.");
+                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - cursor pos (i.e. line-1) =" & Get_Line(cursor_iter)'Wide_Image & ", Scrolling to ensure the screen is clear.");
                             -- Put the cursor position at the top of the screen
                            declare  -- NO METHOD SEEMS TO WORK IF SCREEN NOT COMPLETELY CLEAR
                               use Gtk.Text_Mark;
@@ -1630,13 +1644,15 @@ separate (Gtk.Terminal)
                   then  -- query the foreground colour
                      -- The colour is held in on_buffer.text_colour
                      Write(fd => on_buffer.master_fd,
-                              Buffer => Esc_str & "[38;2;" & 
+                              Buffer => Esc_str & "]10;" & 
+                                -- Buffer => Esc_str & "[38;2;" & 
                                 As_String(natural(on_buffer.text_colour.Red)) &
                                 ";" & 
                                 As_String(natural(on_buffer.text_colour.Green))
                                 & ";" & 
                                 As_String(natural(on_buffer.text_colour.Blue))&
-                                "m");
+                                Bel_str);
+                                -- "m");
                   else  -- set the foreground colour
                      Log_Data(at_level => 9, 
                               with_details=>"Process_Escape " & 
@@ -1651,13 +1667,15 @@ separate (Gtk.Terminal)
                   then  -- query the background colour
                      -- The colour is held in on_buffer.background_colour
                      Write(fd => on_buffer.master_fd,
-                              Buffer => Esc_str & "[48;2;" & 
+                              Buffer => Esc_str & "]11;" & 
+                                -- Buffer => Esc_str & "[48;2;" & 
                                 As_String(natural(on_buffer.background_colour.Red)) &
                                 ";" & 
                                 As_String(natural(on_buffer.background_colour.Green))
                                 & ";" & 
                                 As_String(natural(on_buffer.background_colour.Blue))&
-                                "m");
+                                Bel_str);
+                                -- "m");
                   else  -- set the background colour
                      Log_Data(at_level => 9, 
                               with_details=>"Process_Escape " & 
@@ -1952,16 +1970,16 @@ begin  -- Process
       end;
    end if;
    -- Scroll if required to make it visible
-   if not for_buffer.in_esc_sequence then
-      -- cursor_mark := Get_Insert(the_buf);
-      -- Scroll_Mark_Onscreen(for_buffer.parent, cursor_mark);
+   if for_buffer.cursor_is_visible and not for_buffer.in_esc_sequence then
       Scroll_Mark_Onscreen(for_buffer.parent, Get_Insert(the_buf));
    end if;
    -- Check if we didn't get told to exit
    Get_Iter_At_Mark(for_buffer, start_iter,
                     Get_Mark(for_buffer, "end_paste"));
    if (not for_buffer.bracketed_paste_mode) and then
-      Get_Text(for_buffer, start_iter, end_iter) = "exit" & LF_str  -- ************* FIX ME - shuts down terminal even when exiting 'su'
+      Get_Text(for_buffer, start_iter, end_iter) = "exit" & LF_str and then
+      Get_Environment(New_String("SHLVL")) /= Null_Ptr and then
+      Value(Get_Environment(New_String("SHLVL"))) = "1"
    then  -- got an exit command?
       Gtk_Terminal(Get_Parent(for_buffer.parent)).closed_callback(
                                   Gtk_Terminal(Get_Parent(for_buffer.parent)));
