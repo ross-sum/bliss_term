@@ -20,11 +20,12 @@ s#m0src
 s#p0doc
 s#q0test
 s#r0obj_amd64
-!505;g
+!573;g
 %\011src%shelp_about.adb
 %\011src%scss_management.adb
 %\011src%sgtk-terminal.ads
 %\011src%sgtk_terminal_io.h
+%\011src%sgtk-terminal_markup.ads
 %\011src%ssetup.adb
 %\011src%sbliss_term.adb
 %\011src%sterminal.adb
@@ -37,13 +38,15 @@ s#r0obj_amd64
 %\011src%sgtk-terminal.adb
 %\011bliss_term.gpr
 %\011src%sgtk-terminal-process.adb
+%\011src%sgtk-terminal_markup.adb
 %\011src%sterminal.ads
 %\011src%ssetup.ads
-!505;f
+!573;f
 %\011src%shelp_about.adb
 %\011src%scss_management.adb
 %\011src%sgtk-terminal.ads
 %\011src%sgtk_terminal_io.h
+%\011src%sgtk-terminal_markup.ads
 %\011src%ssetup.adb
 %\011src%sbliss_term.adb
 %\011src%sterminal.adb
@@ -56,5 +59,6 @@ s#r0obj_amd64
 %\011src%sgtk-terminal.adb
 %\011bliss_term.gpr
 %\011src%sgtk-terminal-process.adb
+%\011src%sgtk-terminal_markup.adb
 %\011src%sterminal.ads
 %\011src%ssetup.ads

@@ -1,3 +1,46 @@
+-----------------------------------------------------------------------
+--                                                                   --
+--                      G T K . T E R M I N A L                      --
+--                             Process                               --
+--                          S E P A R A T E                          --
+--                              B o d y                              --
+--                                                                   --
+--                           $Revision: 1.0 $                        --
+--                                                                   --
+--  Copyright (C) 2024  Hyper Quantum Pty Ltd.                       --
+--  Written by Ross Summerfield.                                     --
+--                                                                   --
+--  This  package  provides a simple  virtual  terminal  interface,  --
+--  which contains the necessary components to construct and run  a  --
+--  virtual  terminal.  It was built because the VTE terminal  does  --
+--  not   properly   handle  the  combining  characters   used   in  --
+--  Blissymbolics.                                                   --
+--  It  allows  control of virtual terminal interface  details  for  --
+--  dimensions,  window  control,  status  icon  and  colours,  the  --
+--  language (i.e. Unicode group) being used for input and display,  --
+--  options around the language, and input and output management.    --
+--  It  was  built  as a part of the Bliss  Terminal  (Bliss  Term)  --
+--  software  construction.   But it really could be  considered  a  --
+--  part of the Gtk Ada software suite as, other than allowing  for  --
+--  the capability of using languages like Blissymbolics, there  is  --
+--  nothing in it that specifically alligns it to Blissymbolics.     --
+--                                                                   --
+--  Version History:                                                 --
+--  $Log$
+--                                                                   --
+--  Bliss Term  is free software; you can  redistribute  it  and/or  --
+--  modify  it under terms of the GNU  General  Public  Licence  as  --
+--  published by the Free Software Foundation; either version 2, or  --
+--  (at your option) any later version.  Bliss Term is  distributed  --
+--  in  hope  that  it will be useful, but  WITHOUT  ANY  WARRANTY;  --
+--  without even the implied warranty of MERCHANTABILITY or FITNESS  --
+--  FOR  A PARTICULAR PURPOSE. See the GNU General  Public  Licence  --
+--  for  more details.  You should have received a copy of the  GNU  --
+--  General Public Licence distributed with  Bliss Term.             --
+--  If  not,  write to the Free Software  Foundation,  51  Franklin  --
+--  Street, Fifth Floor, Boston, MA 02110-1301, USA.                 --
+--                                                                   --
+-----------------------------------------------------------------------
 separate (Gtk.Terminal)
    procedure Process(the_input : in UTF8_String; for_buffer : Gtk_Terminal_Buffer) is
    use Gtk.Text_Iter, Gtk.Text_Mark;
@@ -15,359 +58,14 @@ separate (Gtk.Terminal)
    St_chr  : constant character := character'Val(16#9C#);
    Esc_num : constant UTF8_String := Esc_str & "[01;";
    Tab_chr : constant UTF8_String(1..Tab_length) := (1..Tab_length => ' ');
-   Esc_Rng : constant Character_Ranges := (('@','K'),('M','P'),('S','T'),
-                                           ('c','c'),('f','i'),('l','n'),
-                                           ('r','u'),('#','#'),('=','='), -- ('%','%'),
-                                           ('^','^'),('_','_'),('>','>'));
+   Esc_Rng : constant Character_Ranges := (('@','P'),('S','T'),('c','c'),
+                                           ('f','i'),('l','n'),('r','u'),
+                                           ('#','#'),('<','>'), -- ('%','%'),
+                                           ('^','^'),('_','_'));
    Esc_Term: constant Character_Set := To_Set(Esc_Rng);
    Osc_Rng : constant Character_Ranges := ((Bel_str(1),Bel_str(1)),
                                            (st_chr,st_chr));
    Osc_Term: constant Character_Set := To_Set(Osc_Rng);
-   procedure Append_To_Markup(for_buffer : Gtk_Terminal_Buffer;
-                              for_modifier : in font_modifiers;
-                              the_value : in UTF8_String := ""; 
-                              or_rgb_colour: Gdk.RGBA.Gdk_RGBA:=null_rgba) is
-      -- If the markup string is empty, initiate it, otherwise just append the
-      -- supplied text.
-      procedure Set_Max(of_modifier_array : in out font_modifier_array; 
-                        for_modifier : in font_modifiers) is
-         procedure Insert(the_number : in positive; 
-                          into : in out linked_list_ptr) is
-         begin
-            if into = null
-            then
-               into := new linked_list;
-               into.item := the_number;
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Append_To_Markup: executing Set_Max(Insert) at value" & into.item'Wide_Image & "...");
-            else
-               Insert(the_number, into.next);
-            end if;
-         end Insert;
-         modifier_array : font_modifier_array renames of_modifier_array;
-         max_modifier : natural := 0;
-         current_item : linked_list_ptr;
-      begin  -- calculate the order of the modifier being set
-         -- First find the maximum
-         for modifier in font_modifiers loop
-            current_item := modifier_array(modifier).o;
-            while current_item /= null loop
-               if current_item.item > max_modifier
-               then
-                  max_modifier := current_item.item;
-               end if;
-               current_item := current_item.next; 
-            end loop;
-         end loop;
-         -- Now set the maximum + 1 to the requested modifier
-         current_item := modifier_array(for_modifier).o;
-         while current_item  /= null loop
-            -- go down to the linked list to create a new item
-            current_item := current_item.next;
-         end loop;
-         Insert(the_number => max_modifier + 1,
-                into => modifier_array(for_modifier).o);
-         Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Append_To_Markup: executed Set_Max for_modifier '" & for_modifier'Wide_Image & "'.");
-      end Set_Max;
-      function To_RGB_String(for_rgb : Gdk.RGBA.Gdk_RGBA) return string is
-         subtype Hex_Size is positive range 1..2;
-         subtype Hex_String is string(Hex_Size'range);
-         red_num   : constant natural := natural(for_rgb.red * 255.0);
-         green_num : constant natural := natural(for_rgb.green * 255.0);
-         blue_num  : constant natural := natural(for_rgb.blue * 255.0);
-         red,
-         green,
-         blue      : Hex_String;
-         function Put_Into_String(item : in natural) return Hex_String is
-            subtype hex_range is natural range 16#0# .. 16#F#;
-            type hex_array is array (hex_range) of character;
-            zero  : constant character := '0';
-            hexnum: constant hex_array := "0123456789ABCDEF";
-            radix : constant natural := 16#10#;
-            number_string : Hex_String;
-            unit          : hex_range;
-            strip_number  : natural;
-            char_pos      : Hex_Size := 1;
-         begin
-            number_string := "00";
-            if item /= 0
-            then
-               strip_number := item;
-               -- place numbers on the right hand side of the decimal 
-               -- point into the temporary string, number_string 
-               -- (NB: actually no decimal point)
-               while strip_number > 0 loop
-                  unit:= hex_range(strip_number - (strip_number/radix)* radix);
-                  strip_number := strip_number / radix;
-                  number_string(char_pos) := hexnum(unit);
-                  if char_pos < Hex_Size'last then
-                     char_pos := char_pos + 1;
-                  end if;
-               end loop;
-            end if;	-- check for a zero (0)
-            -- return the result
-            return number_string;
-         end Put_Into_String;
-      begin  -- To_RGB_String
-         if for_rgb = null_rgba
-         then  -- default is no string at all
-            return "";
-         else  -- output the RGB as '#RRGGBB'
-            red   := Put_Into_String(red_num);
-            green := Put_Into_String(green_num);
-            blue  := Put_Into_String(blue_num);
-            return """#" & red & green & blue & """";
-         end if;
-      end To_RGB_String;
-      function The_Mod(for_mods: font_modifier_array; 
-                       at_pos : in font_modifiers) return UTF8_String is
-      begin
-         if for_mods(at_pos).n > 0
-         then
-            case at_pos is
-               when none            => -- ignore
-                  return "";
-               when normal          => 
-                  return "";
-               when bold            => 
-                  return "<b>";
-               when italic          => 
-                  return "<i>";
-               when underline       => 
-                  return "<u>";
-               when strikethrough   => 
-                  return "<s>";
-               when mono            => 
-                  return "<tt>";
-               when span            => 
-                  return "<span>";
-            end case;
-         else
-            return "";
-         end if;
-      end The_Mod;
-      temp_markup : Gtkada.Types.Chars_Ptr;
-      mkTxt : Gtkada.Types.Chars_Ptr renames for_buffer.markup_text;
-   begin  -- Append_To_Markup
-      if for_modifier = span
-      then  -- check if already in <span
-          -- Here, we assume all the <span ...> commands are given together!
-          -- Nearly always, they should be.
-         if for_buffer.markup_text /= Null_Ptr and then
-            Ada.Strings.Fixed.Count(Value(for_buffer.markup_text),"<span") = 1
-            and then Ada.Strings.Fixed.Count(Value(mkTxt),"</span>") = 0
-            and then Ada.Strings.Fixed.Tail(Value(mkTxt),1) = ">"
-         then  -- insert this text just prior to the '>' on "<span ...>"
-            temp_markup:= 
-                     New_String(Value(mkTxt)
-                                    (Value(mkTxt)'First..Value(mkTxt)'Last-1) &
-                                the_value & To_RGB_String(or_rgb_colour)&" >");
-            Free(for_buffer.markup_text);
-            for_buffer.markup_text := temp_markup;
-         else  -- treat as a new entry for <span ...>
-            for_buffer.modifier_array(span).n := 
-                                   for_buffer.modifier_array(span).n + 1;
-            Set_Max(of_modifier_array => for_buffer.modifier_array,
-                    for_modifier => span);
-            Insert_At_Cursor (into=>for_buffer,the_text=>"<span " & the_value &
-                                          To_RGB_String(or_rgb_colour) & " >");
-         end if;
-      else -- this is not setting up mark-up text for a span, just append
-         for_buffer.modifier_array(for_modifier).n := 
-                                 for_buffer.modifier_array(for_modifier).n + 1;
-         Set_Max(of_modifier_array => for_buffer.modifier_array,
-                 for_modifier => for_modifier);
-         Insert_At_Cursor(into => for_buffer, 
-                           the_text => The_Mod(for_buffer.modifier_array, 
-                                               at_pos => for_modifier) & 
-                                       the_value);
-      end if;
-   end Append_To_Markup;
-   procedure Finish_Markup(for_buffer: Gtk_Terminal_Buffer;
-                           for_modifier : font_modifiers := none) is
-      -- Close off the mark-up string, then write it out to the buffer, and
-      -- finally reset the mark-up string to empty.
-      function The_Mod(for_mods: font_modifier_array; 
-                       at_pos : in font_modifiers) return UTF8_String is
-      begin
-         if for_mods(at_pos).n > 0
-         then
-            case at_pos is
-               when none            => -- ignore
-                  return "";
-               when normal          => 
-                  return "";
-               when bold            => 
-                  return "</b>";
-               when italic          => 
-                  return "</i>";
-               when underline       => 
-                  return "</u>";
-               when strikethrough   => 
-                  return "</s>";
-               when mono            => 
-                  return "</tt>";
-               when span            => 
-                  return "</span>";
-            end case;
-         else
-            return "";
-         end if;
-      end The_Mod;
-      procedure Clear_Last(from_modifier_array : in out font_modifier_array; 
-                           for_modifier : in font_modifiers) is
-         procedure Delete(from : in out linked_list_ptr) is
-         begin
-            if from.next = null
-            then
-               from := null;  -- clear it out
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Finish_Markup: executed Clear_Last(Delete) at modifier '" & for_modifier'Wide_Image & "'.");
-            else
-               Delete(from.next);
-            end if;
-         end Delete;
-         modifier_array : font_modifier_array renames from_modifier_array;
-      begin  -- calculate the order of the modifier being set
-         -- Now set the maximum + 1 to the requested modifier
-         if  modifier_array(for_modifier).o /= null
-         then  -- some processing to do (otherwise nothing to process)
-            Delete(from => modifier_array(for_modifier).o);
-         end if;
-      end Clear_Last;
-      function Maximum(from_modifier_array : in font_modifier_array) 
-      return font_modifiers is
-         modifier_array : font_modifier_array renames from_modifier_array;
-         current_item   : linked_list_ptr;
-         result         : font_modifiers := none;
-         max_modifier   : natural := 0;
-      begin
-         for modifier in font_modifiers loop
-            current_item := modifier_array(modifier).o;
-            while current_item /= null loop
-               if current_item.item > max_modifier
-               then
-                  max_modifier := current_item.item;
-                  result := modifier;
-               end if;
-               current_item := current_item.next; 
-            end loop;
-         end loop;
-         return result;
-      end Maximum;
-      modifier : font_modifiers;
-   begin  -- Finish_Markup
-      if for_modifier /= none
-      then  -- Just close off that modifier
-         Insert_At_Cursor(into => for_buffer, 
-                          the_text=>The_Mod(for_mods=>for_buffer.modifier_array,
-                                            at_pos => for_modifier));
-         Clear_Last(from_modifier_array => for_buffer.modifier_array,
-                    for_modifier => for_modifier);
-         for_buffer.modifier_array(for_modifier).n := 
-                                 for_buffer.modifier_array(for_modifier).n - 1;
-         if Maximum(from_modifier_array=>for_buffer.modifier_array) = none
-         then  -- mark-up has ended, flush the mark-up text buffer
-            Insert_At_Cursor(into => for_buffer, the_text => "");
-         end if;
-      else
-         -- First, close off any outstanding modifiers.  This needs to be done
-         -- in reverse order for the modifier order number (in its linked list)
-         modifier := Maximum(from_modifier_array => for_buffer.modifier_array);
-         Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Finish_Markup: working with modifier '" & modifier'Wide_Image & "'.");
-         while modifier /= none loop
-            if for_buffer.modifier_array(modifier).n > 0
-            then  -- this is a sanity check (to be sure, to be sure)
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Finish_Markup: executing Insert_At_Cursor on '" & Ada.Characters.Conversions.To_Wide_String(The_Mod(for_mods => for_buffer.modifier_array, at_pos => modifier)) & "'.");
-               Insert_At_Cursor(into => for_buffer, the_text =>
-                             The_Mod(for_mods => for_buffer.modifier_array,
-                                     at_pos => modifier));
-               Clear_Last(from_modifier_array => for_buffer.modifier_array,
-                          for_modifier => modifier);
-               for_buffer.modifier_array(modifier).n := 
-                                     for_buffer.modifier_array(modifier).n - 1;
-            else  -- Something is out of wack!
-               Handle_The_Error(the_error => 1, 
-                                error_intro => "Finish_Markup: Modifier error",
-                                error_message => "Mis-match in number of " &
-                                                 "modifiers. Got a modifier " &
-                                                 "of '" & modifier'Wide_Image &
-                                                 "' but there are 0 of those "&
-                                                 "modifiers left!");
-            end if;
-            modifier:= Maximum(from_modifier_array=>for_buffer.modifier_array);
-         end loop;
-         -- Second, flush the mark-up text
-         Insert_At_Cursor(into => for_buffer, the_text => "");
-      end if;
-   end Finish_Markup;
-   procedure Copy(from : in font_modifier_array; to : out font_modifier_array)
-   is
-      -- Do a deep copy of 'from' to 'to'
-      procedure Insert(the_number : in positive; into : in out linked_list_ptr)
-      is
-      begin
-         if into = null
-         then
-            into := new linked_list;
-            into.item := the_number;
-         else
-            Insert(the_number, into.next);
-         end if;
-      end Insert;
-      current_item : linked_list_ptr;
-   begin
-      for item in font_modifiers loop
-         -- Load the modifier count (number)
-         to(item).n := from(item).n;
-         -- Load the modifier's sequence number(s)
-         current_item := from(item).o;
-         while current_item /= null loop  -- walk the list
-            Insert(current_item.item, into => to(item).o);
-            current_item := current_item.next;
-         end loop;
-      end loop;
-   end Copy;
-   function Regenerate_Markup(from : in  Gtkada.Types.Chars_Ptr) 
-   return Gtkada.Types.Chars_Ptr is
-      -- Scrub the old line, extracting the mark-up instructions.  We know that
-      -- mark-up is enclosed in '<' and '>'
-      function Find_Markup(in_string : UTF8_String; starting_at : in natural)
-      return UTF8_String is
-         first_char : natural := starting_at;
-         last_char  : natural := starting_at;
-      begin
-         if in_string'Length > starting_at
-         then  -- sanity check
-            while first_char < in_string'Length and then 
-                  in_string(first_char) /= '<' loop
-               first_char := first_char + 1;
-            end loop;
-            last_char := first_char;
-            while last_char < in_string'Length and then
-                  in_string(last_char) /= '>' loop
-               last_char := last_char + 1;
-            end loop;
-            if first_char < last_char
-            then
-               return in_string(first_char .. last_char) & 
-                      Find_Markup(in_string(last_char..in_string'Last), 
-                                  starting_at => last_char + 1);
-            else
-               return "";
-            end if;
-         else
-            return "";
-         end if;
-      end Find_Markup;
-      old_markup : UTF8_String := Value(from);
-   begin
-      if old_markup'Length > 0
-      then  -- Sanity check: there is something to search for mark-up on
-         return New_String(Find_Markup(in_string => old_markup, 
-                                       starting_at => old_markup'First));
-      else  -- Nothing to find the mark-up on
-         return Null_Ptr;
-      end if;
-   end Regenerate_Markup;
    function "*" (mult : integer; val : character) return string is
       result : string(1..mult) := (others => val);
    begin
@@ -768,6 +466,9 @@ separate (Gtk.Terminal)
                                     Gtk.Text_View.Set_Buffer
                                                (view  => the_term.terminal,
                                                 buffer=> on_buffer.alt_buffer);
+                                    -- And let mark-up management know
+                                    Set_The_Buffer(to => on_buffer.alt_buffer,
+                                                 for_markup=>on_buffer.markup);
                                     Switch_The_Light(on_buffer, 1, false);
                                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1049' - Switched to Alternative Screen Buffer.");
                                  elsif for_sequence(chr_pos) = 'l'
@@ -784,6 +485,9 @@ separate (Gtk.Terminal)
                                     -- and make sure we are at the cursor point
                                     Scroll_Mark_Onscreen(the_term.terminal, 
                                                         Get_Insert(on_buffer));
+                                    Set_The_Buffer(to => Gtk.Text_Buffer.
+                                                    Gtk_Text_Buffer(on_buffer),
+                                                 for_markup=>on_buffer.markup);
                                     Switch_The_Light(on_buffer, 1, true);
                                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1049' - Switched to Normal Screen Buffer.");
                                  end if;
@@ -971,32 +675,22 @@ separate (Gtk.Terminal)
                         the_term       : Gtk_Text_View := on_buffer.parent;
                         the_terminal   : Gtk_Terminal := 
                                             Gtk_Terminal(Get_Parent(the_term));
-                        saved_markup   : Gtkada.Types.Chars_Ptr;
-                        saved_modifiers: font_modifier_array;
-                        in_markup_state: boolean;
                         home_line_num  : Glib.Gint;
                      begin
                         -- If a modifier string is in progress, then need to
                         -- clear it before moving, so dump out what is there
                         -- first, saving what is there to restore post-
                         -- relocation of the cursor.
-                        if on_buffer.markup_text /= Null_Ptr
+                        if not Is_Empty(on_buffer.markup)
                         then  -- a string to dump
                            Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - Saving mark-up.");
                            -- Rebuild the mark-up (but not text) from modifier
                            -- array
-                           saved_markup := 
-                              Regenerate_Markup(from=> on_buffer.markup_text);
-                                    --New_String(Value(on_buffer.markup_text));
-                           -- Save a copy of the modifier array
-                           Copy(from => on_buffer.modifier_array, 
-                                to => saved_modifiers);
-                           -- and hte mark-up state for later restoration
-                           in_markup_state := on_buffer.in_markup;
+                           Save(the_markup => on_buffer.markup);
                            -- (close off, but the closure is temporary)
-                           Finish_Markup(for_buffer => on_buffer);
+                           Finish(on_markup => on_buffer.markup);
                         else
-                           saved_markup := Null_Ptr;
+                           Clear_Saved(markup => on_buffer.markup);
                         end if;
                         if on_buffer.scroll_region_bottom > 0
                         then  -- the top of the buffer is the correct home
@@ -1064,17 +758,12 @@ separate (Gtk.Terminal)
                         end if;
                         Get_Iter_At_Mark(the_buf,cursor_iter,
                                          Get_Insert(the_buf));
-                        if saved_markup /= Null_Ptr
+                        if Saved_Markup_Exists(for_markup => on_buffer.markup)
                         then  -- mark-up to restore, do a complete restore
                            Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - Restoring mark-up.");
-                           Free(on_buffer.markup_text);
-                           on_buffer.markup_text := 
-                                            New_String(Value(saved_markup));
-                           Copy(from => saved_modifiers, 
-                                to => on_buffer.modifier_array);
-                           on_buffer.in_markup := in_markup_state;
+                           Restore(the_markup => on_buffer.markup);
+                           Clear_Saved(markup => on_buffer.markup);
                         end if;
-                        Free(saved_markup);
                      end;
                      Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moved to (row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ", col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ").");
                   when 'I' => null;  -- Cursor Horizontal (Forward) Tab
@@ -1155,7 +844,7 @@ separate (Gtk.Terminal)
                         param(1) := 1;
                      end if;
                      Insert_At_Cursor(on_buffer, the_text=>(param(1) * 
-                                                  Ada.Characters.Latin_1.LF));
+                                                            Insert_Return));
                   when 'P' => null;  --DCH -- Delete <param> characters
                      if param(1) = 0
                       then
@@ -1237,93 +926,90 @@ separate (Gtk.Terminal)
                      while count <= pnum loop
                         case param(count) is
                            when 0 =>   -- reset to normal
-                              Finish_Markup(on_buffer);
+                              Finish(on_markup => on_buffer.markup);
                            when 1 =>   -- bold
-                              Append_To_Markup(on_buffer, bold);
+                              Append_To_Markup(on_buffer.markup, bold);
                            when 2 => null;  -- dim/faint
                            when 3 =>   -- italic
-                              Append_To_Markup(on_buffer, italic);
+                              Append_To_Markup(on_buffer.markup, italic);
                            when 4 =>   -- underline
-                              Append_To_Markup(on_buffer, underline);
+                              Append_To_Markup(on_buffer.markup, underline);
                            when 5 => null;  -- show blink
                            when 6 => null;  -- rapid blink
                            when 7 =>   -- reverse video
-                              Append_To_Markup(on_buffer, span, "foreground=", 
+                              Append_To_Markup(on_buffer.markup, span, "foreground=", 
                                                on_buffer.background_colour);
-                              Append_To_Markup(on_buffer, span, "background=", 
+                              Append_To_Markup(on_buffer.markup, span, "background=", 
                                                on_buffer.text_colour);
                            when 8 =>   -- conceal or hide
                               -- by setting foreground to background colour
-                              Append_To_Markup(on_buffer, span, "foreground=", 
+                              Append_To_Markup(on_buffer.markup, span, "foreground=", 
                                                on_buffer.background_colour);
                            when 9 =>   -- crossed out or strike-through
-                              Append_To_Markup(on_buffer, strikethrough);
+                              Append_To_Markup(on_buffer.markup, strikethrough);
                            when 10 => null;  -- primary font
                            when 11 .. 19 => null; -- alternative font number n-10
                            when 20 => null; -- Fraktur (Gothic)
                            when 21 =>  -- Doubly underlined
-                              Append_To_Markup(on_buffer, span, 
+                              Append_To_Markup(on_buffer.markup, span, 
                                                "underline=""double"" ");
                            when 22 =>  -- Normal intensity
-                              if on_buffer.modifier_array(bold).n > 0
+                              if Is_Set(the_markup=>on_buffer.markup, to=>bold)
                               then
-                                 Finish_Markup(on_buffer, bold);
+                                 Finish(on_buffer.markup, bold);
                               end if;
                            when 23 => null; -- Neither italic, nor blackletter
-                              if on_buffer.modifier_array(italic).n > 0
+                              if Is_Set(the_markup=>on_buffer.markup, to=>italic)
                               then
-                                 Finish_Markup(on_buffer, italic);
+                                 Finish(on_buffer.markup, italic);
                               end if;
                            when 24 =>  -- Not underlined
-                              if on_buffer.modifier_array(underline).n > 0 then
-                                 Finish_Markup(on_buffer, underline);
+                              if Is_Set(the_markup=>on_buffer.markup, to=>underline)
+                              then
+                                 Finish(on_buffer.markup, underline);
                               end if;
                            when 25 => null; -- Not blinking
                            when 26 =>  -- Proportional spacing
-                              if on_buffer.modifier_array(mono).n > 0 then
-                                 Finish_Markup(on_buffer, mono);
+                              if Is_Set(the_markup=>on_buffer.markup, to=>mono)
+                              then
+                                 Finish(on_buffer.markup, mono);
                               end if;
                            when 27 =>  -- Not reversed
-                              if on_buffer.markup_text /= Null_Ptr
-                              and then -- check for '<span' already being there
-                                 Ada.Strings.Fixed.Count
-                                       (Value(on_buffer.markup_text),"<span")>0
-                              and then -- check for "foreground" already  there
-                                 Ada.Strings.Fixed.Count
-                                  (Value(on_buffer.markup_text),"foreground")>0
+                              if Count_Of_Span(attribute => "foreground", 
+                                               for_markup=> on_buffer.markup)>0
                               then
-                                 Finish_Markup(on_buffer, span);
+                                 Finish(on_buffer.markup, span);
                               else  -- define the Not reversed state
-                                 Append_To_Markup(on_buffer,span,"foreground=",
+                                 Append_To_Markup(on_buffer.markup,span,"foreground=",
                                                   on_buffer.text_colour);
-                                 Append_To_Markup(on_buffer,span,"background=",
+                                 Append_To_Markup(on_buffer.markup,span,"background=",
                                                   on_buffer.background_colour);
                               end if;
                            when 28 =>  -- Reveal (not invisible)
                               -- by setting foreground to foreground colour
-                              Append_To_Markup(on_buffer, span, "foreground=", 
+                              Append_To_Markup(on_buffer.markup, span, "foreground=", 
                                                on_buffer.text_colour);
                            when 29 =>  -- Not crossed out
-                              if on_buffer.modifier_array(strikethrough).n > 0
+                              if Is_Set(the_markup=>on_buffer.markup, to=>strikethrough)
                               then
-                                 Finish_Markup(on_buffer, strikethrough);
+                                 Finish(on_buffer.markup, strikethrough);
                               end if;
                            when 30 | 90 =>  -- Set foreground colour to black
-                              Append_To_Markup(on_buffer, span, "foreground=""black""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""black""");
                            when 31 | 91 =>  -- Set foreground colour to red
-                              Append_To_Markup(on_buffer, span, "foreground=""red""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""red""");
                            when 32 | 92 =>  -- Set foreground colour to green
-                              Append_To_Markup(on_buffer, span, "foreground=""green""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""green""");
                            when 33 | 93 =>  -- Set foreground colour to yellow
-                              Append_To_Markup(on_buffer, span, "foreground=""yellow""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""yellow""");
                            when 34 | 94 =>  -- Set foreground colour to blue
-                              Append_To_Markup(on_buffer, span, "foreground=""blue""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""blue""");
                            when 35 | 95 =>  -- Set foreground colour to magenta
-                              Append_To_Markup(on_buffer, span, "foreground=""magenta""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""magenta""");
                            when 36 | 96  =>  -- Set foreground colour to cyan
-                              Append_To_Markup(on_buffer, span, "foreground=""cyan""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""cyan""");
                            when 37 | 97 =>  -- Set foreground colour to white
-                              Append_To_Markup(on_buffer, span, "foreground=""white""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""white""");
                            when 38 =>  -- Set foreground colour to number
                               count := count + 1;
                               if param(count) = 5 then  -- colour chart colour
@@ -1332,7 +1018,7 @@ separate (Gtk.Terminal)
                                  count := count + 1;
                               elsif param(count) = 2 then -- RGB
                                  count := count + 1;
-                                 Append_To_Markup(on_buffer, span, "foreground=",
+                                 Append_To_Markup(on_buffer.markup, span, "foreground=",
                                                   (GDouble(param(count))/255.0,
                                                    GDouble(param(count+1))/255.0,
                                                    GDouble(param(count+2))/255.0,
@@ -1340,30 +1026,30 @@ separate (Gtk.Terminal)
                                  count := count + 2;
                               end if;
                            when 39 =>  -- Default foreground colour
-                              Append_To_Markup(on_buffer, span, "foreground=""white""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=""white""");
                            when 40 | 100 =>  -- Set background colour to black
-                              Append_To_Markup(on_buffer, span, "background=""black""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""black""");
                            when 41 | 101 =>  -- Set background colour to red
-                              Append_To_Markup(on_buffer, span, "background=""red""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""red""");
                            when 42 | 102 =>  -- Set background colour to green
-                              Append_To_Markup(on_buffer, span, "background=""green""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""green""");
                            when 43 | 103 =>  -- Set background colour to yellow
-                              Append_To_Markup(on_buffer, span, "background=""yellow""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""yellow""");
                            when 44 | 104 =>  -- Set background colour to blue
-                              Append_To_Markup(on_buffer, span, "background=""blue""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""blue""");
                            when 45 | 105 =>  -- Set background colour to magenta
-                              Append_To_Markup(on_buffer, span, "background=""magenta""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""magenta""");
                            when 46 | 106 =>  -- Set background colour to cyan
-                              Append_To_Markup(on_buffer, span, "background=""cyan""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""cyan""");
                            when 47 | 107 =>  -- Set background colour to white
-                              Append_To_Markup(on_buffer, span, "background=""white""");
+                              Append_To_Markup(on_buffer.markup, span, "background=""white""");
                            when 48 =>  -- Set background colour to number
                               count := count + 1;
                               if param(count) = 5 then  -- colour chart colour
                                  null;
                               elsif param(count) = 2 then -- RGB
                                  count := count + 1;
-                                 Append_To_Markup(on_buffer, span, "background=", 
+                                 Append_To_Markup(on_buffer.markup, span, "background=", 
                                                   (GDouble(param(count))/255.0,
                                                    GDouble(param(count+1))/255.0,
                                                    GDouble(param(count+2))/255.0,
@@ -1371,9 +1057,9 @@ separate (Gtk.Terminal)
                                  count := count + 2;
                               end if;
                            when 49 =>  -- Default background colour
-                              Append_To_Markup(on_buffer, span,"background=""black""");
+                              Append_To_Markup(on_buffer.markup, span,"background=""black""");
                            when 50 =>  -- Disable proportional spacing
-                              Append_To_Markup(on_buffer, mono);
+                              Append_To_Markup(on_buffer.markup, mono);
                            when others => null;  -- style or colour not recognised
                               Handle_The_Error(the_error => 4, 
                                                error_intro=>"Process_Escape: " &
@@ -1542,7 +1228,7 @@ separate (Gtk.Terminal)
                                        Ada.Characters.Conversions.
                                                  To_Wide_String(for_sequence) &
                                        "' not yet implemented.");
-            when 'M' => null;  -- Reverse Index
+            when 'M' =>   -- Reverse Index
                -- move the cursor up one line, maintaining horizontal position,
                -- scrolling the buffer if necessary
                Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
@@ -1613,6 +1299,8 @@ separate (Gtk.Terminal)
                                        Ada.Characters.Conversions.
                                                  To_Wide_String(for_sequence) &
                                        "' not yet implemented.");
+            when 'Z' => null;  -- Return Terminal ID
+               Write(fd => on_buffer.master_fd, Buffer => Esc_str & "/Z");
             when '\' => null;  -- String Terminator (terminates other commands)
                -- Handled elsewhere
             when ']' =>   -- Operating System Command (seems terminate by ^G)
@@ -1727,6 +1415,10 @@ separate (Gtk.Terminal)
                -- Keypad keys will emit their Numeric Mode sequences.
                -- This means the virtual terminal client gets normal numbers.
                on_buffer.keypad_keys_in_app_mode := false;
+            when '<' =>   -- Exit VT52 mode (supposedly Enter VT100 mode)
+               -- In Gtk.Terminal, we treat '<Esc> <' as the Exit command
+               Gtk_Terminal(Get_Parent(on_buffer.parent)).closed_callback(
+                                  Gtk_Terminal(Get_Parent(on_buffer.parent)));
             when others =>   -- unrecognised control sequence - log and ignore
                Handle_The_Error(the_error => 7, 
                           error_intro=> "Process_Escape: Control string error",
@@ -1885,7 +1577,6 @@ begin  -- Process
       cursor_mark := Get_Insert(the_buf);   
       Get_Iter_At_Mark(the_buf, end_iter, cursor_mark);
          -- here, end_iter is where the cursor is
-      -- Get_Start_Iter(for_buffer, start_iter);
       Get_Iter_At_Line(the_buf,start_iter,Glib.Gint(for_buffer.buf_line_num-1));
       tab_stop := Tab_length - 
                    (UTF8_Length(Get_Text(the_buf, start_iter, end_iter)) rem
@@ -1899,7 +1590,7 @@ begin  -- Process
       -- doesn't for some very strange reason).
       Process_Escape(for_sequence => esc_str & "[D", on_buffer => for_buffer);
    else  -- An ordinary character
-      if for_buffer.markup_text = Null_Ptr
+      if Is_Empty(the_markup => for_buffer.markup)
       then  -- not in some kind of mark-up so just add the text
          -- First, if in overwrite, then if the_input is > 1 characters (i.e.
          -- it is a multi-byte UTF-8), then insert those characters
@@ -1917,8 +1608,8 @@ begin  -- Process
          -- Now Insert/Overwrite the_input into the buffer
          Insert_At_Cursor(for_buffer, the_text=>the_input);
       else  -- in some kind of mark-up - append it to the mark-up string
-         Insert_At_Cursor(for_buffer, the_text=>the_input);
-         -- Append_To_Markup(for_buffer, the_text => the_input);
+         -- Insert_At_Cursor(for_buffer, the_text=>the_input);
+         Append_To_Markup(for_buffer.markup, the_value => the_input);
       end if;
       for_buffer.just_wrapped := false;
       null;
@@ -1951,8 +1642,8 @@ begin  -- Process
          unedit_iter : Gtk.Text_Iter.Gtk_Text_Iter;
       begin
          -- First, make certain that not in mark-up mode
-         if for_buffer.in_markup then
-            Finish_Markup(for_buffer);
+         if not Is_Empty(for_buffer.markup) then
+            Finish(on_markup => for_buffer.markup);
          end if;
          -- Work out the history span and set it
          Get_Start_Iter(for_buffer, start_iter);
@@ -1972,19 +1663,6 @@ begin  -- Process
    -- Scroll if required to make it visible
    if for_buffer.cursor_is_visible and not for_buffer.in_esc_sequence then
       Scroll_Mark_Onscreen(for_buffer.parent, Get_Insert(the_buf));
-   end if;
-   -- Check if we didn't get told to exit
-   Get_Iter_At_Mark(for_buffer, start_iter,
-                    Get_Mark(for_buffer, "end_paste"));
-   if (not for_buffer.bracketed_paste_mode) and then
-      Get_Text(for_buffer, start_iter, end_iter) = "exit" & LF_str and then
-      Get_Environment(New_String("SHLVL")) /= Null_Ptr and then
-      Value(Get_Environment(New_String("SHLVL"))) = "1"
-   then  -- got an exit command?
-      Gtk_Terminal(Get_Parent(for_buffer.parent)).closed_callback(
-                                  Gtk_Terminal(Get_Parent(for_buffer.parent)));
-   elsif not for_buffer.bracketed_paste_mode then
-      null;  -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : line ='" & Ada.Characters.Conversions.To_Wide_String(Get_Text(for_buffer, start_iter, end_iter)) & "'");
    end if;
    -- Set_Cursor_Visible(for_buffer.parent, true);
    Reset_Cursor_Blink(for_buffer.parent);

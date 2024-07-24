@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------
 --                                                                   --
---                          G T K . T E R M                          --
+--                      G T K . T E R M I N A L                      --
 --                                                                   --
 --                     S p e c i f i c a t i o n                     --
 --                                                                   --
@@ -61,6 +61,7 @@ with Gtk.Text_Mark;
 with Gdk.RGBA;                use Gdk.RGBA;
 with Pango.Font;              use Pango.Font;
 with Gtkada.Types;            use Gtkada.Types;
+with Gtk.Terminal_Markup;
 
 package Gtk.Terminal is
 
@@ -333,6 +334,7 @@ package Gtk.Terminal is
    private
    ----------------------------------------------------------------------------
    use Gdk.Event;
+   use Gtk.Terminal_Markup;
    
    Blue_RGBA       : constant Gdk.RGBA.Gdk_RGBA := (0.0, 0.0, 01.0, 1.0);
    nowrap_size     : constant natural := 1000;
@@ -445,20 +447,6 @@ package Gtk.Terminal is
    -- LIne numbers:
    type line_numbers is new integer range -1 .. integer'Last;
    unassigned_line_number : constant line_numbers := -1;
-   -- Font modifiers:
-   type font_modifiers is (none, normal, bold, italic, underline, 
-                           strikethrough, mono, span);
-   type linked_list;
-   type linked_list_ptr is access linked_list;
-   type linked_list is record
-         item : natural;
-         next : linked_list_ptr;
-      end record;
-   type font_modifier_detail is record
-         n : natural := 0;  -- number of modifiers in the list 'o'
-         o : linked_list_ptr;
-      end record;
-   type font_modifier_array is array (font_modifiers) of font_modifier_detail;
    
    -- GTK Terminal Buffer:
    type Gtk_Terminal_Buffer_Record is new Gtk.Text_Buffer.Gtk_Text_Buffer_Record
@@ -506,12 +494,8 @@ package Gtk.Terminal is
          cursor_keys_in_app_mode  : boolean := false;
          keypad_keys_in_app_mode  : boolean := false;
          -- Escape character handling (including for mark-up)
-         markup_text         : Gtkada.Types.Chars_Ptr := Null_Ptr;
-         modifier_array      : font_modifier_array;
-            -- An array of mark-up (font) modifiers
-         in_markup            : boolean := false;
-            -- switched on when mark-up text has been commenced and is switched
-            -- off when there is no more mark-up in the markup_text buffer
+         markup              : markup_management;
+            -- Mark-up management, including array of mark-up (font) modifiers
          background_colour   : Gdk.RGBA.Gdk_RGBA := Gdk.RGBA.Black_RGBA;
          text_colour         : Gdk.RGBA.Gdk_RGBA := Gdk.RGBA.White_RGBA;
          highlight_colour    : Gdk.RGBA.Gdk_RGBA := Gdk.RGBA.Null_RGBA;
@@ -599,6 +583,24 @@ package Gtk.Terminal is
       --  Simply calls Gtk.Terminal.Insert, using the current cursor position
       --  as the insertion point.
       --  "text": text in UTF-8 format
+   procedure Scrolled_Insert(number_of_lines : in positive; 
+                         for_buffer : access Gtk_Terminal_Buffer_Record'Class; 
+                         starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter);
+      -- Insert the specified number of new lines at the starting_from
+      -- location, scrolling down the lines below to ensure that text only
+      -- moves between scroll_region_top and scroll_region_bottom, making sure
+      -- that lines that scroll above or below the scroll region are discarded
+      -- and that the original lines outside of the scroll region are
+      -- protected.  If the scroll regions are undefined (i.e. set to 0), then
+      -- this procedure does nothing other than insert a regular new line.
+   procedure Scroll_Down(number_of_lines : in positive; 
+                         for_buffer : Gtk_Text_Buffer; 
+                         starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter);
+      -- Scroll down the specified number of lines between scroll_region_top
+      -- and scroll_region_bottom, making sure that lines that scroll above or
+      -- below the scroll region are discarded and that the original lines
+      -- outside of the scroll region are protected.  If the scroll regions are
+      -- undefined (i.e. set to 0), then this procedure does nothing.
        
    -------------------------------------------
    -- Gtk_Terminal_Buffer Private Callbacks --

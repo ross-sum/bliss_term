@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------
 --                                                                   --
---                          G T K . T E R M                          --
+--                      G T K . T E R M I N A L                      --
 --                                                                   --
 --                              B o d y                              --
 --                                                                   --
@@ -62,6 +62,7 @@ pragma Warnings (Off, "*is already use-visible*");
 -- with Gdk.RGBA;                use Gdk.RGBA;
 -- with Pango.Font;              use Pango.Font;
 -- with Gtkada.Types;            use Gtkada.Types;
+-- with Gtk.Terminal_Markup;
 with Ada.Wide_Text_IO;
 with Ada.Characters.Conversions;
 with Ada.Strings.UTF_Encoding.Wide_Strings;
@@ -159,6 +160,11 @@ package body Gtk.Terminal is
    -- end record;
    -- type Gtk_Terminal is access all Gtk_Terminal_Record'Class;
       
+   Insert_Return : constant character := Ada.Characters.Latin_1.EOT;
+      -- We are commandeering this character to represent a LF character when
+      -- we don't want to do a LF overwrite when in overwrite mode (i.e. we
+      -- actually want to do a line feed).
+      
    -----------------------------
    -- Error and Debug Logging --
    -----------------------------
@@ -166,6 +172,7 @@ package body Gtk.Terminal is
    procedure Set_The_Error_Handler(to : error_handler) is
    begin
       the_error_handler := to;
+      Gtk.Terminal_Markup.Set_The_Error_Handler(to => Gtk.Terminal_Markup.error_handler(to));
    end Set_The_Error_Handler;
 
    procedure Handle_The_Error(the_error : in integer;
@@ -188,6 +195,7 @@ package body Gtk.Terminal is
    procedure Set_The_Log_Handler(to : log_handler) is
    begin
       the_log_handler := to;
+      Gtk.Terminal_Markup.Set_The_Log_Handler(to=>Gtk.Terminal_Markup.log_handler(to));
    end Set_The_Log_Handler;
 
    procedure Log_Data(at_level : in natural; with_details : in wide_string) is
@@ -378,7 +386,7 @@ package body Gtk.Terminal is
       -- Clean up the terminal first
       Error_Log.Debug_Data(at_level => 9, with_details => "Finalize: Start.");
       Free(the_terminal.buffer.child_name);
-      Free(the_terminal.buffer.markup_text);
+      Finalise(the_markup => the_terminal.buffer.markup);
       Free(the_terminal.title);
       null;
       -- Finally, call up the inherited finalise operation (if any)
@@ -929,26 +937,14 @@ package body Gtk.Terminal is
       -- onwards, rather than insert it.
       -- "at_iter": a position in the buffer
       -- "the_text": text in UTF-8 format
-      use Gtk.Text_Iter;
-      function Modifier_In_Markup
-                        (for_buffer : access Gtk_Terminal_Buffer_Record'Class)
-      return boolean is
-      begin
-         -- The manual way:
-         -- for modifier in font_modifiers loop
-            -- if for_buffer.modifier_array(modifier).n > 0 then
-               -- return true;
-            -- end if;
-         -- end loop;
-         -- return false;  -- If we got here then nothing found
-         -- The one-liner way:
-         return (for some modifier in font_modifiers'Range => 
-                                      for_buffer.modifier_array(modifier).n>0);
-      end Modifier_In_Markup;
+      use Gtk.Text_Iter, Ada.Strings.Fixed;
+      LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
+      InsRet : constant UTF8_String(1..1) := (1 => Insert_Return);
       buffer    : Gtk.Text_Buffer.Gtk_Text_Buffer;
       end_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
       delete_ch : Gtk.Text_Iter.Gtk_Text_Iter;
       result    : boolean;
+      num_lf    : positive;
    begin
       if into.alternative_screen_buffer
        then  -- using the alternative buffer for display
@@ -956,51 +952,64 @@ package body Gtk.Terminal is
       else  -- using the main buffer for display
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(into);
       end if;
-      Get_End_Iter(buffer, end_iter);
-      if Get_Overwrite(into.parent) -- if in 'overwrite' mode
+      if Get_Overwrite(into.parent) and then  -- if in 'overwrite' mode
+         (Count(source=>the_text, pattern=>InsRet) = 0)
       then  -- delete the characters at the iter before inserting the new one
-         delete_ch := at_iter;
+         -- The assumption for overwrite is that it is only to the end of the
+         -- line.  If in overwrite, you are at the end of the line and you keep
+         -- typing, then it does not go to the next line, but inserts beyond the
+         -- end of the line.
+         end_iter := at_iter;
+         if not Ends_Line(end_iter)
+         then  -- Not at end, so set up the end_iter to be the end of the line
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: Executing Forward_To_Line_End(end_iter, result)...");
+            Forward_To_Line_End(end_iter, result);
+         end if;
+         delete_ch := at_iter;  -- starting point to work forward from
          Forward_Chars(delete_ch, the_text'Length, result);
          if Compare(delete_ch, end_iter) < 0
          then  -- more than enough characters to delete
             end_iter := delete_ch;
          end if;  -- (otherwise delete as many as possible)
-         Delete(buffer, at_iter, end_iter);
+         if not Equal(at_iter, end_iter)
+         then  -- there is something to be deleted (i.e. not at end of line)
+            Delete(buffer, at_iter, end_iter);
+         end if;
       end if;
       -- Now call the inherited Insert operation as appropriate
-      if into.in_markup or Modifier_In_Markup(for_buffer => into)
-      then  -- either insert the mark-up and reset the mark-up flag or store it
-         if not Modifier_In_Markup(for_buffer => into)
-         then  -- no longer in mark-up, dispense the buffer's contents
-            Insert_Markup(Gtk_Text_Buffer(buffer), at_iter, 
-                          Value(into.markup_text), -1);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert(into): executing Insert_Markup on '" & Ada.Characters.Conversions.To_Wide_String(Value(into.markup_text)) & "'.");
-            into.in_markup := false;
-            Free(into.markup_text);
-            into.markup_text := Null_Ptr;
-            if the_text'Length > 0
-            then  -- need to output that as well
-               Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), 
-                                      at_iter, the_text);
+      -- this is ordinary, un-marked-up text, so just display it as is
+      if (into.scroll_region_top > 0 and into.scroll_region_bottom > 0) and
+         then (Count(source=>the_text, pattern=>InsRet) > 0)
+      then  -- A LF exists, need to ensure that we are scrolling within region
+         num_lf := Count(source=>the_text, pattern=>InsRet);
+         if Index(the_text, InsRet) > 1
+         then  -- CR/LF is part way through the_text
+            Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                                   the_text(the_text'First..
+                                            Index(the_text, InsRet)-
+                                                              the_text'First));
+            Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
+                            starting_from => at_iter);
+            Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                                   the_text(Index(the_text, InsRet)-
+                                        the_text'First+num_lf..the_text'Last));
+         else  -- CR/LF must be at the start
+            Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
+                            starting_from => at_iter);
+            if the_text'Length > 1 then
+               Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                               the_text(the_text'First+num_lf..the_text'Last));
             end if;
-         else  -- there is a modifier being specified in the mark-up
-            declare
-               temp_markup : Gtkada.Types.Chars_Ptr;
-            begin
-               if into.markup_text /= Null_Ptr
-               then  -- append
-                  temp_markup:= New_String(Value(into.markup_text) & the_text);
-                  Free(into.markup_text);
-                  into.markup_text := temp_markup;
-               else  -- new text
-                  Free(into.markup_text);
-                  into.markup_text := New_String(the_text);
-                  into.in_markup := true;
-               end if;
-            end;
          end if;
-      else  -- this is ordinary, un-marked-up text, so just display it as is
-         Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
+      else  -- Not a scroll region or no CR/LF but within a scrolled region
+         if Count(source=>the_text, pattern=>InsRet) > 0
+         then  -- in case there is more than one, do Count worth of them
+            for item in 1 .. Count(source=>the_text, pattern=>InsRet) loop
+               Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),at_iter, LF_str);
+            end loop;
+         else
+            Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
+         end if;
       end if;
    end Insert;
       
@@ -1021,6 +1030,82 @@ package body Gtk.Terminal is
       end if;
       Gtk.Terminal.Insert(into, at_iter => cursor_iter, the_text => the_text);
    end Insert_At_Cursor;
+   
+   procedure Scrolled_Insert(number_of_lines : in positive; 
+                         for_buffer : access Gtk_Terminal_Buffer_Record'Class; 
+                         starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter) is
+      -- Insert the specified number of new lines at the starting_from
+      -- location, scrolling down the lines below to ensure that text only
+      -- moves between scroll_region_top and scroll_region_bottom, making sure
+      -- that lines that scroll above or below the scroll region are discarded
+      -- and that the original lines outside of the scroll region are
+      -- protected.  If the scroll regions are undefined (i.e. set to 0), then
+      -- this procedure does nothing other than insert a regular new line.
+      -- This procedure assumes that starting_from is between scroll_region_top
+      -- and scroll_region_bottom.
+      use Gtk.Text_Iter;
+      LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
+      buffer   : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      home_iter: Gtk_Text_Iter;
+      last_iter: Gtk_Text_Iter;
+      end_iter : Gtk_Text_Iter;
+      insert_mk: Gtk.Text_Mark.Gtk_Text_Mark;
+      result   : boolean;
+      the_terminal: Gtk_Terminal:= Gtk_Terminal(Get_Parent(for_buffer.parent));
+   begin
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
+      for line in 1 .. number_of_lines loop
+         if for_buffer.scroll_region_top > 0 and 
+            for_buffer.scroll_region_bottom > 0
+         then  -- scroll down below current cursor as new lines are inserted
+            home_iter := Home_Iterator(for_terminal => the_terminal);
+            last_iter := home_iter;
+            Forward_Lines(last_iter, 
+                          Glib.Gint(for_buffer. scroll_region_bottom-1),
+                          result);
+            Get_End_Iter(buffer, end_iter);
+            if Compare(last_iter, end_iter) <= 0
+            then  -- lines go up to the bottom of the scrolled region
+               -- Protect the starting_from iter
+               insert_mk := Create_Mark(buffer, "InsertPt", starting_from);
+               -- set end iter to the end of the line at last_iter
+               end_iter := last_iter;
+               if not Ends_Line(end_iter)
+               then  -- Not at end, so set to the end of the line
+                  Forward_To_Line_End(end_iter, result);
+               end if;
+               -- and tip it over the end (so we delete the whole line)
+               Forward_Char(end_iter, result);
+               -- Delete the line at the bottom of the scrolled region
+               Delete(buffer, last_iter, end_iter);
+               -- Now can do the insert at the specified location:
+               -- Restore the starting_from iter
+               Get_Iter_At_Mark(buffer, starting_from, insert_mk);
+               -- And clean up the mark
+               Delete_Mark(buffer, insert_mk);
+            end if;
+         end if;
+         -- Now insert the CR/LF at starting_from
+         Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),starting_from, LF_str);
+      end loop;
+   end Scrolled_Insert;
+   
+   procedure Scroll_Down(number_of_lines : in positive; 
+                         for_buffer : Gtk_Text_Buffer; 
+                         starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter) is
+      -- Scroll down the specified number of lines between scroll_region_top
+      -- and scroll_region_bottom, making sure that lines that scroll above or
+      -- below the scroll region are discarded and that the original lines
+      -- outside of the scroll region are protected.  If the scroll regions are
+      -- undefined (i.e. set to 0), then this procedure does nothing.
+   begin
+      null;  -- To be implemented
+   end Scroll_Down;
    
    -- buffer_length : constant positive := 255;
    -- type buf_index is mod buffer_length;
@@ -1206,6 +1291,7 @@ package body Gtk.Terminal is
       quit_loop : boolean := false;
       the_buffer: Gtk_Terminal_Buffer;
       input     : string(1..1) := " ";  -- to start with
+      input2    : string(1..2) := "  ";  -- to start with
       read_len  : natural;
       the_fds   : Gtk.Terminal.CInterface.poll_fd_access;
       nfds      : constant Gtk.Terminal.CInterface.nfds_t := 1;
@@ -1234,12 +1320,22 @@ package body Gtk.Terminal is
             then  -- There is key presses waiting to be read
                Read(master_fd, input, read_len);
                Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input (from terminal client (system's virtual terminal)) = '" & Ada.Characters.Conversions.To_Wide_String(input) & "'.");
+            elsif res > 0 and then the_fds.revents = POLLHUP
+            then  -- Been commanded to exit the terminal
+               read_len := natural'Last;  -- simulate 2 characters
+               Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input Got POLLHUP.");
+               input2 := Ada.Characters.Latin_1.Esc & '<';
             else
                read_len := 0;  -- simulate no character yet
             end if;
             case read_len is
                when  0 =>  -- No character yet
                   delay 0.05;
+               when  natural'Last =>  -- 2 character output
+                  the_buffer.input_monitor.Put(the_character => input2(1));
+                  the_buffer.input_monitor.Put(the_character => input2(2));
+                  the_buffer.waiting_for_response := false;
+                  delay 0.15;
                when others =>  -- Got input
                   the_buffer.input_monitor.Put(the_character => input(1));
                   the_buffer.waiting_for_response := false;
@@ -1280,6 +1376,7 @@ package body Gtk.Terminal is
       begin
          if for_buffer.alternative_screen_buffer
          then  -- using the alternative buffer for display
+            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys SWITCHED TO ALTERNATIVE SCREEN BUFFER!!!**************************************.");
             the_buf := for_buffer.alt_buffer;
          else  -- using the main buffer for display
             the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
@@ -1339,7 +1436,7 @@ package body Gtk.Terminal is
                begin
                   Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
                   res := Backspace(the_buf, cursor_iter, false, true);
-                   Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
                end;
                -- Now output that enter key
                Write(fd => for_buffer.master_fd, Buffer => enter_text);
@@ -1779,6 +1876,11 @@ package body Gtk.Terminal is
       terminal.term_input := new Terminal_Input_Handling;
       terminal.term_input.Start(with_fd => terminal.master_fd, 
                                 with_terminal_buffer => terminal.buffer);
+      -- Ensure the terminal's mark-up management is set up
+      Set_The_Buffer(to => Gtk.Text_Buffer.Gtk_Text_Buffer(terminal.buffer),
+                     for_markup => terminal.buffer.markup);
+      Set_The_View(for_markup => terminal.buffer.markup, 
+                   to => terminal.terminal);
       -- Final sanity check on the creation of the input handler task
       if terminal.term_input = null then  -- it failed out
          Handle_The_Error(the_error  => 13, 
