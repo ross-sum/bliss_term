@@ -940,6 +940,7 @@ package body Gtk.Terminal is
       use Gtk.Text_Iter, Ada.Strings.Fixed;
       LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
       InsRet : constant UTF8_String(1..1) := (1 => Insert_Return);
+        -- this is an inserting CR/line feed (including when in overwrite)
       buffer    : Gtk.Text_Buffer.Gtk_Text_Buffer;
       end_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
       delete_ch : Gtk.Text_Iter.Gtk_Text_Iter;
@@ -952,51 +953,126 @@ package body Gtk.Terminal is
       else  -- using the main buffer for display
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(into);
       end if;
-      if Get_Overwrite(into.parent) and then  -- if in 'overwrite' mode
-         (Count(source=>the_text, pattern=>InsRet) = 0)
+      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(into.parent) or into.alternative_screen_buffer) & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & ".");
+      if (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
+         and then  -- i.e. if in 'overwrite' mode
+            ((Count(source=>the_text, pattern=>InsRet) = 0) and
+             (Count(source=>the_text, pattern=>LF_str) = 0))
       then  -- delete the characters at the iter before inserting the new one
          -- The assumption for overwrite is that it is only to the end of the
          -- line.  If in overwrite, you are at the end of the line and you keep
          -- typing, then it does not go to the next line, but inserts beyond the
          -- end of the line.
+         Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite - checking and deleting if necessary any characters that this will overwrite (if not already at end of line)...");
          end_iter := at_iter;
          if not Ends_Line(end_iter)
          then  -- Not at end, so set up the end_iter to be the end of the line
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: Executing Forward_To_Line_End(end_iter, result)...");
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite and not a Insert_Return character operation, Executing Forward_To_Line_End(end_iter, result)...");
             Forward_To_Line_End(end_iter, result);
          end if;
          delete_ch := at_iter;  -- starting point to work forward from
          Forward_Chars(delete_ch, the_text'Length, result);
          if Compare(delete_ch, end_iter) < 0
          then  -- more than enough characters to delete
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite - setting end_iter := delete_ch...");
             end_iter := delete_ch;
          end if;  -- (otherwise delete as many as possible)
          if not Equal(at_iter, end_iter)
          then  -- there is something to be deleted (i.e. not at end of line)
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : In Overwrite - at_iter line number in buffer =" & Get_Line(at_iter)'Wide_Image & ", Deleting '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Get_Text(buffer, at_iter, end_iter)) & "'.");
             Delete(buffer, at_iter, end_iter);
          end if;
       end if;
       -- Now call the inherited Insert operation as appropriate
       -- this is ordinary, un-marked-up text, so just display it as is
+      Get_End_Iter(buffer, end_iter);  -- get end (for comparison)
+      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: Working out if we need to deal with a line feed - into.scroll_region_top =" &into.scroll_region_top'Wide_Image & ", into.scroll_region_bottom =" & into.scroll_region_bottom'Wide_Image  & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & ".");
       if (into.scroll_region_top > 0 and into.scroll_region_bottom > 0) and
          then (Count(source=>the_text, pattern=>InsRet) > 0)
-      then  -- A LF exists, need to ensure that we are scrolling within region
+      then  -- An inserting LF exists, need to ensure scrolling within region
          num_lf := Count(source=>the_text, pattern=>InsRet);
          if Index(the_text, InsRet) > 1
-         then  -- CR/LF is part way through the_text
+         then  -- Inserting CR/LF is part way through the_text
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, InsRet)-the_text'First)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(the_text'First..
                                             Index(the_text, InsRet)-
                                                               the_text'First));
             Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
                             starting_from => at_iter);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, InsRet)-the_text'First+num_lf..the_text'Last)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(Index(the_text, InsRet)-
                                         the_text'First+num_lf..the_text'Last));
-         else  -- CR/LF must be at the start
+         else  -- Inserting CR/LF must be at the start
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') <= 1, Inserting" & num_lf'Wide_Image & " line feeds at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
             Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
                             starting_from => at_iter);
             if the_text'Length > 1 then
+               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
+               Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                               the_text(the_text'First+num_lf..the_text'Last));
+            end if;
+         end if;
+      elsif (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
+             and then (Count(source=>the_text, pattern=>Lf_str) > 0) and then
+            Compare(at_iter, end_iter) < 0
+      then  -- LF character is actually just a move cursor down 1 line
+         num_lf := Count(source=>the_text, pattern=>LF_str);
+         if Index(the_text, LF_str) > 1
+         then  -- CR/LF is part way through the_text
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, LF_str)-the_text'First)) & "'.");
+            Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                                   the_text(the_text'First..
+                                            Index(the_text, LF_str)-
+                                                              the_text'First));
+            Forward_Lines(at_iter, Glib.Gint(num_lf), result);
+            if result
+            then  -- Successfully gone one line forward
+               Place_Cursor(buffer, where => at_iter);
+            end if;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, LF_str)-the_text'First+num_lf..the_text'Last)) & "'.");
+            Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                                   the_text(Index(the_text, LF_str)-
+                                        the_text'First+num_lf..the_text'Last));
+         else  -- CR/LF must be at the start
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & " - going forward 1 line.");
+            Forward_Lines(at_iter, Glib.Gint(num_lf), result);
+            if result
+            then  -- Successfully gone one line forward
+               Place_Cursor(buffer, where => at_iter);
+            end if;
+            if the_text'Length > 1 then
+               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1abd Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting the text '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
+               Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                               the_text(the_text'First+num_lf..the_text'Last));
+            end if;
+         end if;
+      elsif (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
+            and then (Count(source=> the_text, pattern=> Lf_str) > 0) and then
+            (into.scroll_region_top > 0 and into.scroll_region_bottom > 0) and
+            then Compare(at_iter, end_iter) >= 0
+      then  -- LF character and the region needs to scroll
+         num_lf := Count(source=>the_text, pattern=>LF_str);
+         if Index(the_text, Lf_str) > 1
+         then  -- Inserting CR/LF is part way through the_text
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, Lf_str)-the_text'First)) & "'.");
+            Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                                   the_text(the_text'First..
+                                            Index(the_text, Lf_str)-
+                                                              the_text'First));
+            Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
+                            starting_from => at_iter);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, Lf_str)-the_text'First+num_lf..the_text'Last)) & "'.");
+            Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
+                                   the_text(Index(the_text, Lf_str)-
+                                        the_text'First+num_lf..the_text'Last));
+         else  -- Inserting CR/LF must be at the start
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') <= 1, scrolling for " & num_lf'Wide_Image & " Lf_str lines at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
+            Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
+                            starting_from => at_iter);
+            if the_text'Length > 1 then
+               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting after Lf_str '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                the_text(the_text'First+num_lf..the_text'Last));
             end if;
@@ -1004,10 +1080,12 @@ package body Gtk.Terminal is
       else  -- Not a scroll region or no CR/LF but within a scrolled region
          if Count(source=>the_text, pattern=>InsRet) > 0
          then  -- in case there is more than one, do Count worth of them
-            for item in 1 .. Count(source=>the_text, pattern=>InsRet) loop
+            for item in 1 .. Count(source=>the_text, pattern=>LF_str) loop
+               Error_Log.Debug_Data(at_level => 9, with_details => "Insert: inserting a LF_str at iter's line number " & Get_Line(at_iter)'Wide_Image & "...");
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),at_iter, LF_str);
             end loop;
          else
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : doing regular insert of '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(the_text) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
          end if;
       end if;
@@ -1042,9 +1120,10 @@ package body Gtk.Terminal is
       -- protected.  If the scroll regions are undefined (i.e. set to 0), then
       -- this procedure does nothing other than insert a regular new line.
       -- This procedure assumes that starting_from is between scroll_region_top
-      -- and scroll_region_bottom.
+      -- and scroll_region_bottom (but it checks just in case).
       use Gtk.Text_Iter;
       LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
+      starting_line : constant natural := natural(Get_Line(starting_from)) + 1;
       buffer   : Gtk.Text_Buffer.Gtk_Text_Buffer;
       home_iter: Gtk_Text_Iter;
       last_iter: Gtk_Text_Iter;
@@ -1060,29 +1139,63 @@ package body Gtk.Terminal is
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
       end if;
       for line in 1 .. number_of_lines loop
-         if for_buffer.scroll_region_top > 0 and 
-            for_buffer.scroll_region_bottom > 0
+         if (for_buffer.scroll_region_top > 0 and 
+             for_buffer.scroll_region_bottom > 0) and then
+            (starting_line >= for_buffer.scroll_region_top and
+             starting_line <= for_buffer.scroll_region_bottom)
          then  -- scroll down below current cursor as new lines are inserted
             home_iter := Home_Iterator(for_terminal => the_terminal);
+            -- Set last_iter to the last character on the last line
             last_iter := home_iter;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
             Forward_Lines(last_iter, 
-                          Glib.Gint(for_buffer. scroll_region_bottom-1),
+                          Glib.Gint(for_buffer.scroll_region_bottom-1),
                           result);
+            if not Ends_Line(last_iter)
+            then  -- Not at end, set up the last_iter to be the end of the line
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               Forward_To_Line_End(last_iter, result);
+            end if;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: last_iter now = line" & Get_Line(last_iter)'Wide_Image & ".");
             Get_End_Iter(buffer, end_iter);
-            if Compare(last_iter, end_iter) <= 0
+            if Natural(Get_Line(last_iter))>= for_buffer.scroll_region_bottom-1
+               and then Compare(last_iter, end_iter) <= 0
             then  -- lines go up to the bottom of the scrolled region
                -- Protect the starting_from iter
                insert_mk := Create_Mark(buffer, "InsertPt", starting_from);
-               -- set end iter to the end of the line at last_iter
-               end_iter := last_iter;
-               if not Ends_Line(end_iter)
-               then  -- Not at end, so set to the end of the line
-                  Forward_To_Line_End(end_iter, result);
+               -- Now, if the for_cursor is at the bottom of the scrolled
+               -- region, then we scroll with the top line disappearing.
+               --  Otherwise, we push the last line out.
+               if natural(Get_Line(starting_from)) + 1 >= 
+                                                for_buffer.scroll_region_bottom
+               then  -- scroll by removing the top line
+                  -- We need to delete from the top line, set home_iter to that
+                  if for_buffer.scroll_region_top > 1
+                  then  -- the window starts some way down from the top line
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_Lines(home_iter, " & integer'Wide_Image((for_buffer.scroll_region_top-1)) & ", result)...");
+                     Forward_Lines(home_iter, 
+                                   Glib.Gint(for_buffer.scroll_region_top-1),
+                                   result);
+                  end if;
+                  -- set end iter to the end of the line at home_iter
+                  end_iter := home_iter;
+                  if not Ends_Line(end_iter)
+                  then  -- Not at end, so set to the end of the line
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_To_Line_End(end_iter (= line " & Get_Line(end_iter)'Wide_Image & "), result)...");
+                     Forward_To_Line_End(end_iter, result);
+                  end if;
+                  -- and tip it over the end (so we delete the whole line)
+                  Forward_Char(end_iter, result);
+               else  -- scroll by removing the bottom line
+                  end_iter  := last_iter;
+                  home_iter := last_iter;
+                  Set_Line_Index(home_iter, 0);
+                  -- and tip it over the start (so we delete the whole line)
+                  Backward_Char(home_iter, result);
                end if;
-               -- and tip it over the end (so we delete the whole line)
-               Forward_Char(end_iter, result);
-               -- Delete the line at the bottom of the scrolled region
-               Delete(buffer, last_iter, end_iter);
+               -- Delete the line at the top of the scrolled region
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert : home_iter line number in buffer =" & Get_Line(home_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, home_iter, end_iter)) & "'.");
+               Delete(buffer, home_iter, end_iter);
                -- Now can do the insert at the specified location:
                -- Restore the starting_from iter
                Get_Iter_At_Mark(buffer, starting_from, insert_mk);
@@ -1091,6 +1204,7 @@ package body Gtk.Terminal is
             end if;
          end if;
          -- Now insert the CR/LF at starting_from
+         Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: inserting a LF_str at iter's line number " & Get_Line(starting_from)'Wide_Image & "...");
          Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),starting_from, LF_str);
       end loop;
    end Scrolled_Insert;
@@ -2256,3 +2370,5 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+
+

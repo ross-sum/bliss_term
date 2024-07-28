@@ -94,6 +94,7 @@ separate (Gtk.Terminal)
       count   : natural := 1;  -- current parameter
       res     : boolean;  -- result
       cursor_iter : aliased Gtk.Text_Iter.Gtk_Text_Iter;
+      cursor_mk   : Gtk.Text_Mark.Gtk_Text_Mark;
       dest_iter   : aliased Gtk.Text_Iter.Gtk_Text_Iter;
       buf_x   : Glib.Gint := 0;
       buf_y   : Glib.Gint := 0;
@@ -466,6 +467,10 @@ separate (Gtk.Terminal)
                                     Gtk.Text_View.Set_Buffer
                                                (view  => the_term.terminal,
                                                 buffer=> on_buffer.alt_buffer);
+                                    -- set key values to default values
+                                    on_buffer.scroll_region_top    := 1;
+                                    on_buffer.scroll_region_bottom := 
+                                                                 the_term.rows;
                                     -- And let mark-up management know
                                     Set_The_Buffer(to => on_buffer.alt_buffer,
                                                  for_markup=>on_buffer.markup);
@@ -838,7 +843,7 @@ separate (Gtk.Terminal)
                            Delete(the_buf, cursor_iter, dest_iter);
                         when others => null; -- invalid clear type, just ignore
                      end case;
-                  when 'L' =>  -- Insert (param) blank lines
+                  when 'L' => -- Insert (param) blank lines (even in overwrite)
                      if param(1) = 0
                      then
                         param(1) := 1;
@@ -1248,6 +1253,30 @@ separate (Gtk.Terminal)
                   -- then go back a line
                   res := Backward_Display_Line(on_buffer.parent,cursor_iter);
                   Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : Failed.  Inserted line with cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), going up by 1 line.  Current column =" & column'Wide_Image & ".");
+                  -- If within a scrolling region, delete the line at just past
+                  -- the bottom of the scrolling region
+                  if on_buffer.scroll_region_bottom > 0
+                  then  -- it's a possibility: 1 more check...
+                     Get_End_Iter(the_buf, dest_iter);
+                     if Natural(Get_Line(dest_iter))>= 
+                                               on_buffer.scroll_region_bottom-1
+                     then  -- Yes, need to scroll the last line off the bottom
+                        -- save the cursor position to survive the delete op'n
+                        cursor_mk:= Create_Mark(the_buf,"InsertPt",cursor_iter);
+                        -- set up cursor_iter to be at the start of the line
+                        -- less the carriage return/line feed position
+                        cursor_iter := dest_iter;
+                        Set_Line_Index(cursor_iter, 0);
+                        Backward_Char(cursor_iter, res);
+                        -- Delete the line at the bottom of the scrolled region
+                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : cursor_iter line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(the_buf, cursor_iter, dest_iter)) & "'.");
+                        Delete(the_buf, cursor_iter, dest_iter);
+                        -- Restore the cursor_iter iter
+                        Get_Iter_At_Mark(the_buf, cursor_iter, cursor_mk);
+                        -- And clean up the mark
+                        Delete_Mark(the_buf, cursor_mk);
+                     end if;
+                  end if;
                end if;
                -- Ensure cursor_iter starts at the first column (column 0)
                if Get_Line_Offset(cursor_iter) > 0
