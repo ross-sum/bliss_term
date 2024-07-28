@@ -70,7 +70,7 @@ the log file with an editor that can view in the language specified.  The built-
 less doesn't cut it unless it is used within Bliss_Term.
 
 Execute via something like:
-bliss_term --log /tmp/cellwriter.log --format WCEM=8,ctrl --debug 5
+bliss_term --log /tmp/bliss_term.log --format WCEM=8,ctrl --debug 5
 
 ## Support
 
@@ -152,9 +152,6 @@ follows:
   history mode (mostly a display issue).
 * The codes for Page Up and Page Down are clearly not correct.  There is a
   work-around in place, but it is probably not optimal.
-* 'exit' needs fixing: it exits the currently active terminal (and the
-  application if it is the only terminal remaining) even when exiting a
-  shell (which it shouldn't).
 * The delete operation in the Process_Keys sub-procedure throws an error
   warning into the terminal that this terminal is called from.  The error
   warning is harmless, but is ugly.  There is another similar error that occurs

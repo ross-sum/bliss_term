@@ -668,6 +668,38 @@ Configuration
 You may modify the site-wide bliss_term.glade file (located in /etc or in /usr/local/etc) using the Glade editor.  Such editing must be done as the root user and the signal names, widget names and form names as understood by the system (that is, the ID) must be maintaned.  However, the layout can be adjusted and the text (including this user manual help text) can also be adjusted.
 
 The default site-wide configuration file, bliss_term.conf, located in either /etc or /usr/local/etc, may also be modified by the root user.  This might be useful, for instance, to modify the default colours or the default font.
+
+Execution
+---------------
+
+The main issue to consider during execution of Bliss Term is the location of the log file.  If the system administrator has not made /var/log/bliss_term.log world writable (or, at least, writable by users who will be using Bliss Term), then you must specify your own log file.  Otherwise, you can just use the default and not specify it on the command line.  The other factor to consider is the level of logging required.  When the application is stable, this can be left blank (i.e., only log errors), but otherwise you may choose something more vigorous.  A log level is a number between 1 (almost no logging) and 9 (log everything).  When logging, the --format option determines whether to use UTF-8 formatting or not.  If just using Bliss Term for a language like English (or, perhaps, most European languages), then this need not be specified.  If using it for a language like Blissymbolics, then it should be specified, but in that case, you must view the log file with an editor that can view in the language specified.  The built-in less doesn't cut it unless it is used within Bliss_Term.
+
+Execute via something like:
+bliss_term --log /tmp/bliss_term.log --format WCEM=8,ctrl --debug 5
+
+Local Configuration
+-----------------------------
+
+From the configuration menu, accessed via the configuration button on the tool bar in the top right hand corner of the terminal, you can adjust the colours.  The two items that make sense are the Text (i.e.  Foreground) and the Background colours.  At present, the other two (highlight and bold) are not yet used, but often the system will apply a colour for these two.  The other item on the Colours tab is the font.  By default, this is set to Sans 12.  For Blissymbolics, choose Blissymbolics Courier 25.  At this size, the names of things is big enough to be readable and the Blissymbolics symbols are not overly large.
+You can also adjust the number of columns and rows.  Typically a terminal has 80 columns and 25 rows, but for Blissymbolics it is best to set the number of columns to 120, or if not using word wrap, set it to 1000 (the initial default).
+The other item that can be configured is is the Scroll Back.  This is the number of lines that can be scrolled back in history.  This number is important when saving terminals between sessions, since the history buffer of each terminal is saved away when closing Bliss Term.
+The Save Terminals check box does as it says, namely to ensure that whatever terminals are open when closing Bliss Term are saved and therefore restored when re-opening Bliss Term, together with all of their history (including up to 'Scroll Back' number of lines).
+Command line editing method is emulator check box, when checked, uses the system's terminal client to do any command line editing.  When unchecked, it is a mixture of using local editing features built into Bliss Term and usint the system's terminal client (the cursor shape gives a hint as to which applies when).
+The CSS tab is used for overall colour control of the Bliss Term terminal emulator.
+
+Tool Bar Buttons
+-------------------------
+
+The tool bar is in the top right hand corner of the terminal emulator.  The buttons are:
+  +  Add a new tab, which adds a new terminal emulator tab.  That new tab can operate independently of all  tabs, including the first tab and can have its own commands running in it.
+  -   Delete the currently active tab.  This button will remove the current tab, shutting down any programs running inside that tab.
+  &lt;&gt; The Configuration - brings up the Configuration dialogue box
+  *  Help - brings up this dialogue box, from which you can access information about the Bliss Term, including revision details, as well as the command line 'Usage' details, this on-line manual for Bliss Term, a Status tab that shows live some switches that are internal to Bliss Term (but, if flicking between tabs, will not change until you do something in that tab to make them change) and may be helpful when fault finding issues with Bliss Term, and finally the copyright tab.
+
+Support for Blissymbolics
+--------------------------------------
+
+As long as you have installed the Blissymbolics locale configuration tool kit, you can execute a number of the basic *nix commands in Blissymbolics.  Those commands are in the /usr/local/bin directory, with the exception of cd and exit, which must necessarily be contained within your .bashrc file.
 </property>
   </object>
   <object class="GtkDialog" id="dialogue_about">
