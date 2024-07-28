@@ -1,5 +1,5 @@
 # Bliss Terminal
-$Date: Mon Mar 1 16:34:14 2024 +1100$
+$Date: Sun Jul 28 21:46:14 2024 +1000$
 
 ## Description
 
@@ -46,6 +46,7 @@ Bliss_Term uses the following packages:
 * Compile and load the Ada software, viz from the top level Bliss Term directory:
 
     `mkdir obj_amd64  obj_arm  obj_pi  obj_pi64  obj_x86`
+
     `make ; sudo make install`
 
 ## Usage
@@ -111,7 +112,7 @@ him and Blissymbolics in a Readers Digest magazine that I read when I was really
 young that got me interested in the symbol set.  That inspired me to look for a 
 practical way to input Blissymbolics symbols into a computer.
 
-##Licence
+## Licence
 
 Bliss_Term is free software; you can redistribute it and/or modify it under the
 terms of the GNU General Public Licence as published by the Free Software 
