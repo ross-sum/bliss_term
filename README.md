@@ -167,6 +167,11 @@ follows:
 * Word wrap is yet to be implemented.  At the moment, the terminal assumes an
   'endless' (1000 character) line length.  It should enforce word wrap when
   the user requests it.
+* vi does not work with a file that is in Blissymbolics.  This is because vi
+  wants to position the cursor after every non-ASCII character and Gtk.Text_
+  buffer will not put the cursor at points immediately after the last entered
+  Blissymbolic charaacter (rembembering Blissymbolics characters are outside
+  of the ASCII character range).
 
 There are probably numerous other errors that I have yet to discover.  I am
 actively using this terminal emulator whenever it is safe for me to do so, so I
