@@ -941,6 +941,7 @@ package body Gtk.Terminal is
       LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
       InsRet : constant UTF8_String(1..1) := (1 => Insert_Return);
         -- this is an inserting CR/line feed (including when in overwrite)
+      iter_line : constant natural := natural(Get_Line(at_iter)) + 1;
       buffer    : Gtk.Text_Buffer.Gtk_Text_Buffer;
       end_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
       delete_ch : Gtk.Text_Iter.Gtk_Text_Iter;
@@ -953,7 +954,7 @@ package body Gtk.Terminal is
       else  -- using the main buffer for display
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(into);
       end if;
-      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(into.parent) or into.alternative_screen_buffer) & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & ".");
+      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(into.parent) or into.alternative_screen_buffer) & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & " with iter_line =" & iter_line'Wide_Image & ".");
       if (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
          and then  -- i.e. if in 'overwrite' mode
             ((Count(source=>the_text, pattern=>InsRet) = 0) and
@@ -989,7 +990,7 @@ package body Gtk.Terminal is
       Error_Log.Debug_Data(at_level => 9, with_details => "Insert: Working out if we need to deal with a line feed - into.scroll_region_top =" &into.scroll_region_top'Wide_Image & ", into.scroll_region_bottom =" & into.scroll_region_bottom'Wide_Image  & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & ".");
       if (into.scroll_region_top > 0 and into.scroll_region_bottom > 0) and
          then (Count(source=>the_text, pattern=>InsRet) > 0)
-      then  -- An inserting LF exists, need to ensure scrolling within region
+      then  -- An Inserting LF exists, need to ensure scrolling within region
          num_lf := Count(source=>the_text, pattern=>InsRet);
          if Index(the_text, InsRet) > 1
          then  -- Inserting CR/LF is part way through the_text
@@ -1015,8 +1016,11 @@ package body Gtk.Terminal is
             end if;
          end if;
       elsif (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
-             and then (Count(source=>the_text, pattern=>Lf_str) > 0) and then
-            Compare(at_iter, end_iter) < 0
+            and then (Count(source=>the_text, pattern=>Lf_str) > 0) and then
+            (Compare(at_iter, end_iter) < 0) and then
+            (into.scroll_region_top > 0 and into.scroll_region_bottom > 0)
+            and then (iter_line >= into.scroll_region_top and 
+                      iter_line < into.scroll_region_bottom)
       then  -- LF character is actually just a move cursor down 1 line
          num_lf := Count(source=>the_text, pattern=>LF_str);
          if Index(the_text, LF_str) > 1
@@ -1050,12 +1054,12 @@ package body Gtk.Terminal is
          end if;
       elsif (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
             and then (Count(source=> the_text, pattern=> Lf_str) > 0) and then
-            (into.scroll_region_top > 0 and into.scroll_region_bottom > 0) and
-            then Compare(at_iter, end_iter) >= 0
-      then  -- LF character and the region needs to scroll
+            (into.scroll_region_top > 0 and into.scroll_region_bottom > 0)--  and
+            -- then Compare(at_iter, end_iter) >= 0
+      then  -- LF exists, need to ensure scrolling within region
          num_lf := Count(source=>the_text, pattern=>LF_str);
          if Index(the_text, Lf_str) > 1
-         then  -- Inserting CR/LF is part way through the_text
+         then  -- LF is part way through the_text
             Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, Lf_str)-the_text'First)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(the_text'First..
@@ -1067,7 +1071,7 @@ package body Gtk.Terminal is
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(Index(the_text, Lf_str)-
                                         the_text'First+num_lf..the_text'Last));
-         else  -- Inserting CR/LF must be at the start
+         else  -- LF must be at the start
             Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') <= 1, scrolling for " & num_lf'Wide_Image & " Lf_str lines at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
             Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
                             starting_from => at_iter);
@@ -2370,5 +2374,3 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
-
-

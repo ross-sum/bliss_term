@@ -703,11 +703,10 @@ separate (Gtk.Terminal)
                            Get_Start_Iter(the_buf, cursor_iter);
                            -- Also, can't go past the bottom of screen, wrap it
                            -- if needs be
-                           if param(1) > on_buffer.scroll_region_bottom -
-                                         on_buffer.scroll_region_top + 1
+                           if param(1) > on_buffer.scroll_region_bottom
                            then
-                              param(1) := (on_buffer.scroll_region_bottom -
-                                           on_buffer.scroll_region_top + 1) mod
+                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moving from top LH param(1) =" & param(1)'Wide_Image & ", on_buffer.scroll_region_bottom =" & on_buffer.scroll_region_bottom'Wide_Image & ", setting param(1) =" & Integer'Wide_Image(on_buffer.scroll_region_bottom mod param(1)) & ".");
+                              param(1) := on_buffer.scroll_region_bottom mod
                                           param(1);
                            end if;
                         else  -- Get the home position
