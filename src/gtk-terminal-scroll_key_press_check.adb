@@ -58,7 +58,7 @@ return boolean is
    the_key       : string(1..3) := esc_start;
    the_character : wide_string(1..1);
 begin
-   Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ".");
+   Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ", last_key_pressed=" & the_terminal.buffer.last_key_pressed'Wide_Image & ".");
    if the_terminal.buffer.cursor_keys_in_app_mode
    then  -- substitute the '[' for a 'O'
       the_key := app_esc_st;
@@ -198,9 +198,19 @@ begin
          then  -- send the control sequence for this key
             the_key(3) := 'P';
          end if;
+      when GDK_LC_a .. GDK_LC_z =>
+         if the_terminal.buffer.last_key_pressed = GDK_Control_L or
+           the_terminal.buffer.last_key_pressed = GDK_Control_R
+         then  -- Control-A - Control-Z
+            the_key(1) := Character'Val(for_event.keyval-Character'Pos('a')+1);
+            the_key(2) := ' ';
+         end if;
       when others =>
          null;  -- Don't do anything
    end case;
+   -- For Control, Alt, Super and similar keys, we need to save away  the
+   -- previous key to know, since that could be the Alt, Super, etc. key.
+   the_terminal.buffer.last_key_pressed := for_event.keyval;
    -- In the event of there being a history_review key press or in and
    -- application in the alternative buffer, need to make sure that an actual
    -- insert takes place
@@ -248,6 +258,10 @@ begin
       elsif for_event.keyval = GDK_Tab
       then  -- Actually a single tab character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
+      elsif the_key(2) = ' ' and  the_key(3) = ' ' and 
+            the_key(1) /= Ada.Characters.Latin_1.Esc
+      then  -- A single control character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
       else  -- standard sequence
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
       end if;
@@ -286,6 +300,10 @@ begin
       elsif for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape or
             for_event.keyval = GDK_Return
       then  -- Actually a single back-space, Escape or Return character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
+      elsif the_key(2) = ' ' and  the_key(3) = ' ' and 
+            the_key(1) /= Ada.Characters.Latin_1.Esc
+      then  -- A single control character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
       else  -- standard sequence
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);

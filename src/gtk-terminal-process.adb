@@ -58,7 +58,7 @@ separate (Gtk.Terminal)
    St_chr  : constant character := character'Val(16#9C#);
    Esc_num : constant UTF8_String := Esc_str & "[01;";
    Tab_chr : constant UTF8_String(1..Tab_length) := (1..Tab_length => ' ');
-   Esc_Rng : constant Character_Ranges := (('@','P'),('S','T'),('c','c'),
+   Esc_Rng : constant Character_Ranges := (('@','P'),('S','T'),('c','d'),
                                            ('f','i'),('l','n'),('r','u'),
                                            ('#','#'),('<','>'), -- ('%','%'),
                                            ('^','^'),('_','_'));
@@ -156,6 +156,22 @@ separate (Gtk.Terminal)
             end loop;
          end if;
          case the_sequence(ist+1) is
+            when '(' =>  -- it is designating a G0 Character Set
+               case the_sequence(ist+2) is
+                  when 'A' => null;  -- United Kingdom (UK)
+                  when 'B' => null;  -- United States (USASCII)
+                     -- do ntohing as this is the default base character set
+                  when 'C' | '5' => null;  -- Finnish
+                  when others =>  -- not valid and not interpreted
+                     Handle_The_Error(the_error => 3, 
+                                      error_intro=> "Process_Escape: " & 
+                                                    "Control string error",
+                                      error_message => "Unrecognised  "&
+                                                       "sequence for '" & 
+                                              Ada.Characters.Conversions.
+                                                  To_Wide_String(for_sequence)&
+                                                       "'.");
+               end case; -- the_sequence(chr_pos) for the_sequence(ist+1) = '('
             when '[' =>  -- it is a Control Sequence Introducer (CSI) sequence
                Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI sequence - there are" & pnum'Wide_Image & " parameters, being " & param(1)'Wide_Image & "," & param(2)'Wide_Image & "," & param(3)'Wide_Image & " and next sequence is the_sequence(" & chr_pos'wide_image & ")= '" & Ada.Characters.Conversions.To_Wide_String(the_sequence(chr_pos..chr_pos)) & "'.");
                if the_sequence(ist+2) = '>'
@@ -382,6 +398,13 @@ separate (Gtk.Terminal)
                               then  -- Numeric Mode
                                  on_buffer.cursor_keys_in_app_mode := false;
                               end if;
+                           when 7 => null; -- Auto-Wrap Mode (DECAWM)
+                              Log_Data(at_level => 9, 
+                                       with_details=>"Process_Escape: Escape "&
+                                                     "DECAWM (Auto-Wrap) '" &
+                                                     Ada.Characters.Conversions.
+                                                     To_Wide_String(for_sequence)&
+                                                     "' not yet implemented.");
                            when 12 => null;  -- cursor blinking/not blinking
                               if for_sequence(chr_pos) = 'h'
                               then  -- switch on blinking
@@ -422,7 +445,7 @@ separate (Gtk.Terminal)
                                                    for_sequence(chr_pos) = 'h';
                               Log_Data(at_level => 9, 
                                        with_details=>"Process_Escape: Escape "&
-                                                     "SET_X10_MOUSE ;" &
+                                                     "SET_X10_MOUSE '" &
                                                      Ada.Characters.Conversions.
                                                      To_Wide_String(for_sequence)&
                                                      "' not yet fully implemented.");
@@ -912,6 +935,15 @@ separate (Gtk.Terminal)
                   when 'c' =>   -- Send Device Attributes (Primary DA)
                      Write(fd => on_buffer.master_fd, 
                               Buffer => Esc_str & "[?1;0c");
+                  when 'd' =>   -- Line Position Absolute (default=[1,column])
+                     -- Get the column number (to preserve it)
+                     Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
+                     column := natural(Get_Line_Index(cursor_iter)) + 1;
+                     -- Call ourselves, executing an <esc> H
+                     Process_Escape(for_sequence=> Esc_Str & '[' & 
+                                                   As_String(param(1)) & ';' & 
+                                                   As_String(column) & "H",
+                                    on_buffer => on_buffer);
                   when 'g' => null;  -- Tab Clear
                      -- Clear tab stops at current position (0) or all (3)
                      -- (default=0)
@@ -920,7 +952,32 @@ separate (Gtk.Terminal)
                                              Ada.Characters.Conversions.
                                                  To_Wide_String(for_sequence) &
                                              "' not yet implemented.");
+                  when 'h' => null;  -- Reset Mode (RM)
+                     case param(count) is
+                        when 2 => null; -- Keyboard Action Mode (KAM)
+                        when 4 => null;  -- insert - Insert/Replace Mode (IRM)
+                           -- Switch to insert?
+                           Set_Overwrite(on_buffer.parent, false);
+                        when 12 => null;  -- Send/receive (SRM)
+                        when 20 => null;  -- Automatic Newline (LNM)
+                        when others => null;
+                     end case;
                   when 'i' => null;  -- Serial port control (media copy)
+                     Log_Data(at_level => 9, 
+                              with_details=> "Process_Escape : Escape '" &
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                             "' not yet implemented.");
+                  when 'l' => null;  -- Reset Mode (RM)
+                     case param(count) is
+                        when 2 => null; -- Keyboard Action Mode (KAM)
+                        when 4 => null;  -- replace - Insert/Replace Mode (IRM)
+                           -- switch to overwrite?
+                           Set_Overwrite(on_buffer.parent, true);
+                        when 12 => null;  -- Send/receive (SRM)
+                        when 20 => null;  -- Normal Linefeed (LNM)
+                        when others => null;
+                     end case;
                      Log_Data(at_level => 9, 
                               with_details=> "Process_Escape : Escape '" &
                                              Ada.Characters.Conversions.
@@ -1030,7 +1087,8 @@ separate (Gtk.Terminal)
                                  count := count + 2;
                               end if;
                            when 39 =>  -- Default foreground colour
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""white""");
+                              Append_To_Markup(on_buffer.markup, span, "foreground=",
+                                               on_buffer.text_colour);
                            when 40 | 100 =>  -- Set background colour to black
                               Append_To_Markup(on_buffer.markup, span, "background=""black""");
                            when 41 | 101 =>  -- Set background colour to red
@@ -1061,7 +1119,8 @@ separate (Gtk.Terminal)
                                  count := count + 2;
                               end if;
                            when 49 =>  -- Default background colour
-                              Append_To_Markup(on_buffer.markup, span,"background=""black""");
+                              Append_To_Markup(on_buffer.markup, span,"background=",
+                                               on_buffer.background_colour);
                            when 50 =>  -- Disable proportional spacing
                               Append_To_Markup(on_buffer.markup, mono);
                            when others => null;  -- style or colour not recognised
@@ -1561,7 +1620,21 @@ begin  -- Process
          Error_Log.Debug_Data(at_level => 9, with_details => "Process : CR - cursor going forward one line");
          Forward_Line(start_iter, res);
       end if;
+      if not Is_Empty(for_buffer.markup)
+      then  -- a string to dump
+         Error_Log.Debug_Data(at_level => 9, with_details => "Process : CR - Saving mark-up.");
+         -- Rebuild the mark-up (but not text) from modifier array
+         Save(the_markup => for_buffer.markup);
+         -- (close off, but the closure is temporary)
+         Finish(on_markup => for_buffer.markup);
+      end if;  
       Place_Cursor(the_buf, where => start_iter);
+      if Saved_Markup_Exists(for_markup => for_buffer.markup)
+      then  -- mark-up to restore, do a complete restore
+         Error_Log.Debug_Data(at_level => 9, with_details => "Process : CR - Restoring mark-up.");
+         Restore(the_markup => for_buffer.markup);
+         Clear_Saved(markup => for_buffer.markup);
+      end if;
    elsif the_input = LF_str then
       if not for_buffer.just_wrapped
       then  -- do a new line

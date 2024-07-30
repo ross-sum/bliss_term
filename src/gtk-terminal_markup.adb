@@ -632,7 +632,7 @@ package body Gtk.Terminal_Markup is
       -- return false;  -- If we got here then nothing found
       -- The one-liner way:
       return (for some modifier in 
-              font_modifier'Range => for_array(modifier).n>0);
+                       font_modifier'Range => for_array(modifier).n>0);
    end Modifier_In_Markup;
    
    function Length(of_markup_text : Gtkada.Types.Chars_Ptr) return Gint is

@@ -48,6 +48,7 @@ with Glib;                    use Glib;
 with Glib.Spawn;              use Glib.Spawn;
 with GLib.Main;
 with Glib.Error;
+with Gdk.Types;
 with Gdk.Event;
 with Gtk.Editable;            use Gtk.Editable;
 with Gtk.Widget;              use Gtk.Widget;
@@ -476,6 +477,8 @@ package Gtk.Terminal is
          in_response         : boolean := false;  -- from the terminal
          just_wrapped        : boolean := false;  -- is output at next line?
          old_key_at_cursor   : wide_string(1..1); -- captured when in overwrite
+         last_key_pressed    : Gdk.Types.Gdk_Key_Type := 16#20#;
+            -- each key press is saved away in case it is a momentary action key
          -- Escape sequences alter the display of text, so need to be trapped
          -- and acted upon.
          -- Hold escape sequences over multiple display characters by storing
