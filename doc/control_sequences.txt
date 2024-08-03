@@ -3,6 +3,12 @@ Command		Meaning
 <esc>(A		Set the G0 character set to UK
 <esc>(B		Set the G0 character set to USA ASCII
 <esc>(C		Set the G0 character set to Finnish
+<esc>[>c		Send device attributes (Secondary DA) [currently sends back "<esc>[>1;10;1c"]
+<esc>[><P1><P2>m	key modifier options XTMODKEYS (while these are recorded, not much is implemented yet)
+<esc>[>n		Disable key modifier options (not implemented, with a log message at level 9 saying so)
+<esc>[=c		Send Device Attributes (Tertiary DA) [currently sends back "<esc>P!|00000000<esc>\"]
+<esc>[?<P1><P2>m	query key modifier options XTQMODKEYS (sends back the key modifier options set with <esc>[><P1><P2>m)
+<esc>[?<P1>n	Device Status Report: <P1>=6 - Report Cursor Position (DECXCPR) [sends back "<esc>[?<row>;<col>R"], <P1>=anything else - not implemented.
 <esc>[?1h		Put Cursor Keys in App mode
 <esc>[?1l		Take cursor keys out of App mode
 <esc>[?7h		Switch on Auto-Wrap
@@ -36,6 +42,7 @@ Command		Meaning
 <esc>[<P1>J		Erase display: <P1>=0 -> Clear from cursor to end of screen, <P1>=1 -> Clear from TLH corner to cursor, <P1>=2 -> clear the screen, <P1>=3 => clear the entire buffer
 <esc>[<P1>K		Erase in line: <P1>=0 -> clear from cursor to end of line, <P1>=1 -> clear from cursor to beginning of line, <P1>=2 -> clear the entire line
 <esc>[<P1>L		Insert <P1> blank lines (even in overwrite)
+<esc>[<P1>M		Delete <P1> lines (even in overwrite)
 <esc>[<P1>P		Delete <P1> characters
 <esc>[<P1>S		Scroll up <P1> lines
 <esc>[<P1>T		Scroll down <P1> lines
@@ -52,15 +59,109 @@ Command		Meaning
 <esc>[s		Save cursor position
 <esc>[<P1>;<P2>t	Window manipulation: <P1>=21 -> report terminal's title, <P1>=22 -> Save icon (<P2>=0 or 1) and window title (<P2>=0 or 2) on stack, <P1>=23 -> restore icon and/or title from stack
 <esc>[u		Restore cursor position
-<esc>[<P1>~
+<esc>[<P1>~		Non-standard, but used for going to end (VT)
 <esc>H		Set a tab stop for the current column that the cursor is in
 <esc>M		Reverse Index (move the cursor up one line, maintaining horizontal position and scrolling the buffer in the scrolling region if necessary
+<esc>N		Single Shift Two (not implemented, with a log message at level 9 saying so)
+<esc>O		Single Shift Three (not implemented, with a log message at level 9 saying so)
+<esc>P		Device Control String (terminated by <Esc> \ ) (not implemented, with a log message at level 9 saying so)
+<esc>X		Start of String (not implemented, with a log message at level 9 saying so)
 <esc>Z		Return the terminal ID [sends back "<esc>/Z"]
 <esc>\		This is the String Terminator (e.g. might be used in the title name, but Linux uses <BEL> there)
 <esc>]0<P1><esc>\	Operating system command: Title: <P1>=title
 <esc>]8<P1><esc>\	Operating system command: Hyperlink <P1>=hyperlink
 <esc>]10?		Operating system command: Query foreground colour [sends back "<esc>]10;<red>;<grn>;<blu><BEL>"]
 <esc>]11?		Operating system command: Query background colour [sends back "<esc>]10;<red>;<grn>;<blu><BEL>"]
+<esc>]<P1>P		change the Linux Console's palette with palette of the form 'RRGGBB' (not implemented, with a log message at level 9 saying so)
+<esc>^		Privacy Message (not implemented, with a log message at level 9 saying so)
+<esc>_		Application Program Command (not implemented, with a log message at level 9 saying so)
+<esc><P1>#		Test (not implemented, with a log message at level 9 saying so)
 <esc>=		Set keypad keys into Application mode
 <esc>>		Take keypad keys out of Application mode
-<esc><		Exit the  terminal
+<esc><		Exit the terminal (this is a Bliss_Term specific implementation of this command)
+
+<esc>[><P1><P2>m (key modifier options XTMODKEYS)
+These sequences are recorded and, when requested, provided back, but at this point in time, only the modifier for Meta keys (at modifyOtherKeys) is implemented and then only for <meta>A to <meta>Z.  In fact, <Alt> is treated as <meta> in Bliss_Term.
+Parameters	Meaning
+------------------------------------------------------------------------------------------
+0;0	modifyKeyboard - interpret only control modifier
+0;1	modifyKeyboard - numeric keypad modify allowed
+0;2	modifyKeyboard - editing keypad modify allowed
+0;4	modifyKeyboard - function keys modify allowed
+0;8	modifyKeyboard - enable without exceptions
+1;-1	modifyCursorKeys - disable the feature
+1;0	modifyCursorKeys - modifier is first parameter
+1;1	modifyCursorKeys - prefix sequence with CSI
+1;2	modifyCursorKeys -modifier is forced to second
+1;3	modifyCursorKeys - hint sequence is private with >
+2;-1	modifyFunctionKeys - use shift + ctrl modifiers
+2;0	modifyFunctionKeys - modifier is first parameter
+2;1	modifyFunctionKeys - prefix sequence with CSI
+2;2	modifyFunctionKeys - modifier is forced to second
+2;3	modifyFunctionKeys - hint sequence is private with >
+4;0	modifyOtherKeys - disable the feature
+4;1	modifyOtherKeys - enable with exceptions
+4;2	modifyOtherKeys - enable without exceptions
+
+<esc>[<P1>;..m (Set or reset font colouring and styles) Sequences
+These sequences are implemented in Bliss_Term's buffer as mark-up text, with much (but not all) of it being implemented as a <span parameter=value>marked-up-text</span> sequence.
+In the following, the Parameter is one of the semi-colon (;) separated numbers (i.e. the <P1> .. <Pn>) in <esc>[m command set.  When no parameter is given (i.e., '<esc>[m' is transmitted), then the parameter defaults to '0'.
+Parameter	Meaning
+------------------------------------------------------------------------------------------
+0	reset to normal (i.e. close off the mark-up)
+1	bold
+2	dim/faint
+3	italic
+4	underline
+5	show blink (not implemented, just ignored)
+6	rapid blink (not implemented, just ignored)
+7	reverse video
+8	conceal or hide (done by setting the foreground colour to the background colour)
+9	crossed out or strike-through
+10	primary font (ignored)
+11-19	alternative font number n-10 (also ignored)
+20	Fraktur (Gothic) (not implemented, just ignored)
+21	doubly underlined
+22	normal intensity
+23	neither italic, nor blackletter
+24	not underlined
+25	not blinking  (not implemented, just ignored)
+26	proportional spacing
+27	not reversed
+28	reveal (not invisible)
+29	not crossed out
+30|90	set foreground colour to black
+31|91	set foreground colour to red
+32|92	set foreground colour to green
+33|93	set foreground colour to yellow
+34|94	set foreground colour to blue
+35|95	set foreground colour to magenta
+36|96	set foreground colour to cyan
+37|97	set foreground colour to white
+38	set foreground colour to number: <P2>=5: colour chart colour (not implmeented, just ignored), <P2>=2, RGB (implemented as '<RR>;<GG>;<BB>' with RR, GG and BB being the red, green and blue numbers)
+39	default foreground colour
+40|100	set background colour to black
+41|101	set background colour to red
+42|102	set background colour to green
+43|103	set background colour to yellow
+44|104	set background colour to blue
+45|105	set background colour to magenta
+46|106	set background colour to cyan
+47|107	set background colour to white
+48	set background colour to number: <P2>=5: colour chart colour (not implmeented, just ignored), <P2>=2, RGB (implemented as '<RR>;<GG>;<BB>' with RR, GG and BB being the red, green and blue numbers)
+49	default background colour
+50	disable proportional spacing
+
+<esc>[<P1>~ (Non-standard, but used for going to end (VT)) Sequences
+Parameter	Meaning
+------------------------------------------------------------------------------------------
+2	VT sequence for Insert/Overwrite [non-standard] (not implemented and a message is logged at level 9)
+4	VT sequence for End [non-standard]
+5	VT sequence for Page Up [non-standard]
+6	VT sequence for Page Down [non-standard]
+7	VT sequence for Home [non-standard]
+200	may not treat characters as commands
+201	start reinterpreting sequences as commands
+
+Not all of the above are implemented.  When not, the log file will show that to be the case when the relevant <esc> sequence is encountered.
+#### End of control_sequences.txt ####

@@ -345,8 +345,7 @@ separate (Gtk.Terminal)
                                         As_String(Get_Line_Number
                                            (for_terminal=> on_buffer.parent, 
                                             at_iter => cursor_iter)) & ";" & 
-                                        -- As_String(cur_line'Length) & 
-                                        As_String(UTF8_Length(utf8_line)) & 
+                                        As_String(UTF8_Length(utf8_line)) &
                                         "R");
                            end;
                         else
@@ -1011,7 +1010,9 @@ separate (Gtk.Terminal)
                               Finish(on_markup => on_buffer.markup);
                            when 1 =>   -- bold
                               Append_To_Markup(on_buffer.markup, bold);
-                           when 2 => null;  -- dim/faint
+                           when 2 =>   -- dim/faint
+                              Append_To_Markup(on_buffer.markup, span, 
+                                               "weight=""light"" ");
                            when 3 =>   -- italic
                               Append_To_Markup(on_buffer.markup, italic);
                            when 4 =>   -- underline
@@ -1395,7 +1396,7 @@ separate (Gtk.Terminal)
                                        Ada.Characters.Conversions.
                                                  To_Wide_String(for_sequence) &
                                        "' not yet implemented.");
-            when 'P' => null;  -- Device Control String (terminated by <Esc> \
+            when 'P' => null;  -- Device Control String (terminated by <Esc> \ )
                Log_Data(at_level => 9, 
                         with_details=> "Process_Escape (DCS) : Escape '" &
                                        Ada.Characters.Conversions.
@@ -1441,14 +1442,12 @@ separate (Gtk.Terminal)
                      -- The colour is held in on_buffer.text_colour
                      Write(fd => on_buffer.master_fd,
                               Buffer => Esc_str & "]10;" & 
-                                -- Buffer => Esc_str & "[38;2;" & 
                                 As_String(natural(on_buffer.text_colour.Red)) &
                                 ";" & 
                                 As_String(natural(on_buffer.text_colour.Green))
                                 & ";" & 
                                 As_String(natural(on_buffer.text_colour.Blue))&
                                 Bel_str);
-                                -- "m");
                   else  -- set the foreground colour
                      Log_Data(at_level => 9, 
                               with_details=>"Process_Escape " & 
@@ -1464,14 +1463,12 @@ separate (Gtk.Terminal)
                      -- The colour is held in on_buffer.background_colour
                      Write(fd => on_buffer.master_fd,
                               Buffer => Esc_str & "]11;" & 
-                                -- Buffer => Esc_str & "[48;2;" & 
                                 As_String(natural(on_buffer.background_colour.Red)) &
                                 ";" & 
                                 As_String(natural(on_buffer.background_colour.Green))
                                 & ";" & 
                                 As_String(natural(on_buffer.background_colour.Blue))&
                                 Bel_str);
-                                -- "m");
                   else  -- set the background colour
                      Log_Data(at_level => 9, 
                               with_details=>"Process_Escape " & 
