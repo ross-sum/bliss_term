@@ -114,8 +114,37 @@ begin
          end if;
       when GDK_Tab =>  --16#FF09# / 10#65289#
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: tab key = pressed.");
+         if the_terminal.buffer.last_key_pressed = GDK_Control_L or
+            the_terminal.buffer.last_key_pressed = GDK_Control_R
+         then  -- Control-Tab
+            case the_terminal.buffer.modifiers.modify_other_keys is
+               when disabled =>  -- <esc> then shift by 128
+                  the_key(2) := 
+                     Character'Val(Character'Pos(Ada.Characters.Latin_1.HT)+128);
+                  the_key(3) := ' ';
+               when all_except_special | all_including_special =>
+                  -- Define as alt, + character as number
+                  the_key(3..7) := "27;5;";  -- 5=Ctl (3=Alt,2=Shift,6=Shft-Ctl)
+                  the_key(8) := 
+                        As_String(Character'Pos(Ada.Characters.Latin_1.HT))(1);
+            end case;
+         elsif the_terminal.buffer.last_key_pressed = GDK_Meta_L or
+               the_terminal.buffer.last_key_pressed = GDK_Meta_R or
+               the_terminal.buffer.last_key_pressed = GDK_Alt_L or
+               the_terminal.buffer.last_key_pressed = GDK_Alt_R
+         then  -- Alt-Tab
+            case the_terminal.buffer.modifiers.modify_other_keys is
+               when disabled =>  -- <esc> then shift by 128
+                  the_key(2) := Ada.Characters.Latin_1.HT;
+                  the_key(3) := ' ';
+               when all_except_special | all_including_special =>
+                  -- Define as alt, + Tab as number
+                  the_key(3..7) := "27;3;";  -- 3=Alt (2=Shift,...)
+                  the_key(8) := 
+                        As_String(Character'Pos(Ada.Characters.Latin_1.HT))(1);
+            end case;
          -- if in command line, but not history_review, put it in that state
-         if (the_terminal.buffer.use_buffer_editing and
+         elsif (the_terminal.buffer.use_buffer_editing and
              not the_terminal.buffer.history_review) and then 
              the_terminal.buffer.entering_command
          then  -- should be in command line entry
@@ -264,11 +293,11 @@ begin
                the_terminal.buffer.last_key_pressed = GDK_Alt_R
          then  -- Alt-A - Alt-Z
             case the_terminal.buffer.modifiers.modify_other_keys is
-               when disabled =>  -- <esc> then shift by 128
+               when disabled =>  -- <esc> then (lower case) character
                   the_key(2) := Character'Val(for_event.keyval);
                   the_key(3) := ' ';
                when all_except_special | all_including_special =>
-                  -- Define as alt, + char as number
+                  -- Define as alt, + character as number
                   the_key(3..7) := "27;3;";  -- 3=Alt (2=Shift)
                   if for_event.keyval < 10
                   then
