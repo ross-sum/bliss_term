@@ -20,13 +20,14 @@ s#m0src
 s#p0doc
 s#q0test
 s#r0obj_amd64
-!573;g
+!625;g
 %\011src%shelp_about.adb
 %\011src%scss_management.adb
 %\011src%sgtk-terminal.ads
 %\011src%sgtk_terminal_io.h
 %\011src%sgtk-terminal_markup.ads
 %\011src%ssetup.adb
+%\011src%sgdk-key_map.ads
 %\011src%sbliss_term.adb
 %\011src%sterminal.adb
 %\011src%sgtk_terminal_io.c
@@ -41,13 +42,15 @@ s#r0obj_amd64
 %\011src%sgtk-terminal_markup.adb
 %\011src%sterminal.ads
 %\011src%ssetup.ads
-!573;f
+%\011src%sgdk-key_map.adb
+!625;f
 %\011src%shelp_about.adb
 %\011src%scss_management.adb
 %\011src%sgtk-terminal.ads
 %\011src%sgtk_terminal_io.h
 %\011src%sgtk-terminal_markup.ads
 %\011src%ssetup.adb
+%\011src%sgdk-key_map.ads
 %\011src%sbliss_term.adb
 %\011src%sterminal.adb
 %\011src%sgtk_terminal_io.c
@@ -62,3 +65,4 @@ s#r0obj_amd64
 %\011src%sgtk-terminal_markup.adb
 %\011src%sterminal.ads
 %\011src%ssetup.ads
+%\011src%sgdk-key_map.adb

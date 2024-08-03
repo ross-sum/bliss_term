@@ -50,12 +50,18 @@ return boolean is
    -- right arrow and backspace key has been been pressed.  If so, it gets
    -- passed to the terminal emulator and not to the buffer for processing.
    use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
+   use Gdk.Key_Map;
    use Ada.Strings.UTF_Encoding.Wide_Strings;
-   esc_start     : constant string(1..3) := Ada.Characters.Latin_1.Esc & "[ ";
-   app_esc_st    : constant string(1..3) := Ada.Characters.Latin_1.Esc & "O ";
+   esc_start : constant string(1..10) := (1 => Ada.Characters.Latin_1.Esc, 2 => '[', others => ' ');
+   app_esc_st: constant string(1..10) := (1 => Ada.Characters.Latin_1.Esc, 2 => 'O', others => ' ');
    the_term      : Gtk_Text_View := Gtk_Text_View(for_terminal);
    the_terminal  : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
-   the_key       : string(1..3) := esc_start;
+   interpret_key : constant boolean :=
+                            the_terminal.buffer.history_review or
+                            (not the_terminal.buffer.use_buffer_editing) or
+                            Get_Overwrite(the_terminal.terminal) or
+                             the_terminal.buffer.alternative_screen_buffer;
+   the_key       : string(1..10) := esc_start;
    the_character : wide_string(1..1);
 begin
    Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ", last_key_pressed=" & the_terminal.buffer.last_key_pressed'Wide_Image & ".");
@@ -69,46 +75,39 @@ begin
       when GDK_Down =>
          the_key(3) := 'B';
       when GDK_Home =>
-         if (not the_terminal.buffer.use_buffer_editing) or
-            the_terminal.buffer.cursor_keys_in_app_mode
+         if interpret_key
          then
-            the_key(3) := 'G';
+            the_key(3) := 'H';
          end if;
       when GDK_End =>
-         if (not the_terminal.buffer.use_buffer_editing) or
-            the_terminal.buffer.cursor_keys_in_app_mode
+         if interpret_key
          then
-            the_key(3) := '4';
+            the_key(3) := 'F';
          end if;
       when GDK_Page_Up =>
-         if (not the_terminal.buffer.use_buffer_editing) or
-            the_terminal.buffer.cursor_keys_in_app_mode
+         if interpret_key
          then
+            the_key(2) := '[';  -- always CSI
             the_key(3) := '5';
          end if;
       when GDK_Page_Down =>
-         if (not the_terminal.buffer.use_buffer_editing) or
-            the_terminal.buffer.cursor_keys_in_app_mode
+         if interpret_key
          then
+            the_key(2) := '[';  -- always CSI
             the_key(3) := '6';
          end if;
       when GDK_Left =>
-         if the_terminal.buffer.history_review or
-            (not the_terminal.buffer.use_buffer_editing) or
-            the_terminal.buffer.cursor_keys_in_app_mode
+         if interpret_key
          then
             the_key(3) := 'D';
          end if;
       when GDK_Right =>
-         if the_terminal.buffer.history_review or
-            (not the_terminal.buffer.use_buffer_editing) or
-            the_terminal.buffer.cursor_keys_in_app_mode
+         if interpret_key
          then
             the_key(3) := 'C';
          end if;
       when GDK_BackSpace =>  --16#FF08# / 10#65288#
-         if the_terminal.buffer.history_review or
-            not the_terminal.buffer.use_buffer_editing
+         if interpret_key
          then
             the_key(1) := Ada.Characters.Latin_1.BS;
             the_key(2) := ' ';
@@ -137,73 +136,150 @@ begin
          the_key(1) := Ada.Characters.Latin_1.Esc;
          the_key(2) := ' ';
       when GDK_Return =>
-         if the_terminal.buffer.keypad_keys_in_app_mode and then
+         if interpret_key and then -- the_terminal.buffer.keypad_keys_in_app_mode and then
             the_terminal.buffer.alternative_screen_buffer
          then  -- send the control sequence for this key
             the_key(1) := Ada.Characters.Latin_1.CR;
             the_key(2) := ' ';
          end if;
       when GDK_KP_0 | GDK_KP_Insert =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := '2';
+         else  -- send the numeric key
+            the_key(1..2) := "0 ";
          end if;
       when GDK_KP_1 | GDK_KP_End =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := '4';
+         else  -- send the numeric key
+            the_key(1..2) := "1 ";
          end if;
       when GDK_KP_2 | GDK_KP_Down =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := 'B';
+         else  -- send the numeric key
+            the_key(1..2) := "2 ";
          end if;
       when GDK_KP_3 | GDK_KP_Page_Down =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := '6';
+         else  -- send the numeric key
+            the_key(1..2) := "3 ";
          end if;
       when GDK_KP_4 | GDK_KP_Left =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := 'D';
+         else  -- send the numeric key
+            the_key(1..2) := "4 ";
          end if;
       when GDK_KP_5 =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             null;
+         else  -- send the numeric key
+            the_key(1..2) := "5 ";
          end if;
       when GDK_KP_6 | GDK_KP_Right =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := 'C';
+         else  -- send the numeric key
+            the_key(1..2) := "6 ";
          end if;
       when GDK_KP_7 | GDK_KP_Home =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := 'G';
+         else  -- send the numeric key
+            the_key(1..2) := "7 ";
          end if;
       when GDK_KP_8 | GDK_KP_Up =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := 'A';
+         else  -- send the numeric key
+            the_key(1..2) := "8 ";
          end if;
       when GDK_KP_9 | GDK_KP_Page_Up =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := '5';
+         else  -- send the numeric key
+            the_key(1..2) := "9 ";
          end if;
       when GDK_KP_Decimal | GDK_KP_Delete =>
-         if the_terminal.buffer.keypad_keys_in_app_mode
+         if the_terminal.buffer.keypad_keys_in_app_mode and
+            not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
             the_key(3) := 'P';
          end if;
+      when GDK_F1 => 
+         the_key(2..3) := "OP";  -- always SS3
+      when GDK_F2 => 
+         the_key(2..3) := "OQ";  -- always SS3
+      when GDK_F3 => 
+         the_key(2..3) := "OR";  -- always SS3
+      when GDK_F4 => 
+         the_key(2..3) := "OS";  -- always SS3
+      when GDK_F5 => 
+         the_key(2..4) := "[15";  -- always CSI
+      when GDK_F6 => 
+         the_key(2..4) := "[17";  -- always CSI
+      when GDK_F7 => 
+         the_key(2..4) := "[18";  -- always CSI
+      when GDK_F8 => 
+         the_key(2..4) := "[19";  -- always CSI
+      when GDK_F9 => 
+         the_key(2..4) := "[20";  -- always CSI
+      when GDK_F10 => 
+         the_key(2..4) := "[21";  -- always CSI
+      when GDK_F11 => 
+         the_key(2..4) := "[23";  -- always CSI
+      when GDK_F12 => 
+         the_key(2..4) := "[24";  -- always CSI
       when GDK_LC_a .. GDK_LC_z =>
          if the_terminal.buffer.last_key_pressed = GDK_Control_L or
-           the_terminal.buffer.last_key_pressed = GDK_Control_R
+            the_terminal.buffer.last_key_pressed = GDK_Control_R
          then  -- Control-A - Control-Z
             the_key(1) := Character'Val(for_event.keyval-Character'Pos('a')+1);
             the_key(2) := ' ';
+         elsif the_terminal.buffer.last_key_pressed = GDK_Meta_L or
+               the_terminal.buffer.last_key_pressed = GDK_Meta_R or
+               the_terminal.buffer.last_key_pressed = GDK_Alt_L or
+               the_terminal.buffer.last_key_pressed = GDK_Alt_R
+         then  -- Alt-A - Alt-Z
+            case the_terminal.buffer.modifiers.modify_other_keys is
+               when disabled =>  -- <esc> then shift by 128
+                  the_key(2) := Character'Val(for_event.keyval);
+                  the_key(3) := ' ';
+               when all_except_special | all_including_special =>
+                  -- Define as alt, + char as number
+                  the_key(3..7) := "27;3;";  -- 3=Alt (2=Shift)
+                  if for_event.keyval < 10
+                  then
+                     the_key(8) := Gdk_Key_Type'Image(for_event.keyval)(1);
+                  elsif for_event.keyval < 100
+                  then
+                     the_key(8..9):=Gdk_Key_Type'Image(for_event.keyval)(1..2);
+                  else
+                     the_key(8..10):=Gdk_Key_Type'Image(for_event.keyval)(1..3);
+                  end if;
+            end case;
          end if;
       when others =>
          null;  -- Don't do anything
@@ -262,8 +338,24 @@ begin
             the_key(1) /= Ada.Characters.Latin_1.Esc
       then  -- A single control character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
+      elsif the_key(2) /= ' ' and  the_key(3) = ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A single alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..2));
+      elsif the_key(7) = ';' and  the_key(9) = ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A shift, control or alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..8));
+      elsif the_key(7) = ';' and  the_key(10) = ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A shift, control or alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..9));
+      elsif the_key(7) = ';' and  the_key(10) /= ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A shift, control or alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..10));
       else  -- standard sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3));
       end if;
       if for_event.keyval = GDK_Up or for_event.keyval = GDK_Down
       then  -- these keys are about starting/continuing history review
@@ -283,20 +375,14 @@ begin
       -- According to https://invisible-island.net/xterm/ctlseqs/
       --                         ctlseqs.html#h2-The-Alternate-Screen-Buffer
       -- the following codes in the form of "CSI n ~" should work.  That is
-      -- corroborated by the DEC VT240 Programmer Reference Manual.  But, for
-      -- Page Up and Page Down at least, they do not.  Hence the work-arounds
-      -- below.
+      -- corroborated by the DEC VT240 Programmer Reference Manual.
       if the_key(3) = '2' or the_key(3) = '4' 
-         -- or the_key(3) = '5' or the_key(3) = '6'
+         or the_key(3) = '5' or the_key(3) = '6'
       then  -- Actually a 4 character non-standard sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key & '~');
-      elsif the_key(3) = '5' or the_key(3) = '6'  -- Page Up, Page Down
-      then
-         if the_key(3) = '5' then the_key(3) := 'A'; end if;
-         if the_key(3) = '6' then the_key(3) := 'B'; end if;
-         for cntr in 1 .. (the_terminal.rows / 2) + 1 loop  -- half screen
-            Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
-         end loop;
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3) & '~');
+      elsif for_event.keyval in GDK_F5..GDK_F12
+      then  -- Acutally a 5 character sequence
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..4) & '~');
       elsif for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape or
             for_event.keyval = GDK_Return
       then  -- Actually a single back-space, Escape or Return character
@@ -305,8 +391,24 @@ begin
             the_key(1) /= Ada.Characters.Latin_1.Esc
       then  -- A single control character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
+      elsif the_key(2) /= ' ' and  the_key(3) = ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A single alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..2));
+      elsif the_key(7) = ';' and  the_key(9) = ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A shift, control or alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..8));
+      elsif the_key(7) = ';' and  the_key(10) = ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A shift, control or alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..9));
+      elsif the_key(7) = ';' and  the_key(10) /= ' ' and 
+            the_key(1) = Ada.Characters.Latin_1.Esc
+      then  -- A shift, control or alt character
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..10));
       else  -- standard sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key);
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3));
       end if;
       return true;
    elsif the_terminal.buffer.alternative_screen_buffer and then

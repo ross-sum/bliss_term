@@ -779,6 +779,7 @@ separate (Gtk.Terminal)
                                  Forward_Char(cursor_iter, res);
                               else  -- line not long enough
                               -- Pad out with a space character
+                                 Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - At end of line, appending ' '...");
                                  Insert(on_buffer, at_iter=>cursor_iter,
                                      the_text=>" ");
                               end if;

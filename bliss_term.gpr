@@ -77,6 +77,7 @@ project Bliss_Term is
    -- end Compiler;
 
    for Source_Files use (
+      "gdk-key_map.ads", "gdk-key_map.adb",
       "gtk-terminal.ads", "gtk-terminal.adb", "gtk-terminal-process.adb",
       "gtk-terminal-scroll_key_press_check.adb",
       "gtk-terminal-cinterface.ads", "gtk_terminal_io.h", "gtk_terminal_io.c",
