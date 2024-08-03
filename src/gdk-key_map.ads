@@ -11,6 +11,16 @@
 --                                                                   --
 --  This package provides a simple and incomplete Ada interface  to  --
 --  the GDK Keymap C library within the GTK system.                  --
+--  A  GdkKeymap  defines  the  translation  from  keyboard   state  --
+--  (including a hardware key, a modifier mask, and active keyboard  --
+--  group) to a keyval. This translation has two phases. The  first  --
+--  phase  is to determine the effective keyboard group  and  level  --
+--  for  the  keyboard state; the second phase is to  look  up  the  --
+--  keycode/group/level  triplet in the keymap and see what  keyval  --
+--  it corresponds to.                                               --
+--  You  should also refer to Gdk.Types and  Gdk.Types.Keysyms  for  --
+--  key  translations as that package defines the numerical  values  --
+--  that are passed into the application.                            --
 --                                                                   --
 --  Version History:                                                 --
 --  $Log$
@@ -37,15 +47,29 @@ package GDK.Key_Map is
    type Gdk_Keymap is access all Gdk_Keymap_Record'Class;
    
    function Get_Default_Key_Map return Gdk_Keymap;
+   pragma Obsolescent (Get_Default_Key_Map);
+      -- Returns the GdkKeymap attached to the default display.
+      -- This call is apparently depreciated since 3.22.
+      -- Use Get_Key_Map() instead.
    function Get_Key_Map(for_display : in Gdk_Display) return Gdk_Keymap;
+      -- Returns the GdkKeymap attached to display.
    
    function Num_Lock_Is_On(for_keymap : access Gdk_Keymap_Record) 
    return boolean;
+      -- Returns whether the Num Lock modifer is locked.
+      -- Returns TRUE if Num Lock is on.
    function Caps_Lock_Is_On(for_keymap : access Gdk_Keymap_Record) 
    return boolean;
+      -- Returns whether the Caps Lock modifer is locked.
+      -- Returns TRUE if Caps Lock is on.
    function Scroll_Lock_Is_On(for_keymap : access Gdk_Keymap_Record) 
    return boolean;
+      -- Returns whether the Scroll Lock modifer is locked.
+      -- Returns TRUE if Scroll Lock is on.
    function There_Are_BIDI_Layouts(for_keymap : access Gdk_Keymap_Record) 
    return boolean;
+      -- Determines if keyboard layouts for both right-to-left and
+      -- left-to-right languages are in use.
+      -- Returns TRUE if there are layouts in both directions, FALSE otherwise.
    
 end GDK.Key_Map;

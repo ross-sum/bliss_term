@@ -11,6 +11,16 @@
 --                                                                   --
 --  This package provides a simple and incomplete Ada interface  to  --
 --  the GDK Keymap C library within the GTK system.                  --
+--  A  GdkKeymap  defines  the  translation  from  keyboard   state  --
+--  (including a hardware key, a modifier mask, and active keyboard  --
+--  group) to a keyval. This translation has two phases. The  first  --
+--  phase  is to determine the effective keyboard group  and  level  --
+--  for  the  keyboard state; the second phase is to  look  up  the  --
+--  keycode/group/level  triplet in the keymap and see what  keyval  --
+--  it corresponds to.                                               --
+--  You  should also refer to Gdk.Types and  Gdk.Types.Keysyms  for  --
+--  key  translations as that package defines the numerical  values  --
+--  that are passed into the application.                            --
 --                                                                   --
 --  Version History:                                                 --
 --  $Log$
