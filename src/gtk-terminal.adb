@@ -78,6 +78,8 @@ with Glib.Properties;
 with Gdk.Color;
 with Gdk.Types.Keysyms;
 with Gdk.Rectangle;
+with Gdk.Display;
+with GDK.Key_Map;
 with Gtk.Enums;
 with Gtk.Window;
 with Gtk.Text_Tag;
@@ -165,7 +167,14 @@ package body Gtk.Terminal is
       -- We are commandeering this character to represent a LF character when
       -- we don't want to do a LF overwrite when in overwrite mode (i.e. we
       -- actually want to do a line feed).
-      
+   
+   key_map : GDK.Key_Map.Gdk_Keymap;
+      -- The key map module in GTK has the detection routines to advise whether
+      -- the Num Lock, Scroll Lock  or Caps Lock keys are in the depressed
+      -- (i.e. 'on') state.  This variable is universal to  the application,
+      -- irrespective of the number of terminals it has, and so is set once at
+      -- initialisation of the first terminal.
+   
    -----------------------------
    -- Error and Debug Logging --
    -----------------------------
@@ -256,6 +265,11 @@ package body Gtk.Terminal is
          ip_source := GLib.Main.Timeout_Add(250, Check_For_Display_Data'access);
          GLib.Main.Set_Priority(GLib.Main.Find_Source_By_ID(ip_source), 
                                 GLib.Main.Priority_Low);
+         -- Additionally, we set the key_map to match the current application's
+         -- main window, thus allowing the application to detect when the
+         -- NumLock is 'on'.
+         key_map :=
+               Gdk.Key_Map.Get_Key_Map(for_display => Gdk.Display.Get_Default);
          service_initialised := true;
       end if;
    end Gtk_New_With_Buffer;
@@ -1168,7 +1182,7 @@ package body Gtk.Terminal is
             then  -- lines go up to the bottom of the scrolled region
                -- Protect the starting_from iter
                insert_mk := Create_Mark(buffer, "InsertPt", starting_from);
-               -- Now, if the for_cursor is at the bottom of the scrolled
+               -- Now, if the starting_from is at the bottom of the scrolled
                -- region, then we scroll with the top line disappearing.
                --  Otherwise, we push the last line out.
                if natural(Get_Line(starting_from)) + 1 >= 
@@ -1213,6 +1227,109 @@ package body Gtk.Terminal is
          Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),starting_from, LF_str);
       end loop;
    end Scrolled_Insert;
+    
+   procedure Scrolled_Delete(number_of_lines : in positive; 
+                         for_buffer : access Gtk_Terminal_Buffer_Record'Class; 
+                         starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter) is
+      -- Delete the specified number of new lines at the starting_from
+      -- location, scrolling up the lines below to ensure that text only
+      -- moves between scroll_region_top and scroll_region_bottom, making sure
+      -- that lines that scroll above or below the scroll region are discarded
+      -- and that the original lines outside of the scroll region are
+      -- protected.  If the scroll regions are undefined (i.e. set to 0), then
+      -- this procedure does nothing other than delete a regular line.
+      -- This procedure assumes that starting_from is between scroll_region_top
+      -- and scroll_region_bottom (but it checks just in case).
+      use Gtk.Text_Iter;
+      LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
+      starting_line : constant natural := natural(Get_Line(starting_from)) + 1;
+      buffer   : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      home_iter: Gtk_Text_Iter;
+      last_iter: Gtk_Text_Iter;
+      end_iter : Gtk_Text_Iter;
+      delete_mk: Gtk.Text_Mark.Gtk_Text_Mark;
+      result   : boolean;
+      the_terminal: Gtk_Terminal:= Gtk_Terminal(Get_Parent(for_buffer.parent));
+   begin
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
+      for line in 1 .. number_of_lines loop
+         if (for_buffer.scroll_region_top > 0 and 
+             for_buffer.scroll_region_bottom > 0) and then
+            (starting_line >= for_buffer.scroll_region_top and
+             starting_line <= for_buffer.scroll_region_bottom)
+         then  -- scroll up from below current cursor as lines are deleted
+            home_iter := Home_Iterator(for_terminal => the_terminal);
+            -- Set last_iter to the last character on the last line in the
+            -- scrolled region.  A blank line gets inserted after this to
+            -- replace the line that gets deleted at starting_from.
+            last_iter := home_iter;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
+            Forward_Lines(last_iter, 
+                          Glib.Gint(for_buffer.scroll_region_bottom-1),
+                          result);
+            if not Ends_Line(last_iter)
+            then  -- Not at end, set up the last_iter to be the end of the line
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               Forward_To_Line_End(last_iter, result);
+            end if;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: last_iter now = line" & Get_Line(last_iter)'Wide_Image & ".");
+            Get_End_Iter(buffer, end_iter);
+            if Natural(Get_Line(last_iter))>= for_buffer.scroll_region_bottom-1
+               and then Compare(last_iter, end_iter) <= 0
+            then  -- lines go up from the bottom of the scrolled region
+               -- Protect the starting_from iter
+               delete_mk := Create_Mark(buffer, "DeletePt", starting_from);
+               -- Now, if the starting_from is at the bottom of the scrolled
+               -- region, then we just delete that line.  Otherwise, we insert
+               -- a line after last_iter and delete the line at starting_from.
+               if natural(Get_Line(starting_from)) + 1 >= 
+                                                for_buffer.scroll_region_bottom
+               then  -- delete by removing that bottom line
+                  end_iter  := last_iter;
+                  home_iter := last_iter;
+                  Set_Line_Index(home_iter, 0);
+                  -- and tip it over the start (so we delete the whole line)
+                  Backward_Char(home_iter, result);
+               else  -- delete by removing the line at starting_from
+                  -- First up, insert the line at the bottom first up by
+                  -- inserting a LF there
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: inserting a LF_str at last_iter's line number " & Get_Line(last_iter)'Wide_Image & "...");
+                  Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),
+                                         last_iter, LF_str);
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: inserted LF_str at last_iter's line, which now has number " & Get_Line(last_iter)'Wide_Image & " (should be 1 more than previously).");
+                  -- We need to delete from the starting_from line, set
+                  -- home_iter to that
+                  Get_Iter_At_Mark(buffer, home_iter, delete_mk);
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: Set home_iter := starting_from.");
+                  Set_Line_Index(home_iter, 0);
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: Set home_iter to the start of the starting_from line.");
+                  -- set end iter to the end of the line at home_iter
+                  end_iter := home_iter;
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: Set end_iter := home_iter.");
+                  if not Ends_Line(end_iter)
+                  then  -- Not at end, so set to the end of the line
+                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: Executing Forward_To_Line_End(end_iter (= line " & Get_Line(end_iter)'Wide_Image & "), result)...");
+                     Forward_To_Line_End(end_iter, result);
+                  end if;
+                  -- and tip it over the end (so we delete the whole line)
+                  Forward_Char(end_iter, result);
+               end if;
+               -- Delete the line at the top of the scrolled region
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete : home_iter line number in buffer =" & Get_Line(home_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, home_iter, end_iter)) & "'.");
+               Delete(buffer, home_iter, end_iter);
+               -- Restore the starting_from iter
+               Get_Iter_At_Mark(buffer, starting_from, delete_mk);
+               -- And clean up the mark
+               Delete_Mark(buffer, delete_mk);
+            end if;
+         end if;
+      end loop;
+   end Scrolled_Delete;
    
    procedure Scroll_Down(number_of_lines : in positive; 
                          for_buffer : Gtk_Text_Buffer; 

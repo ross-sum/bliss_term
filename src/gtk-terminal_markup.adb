@@ -341,10 +341,13 @@ package body Gtk.Terminal_Markup is
       then  -- check if already in <span
           -- Here, we assume all the <span ...> commands are given together!
           -- Nearly always, they should be.
+          -- In the process, check for brain dead Nano repeating a foreground
+          -- or background request.
          if in_markup.markup_text /= Null_Ptr and then
             Ada.Strings.Fixed.Count(Value(in_markup.markup_text),"<span") = 1
             and then Ada.Strings.Fixed.Count(Value(mkTxt),"</span>") = 0
             and then Ada.Strings.Fixed.Tail(Value(mkTxt),1) = ">"
+            and then Ada.Strings.Fixed.Count(Value(mkTxt),the_value) = 0
          then  -- insert this text just prior to the '>' on "<span ...>"
             -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Inserting into existing markup_text with <" & for_modifier'Wide_Image & ">: '" & Ada.Characters.Conversions.To_Wide_String(Value(mkTxt)(Value(mkTxt)'First..Value(mkTxt)'Last-1) &the_value & To_RGB_String(or_rgb_colour)&" >") & "'.");
             temp_markup:= 

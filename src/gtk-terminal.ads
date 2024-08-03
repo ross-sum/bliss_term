@@ -596,6 +596,16 @@ package Gtk.Terminal is
       -- and that the original lines outside of the scroll region are
       -- protected.  If the scroll regions are undefined (i.e. set to 0), then
       -- this procedure does nothing other than insert a regular new line.
+   procedure Scrolled_Delete(number_of_lines : in positive; 
+                         for_buffer : access Gtk_Terminal_Buffer_Record'Class; 
+                         starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter);
+      -- Delete the specified number of lines at the starting_from
+      -- location, scrolling up the lines below to ensure that text only
+      -- moves between scroll_region_top and scroll_region_bottom, making sure
+      -- that lines that scroll above or below the scroll region are discarded
+      -- and that the original lines outside of the scroll region are
+      -- protected.  If the scroll regions are undefined (i.e. set to 0), then
+      -- this procedure does nothing other than delete a regular line.
    procedure Scroll_Down(number_of_lines : in positive; 
                          for_buffer : Gtk_Text_Buffer; 
                          starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter);

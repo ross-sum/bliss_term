@@ -484,8 +484,11 @@ separate (Gtk.Terminal)
                                     Get_Start_Iter(on_buffer.alt_buffer,
                                                    cursor_iter);
                                     Get_End_Iter(on_buffer.alt_buffer,dest_iter);
-                                    Delete(on_buffer.alt_buffer,
-                                           cursor_iter, dest_iter);
+                                    if not Equal(cursor_iter, dest_iter)
+                                    then -- something to delete, so delete it
+                                       Delete(on_buffer.alt_buffer,
+                                              cursor_iter, dest_iter);
+                                    end if;
                                      -- Switch to the alternate buffer
                                     Gtk.Text_View.Set_Buffer
                                                (view  => the_term.terminal,
@@ -688,16 +691,24 @@ separate (Gtk.Terminal)
                      end if;
                      Place_Cursor(the_buf, where => cursor_iter);
                   when 'G' | '`' =>   -- Move cursor to column <param>
-                     Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
-                     Backward_Line(cursor_iter, res);  -- go to last line start
-                     if res then  -- did go back
-                        Forward_Line(cursor_iter, res); -- return to current line
-                     end if;
-                     if param(1) > 1
-                     then
-                        Forward_Chars(cursor_iter, Glib.Gint(param(1)-1), res);
-                     end if;
-                     Place_Cursor(the_buf, where => cursor_iter);
+                     declare
+                        the_term     : Gtk_Text_View := on_buffer.parent;
+                        the_terminal : Gtk_Terminal := 
+                                            Gtk_Terminal(Get_Parent(the_term));
+                        line_num     : positive;
+                     begin
+                        -- Get the line number (to preserve it)
+                        Get_Iter_At_Mark(the_buf,dest_iter,Get_Insert(the_buf));
+                        cursor_iter:=Home_Iterator(for_terminal=>the_terminal);
+                        line_num := natural(Get_Line(dest_iter) - 
+                                            Get_Line(cursor_iter)) + 1;
+                        -- Call ourselves, executing an <esc> [ H
+                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'G' - Moving to line" & line_num'Wide_Image  & " and column" & param(1)'Wide_Image & ".");
+                        Process_Escape(for_sequence=>Esc_Str & '[' & 
+                                                    As_String(line_num) & ';' &
+                                                    As_String(param(1)) & "H",
+                                       on_buffer => on_buffer);
+                     end;
                   when 'H' | 'f' =>   -- Move cursor to row <param>, column <param>
                      declare
                         the_term       : Gtk_Text_View := on_buffer.parent;
@@ -792,7 +803,7 @@ separate (Gtk.Terminal)
                            Clear_Saved(markup => on_buffer.markup);
                         end if;
                      end;
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moved to (row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ", col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ").");
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moved to (row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ", col" & GInt'Wide_Image(Get_Line_Offset(cursor_iter)+1) & ").");
                   when 'I' => null;  -- Cursor Horizontal (Forward) Tab
                      -- Advance the cursor to the next column (in the same row)
                      -- with a tab stop. If there are no more tab stops, move
@@ -872,6 +883,15 @@ separate (Gtk.Terminal)
                      end if;
                      Insert_At_Cursor(on_buffer, the_text=>(param(1) * 
                                                             Insert_Return));
+                  when 'M' => -- Delete (param) lines (even in overwrite)
+                     if param(1) = 0
+                     then
+                        param(1) := 1;
+                     end if;
+                     Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
+                     Scrolled_Delete(number_of_lines => param(1), 
+                                     for_buffer => on_buffer, 
+                                     starting_from => cursor_iter);
                   when 'P' => null;  --DCH -- Delete <param> characters
                      if param(1) = 0
                       then
@@ -939,7 +959,7 @@ separate (Gtk.Terminal)
                      -- Get the column number (to preserve it)
                      Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
                      column := natural(Get_Line_Index(cursor_iter)) + 1;
-                     -- Call ourselves, executing an <esc> H
+                     -- Call ourselves, executing an <esc> [ H
                      Process_Escape(for_sequence=> Esc_Str & '[' & 
                                                    As_String(param(1)) & ';' & 
                                                    As_String(column) & "H",
@@ -1689,7 +1709,21 @@ begin  -- Process
       -- Move the cursor back one character (without deleting the character)
       -- We use the Process_Escape procedure as that works (but doing it here
       -- doesn't for some very strange reason).
+      if not Is_Empty(for_buffer.markup)
+      then  -- a string to dump
+         Error_Log.Debug_Data(at_level => 9, with_details => "Process : BS - Saving mark-up.");
+         -- Rebuild the mark-up (but not text) from modifier array
+         Save(the_markup => for_buffer.markup);
+         -- (close off, but the closure is temporary)
+         Finish(on_markup => for_buffer.markup);
+      end if;  
       Process_Escape(for_sequence => esc_str & "[D", on_buffer => for_buffer);
+      if Saved_Markup_Exists(for_markup => for_buffer.markup)
+      then  -- mark-up to restore, do a complete restore
+         Error_Log.Debug_Data(at_level => 9, with_details => "Process : BS - Restoring mark-up.");
+         Restore(the_markup => for_buffer.markup);
+         Clear_Saved(markup => for_buffer.markup);
+      end if;
    else  -- An ordinary character
       if Is_Empty(the_markup => for_buffer.markup)
       then  -- not in some kind of mark-up so just add the text

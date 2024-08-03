@@ -151,8 +151,6 @@ follows:
   is the native selection supplied by the Gtk.Text_Buffer/Gtk.Text_View, which
   is not always obvious.  Paste does not yet work properly when in command
   history mode (mostly a display issue).
-* The codes for Page Up and Page Down are clearly not correct.  There is a
-  work-around in place, but it is probably not optimal.
 * The delete operation in the Process_Keys sub-procedure throws an error
   warning into the terminal that this terminal is called from.  The error
   warning is harmless, but is ugly.  There is another similar error that occurs
@@ -172,6 +170,13 @@ follows:
   buffer will not put the cursor at points immediately after the last entered
   Blissymbolic charaacter (rembembering Blissymbolics characters are outside
   of the ASCII character range).
+* Nano outputs spurious text at random points in time after moving around in
+  the file being edited.  Sometimes it is obvious that Nano has lost what line
+  number it is on and sometimes the cause is not obvious.  At either rate the
+  root cause has not been detected from the information streams passing between
+  the terminal emulator and Nano via the terminal client in the operating
+  system.  It otherwise works with Blissymbolics characters.
+* Emacs has yet to be tested against Bliss_Term.
 
 There are probably numerous other errors that I have yet to discover.  I am
 actively using this terminal emulator whenever it is safe for me to do so, so I
