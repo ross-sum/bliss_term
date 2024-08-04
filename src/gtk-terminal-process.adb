@@ -1660,7 +1660,7 @@ begin  -- Process
          then  -- in Alternative buffer, do  the LF at the end of current line
             if for_buffer.scroll_region_bottom = 0 or else
                (for_buffer.scroll_region_bottom > 0 and then
-                natural(Get_Line_Count(for_buffer)) <
+                natural(Get_Line_Count(the_buf)) <=
                                             (for_buffer.scroll_region_bottom - 
                                              for_buffer.scroll_region_top + 1))
             then  -- but only if within range of the screen
