@@ -166,10 +166,13 @@ follows:
   'endless' (1000 character) line length.  It should enforce word wrap when
   the user requests it.
 * vi does not work with a file that is in Blissymbolics.  This is because vi
-  wants to position the cursor after every non-ASCII character and Gtk.Text_
-  buffer will not put the cursor at points immediately after the last entered
-  Blissymbolic charaacter (rembembering Blissymbolics characters are outside
-  of the ASCII character range).
+  wants to position the cursor after every non-ASCII character, inserting
+  space characters in between.  It deliberately positions the cursor before
+  writing each Unicode UTF-8 character such that there is a space.
+  Interestingly, vim writes the contents of the file on the screen twice,
+  clearing the screen in between those writes.  The first time it writes the
+  file to the screen, it does it correctly, without inserting the spaces.  It
+  is the second time that the space characters get inserted.
 * Nano outputs spurious text at random points in time after moving around in
   the file being edited.  Sometimes it is obvious that Nano has lost what line
   number it is on and sometimes the cause is not obvious.  At either rate the
