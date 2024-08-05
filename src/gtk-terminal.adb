@@ -60,6 +60,7 @@ pragma Warnings (Off, "*is already use-visible*");
 -- with Gtk.Text_Iter;
 -- with Gtk.Text_Tag_Table;
 -- with Gtk.Text_Mark;
+-- with Gtk.Clipboard;
 -- with Gdk.RGBA;                use Gdk.RGBA;
 -- with Pango.Font;              use Pango.Font;
 -- with Gtkada.Types;            use Gtkada.Types;
@@ -182,7 +183,8 @@ package body Gtk.Terminal is
    procedure Set_The_Error_Handler(to : error_handler) is
    begin
       the_error_handler := to;
-      Gtk.Terminal_Markup.Set_The_Error_Handler(to => Gtk.Terminal_Markup.error_handler(to));
+      Gtk.Terminal_Markup.Set_The_Error_Handler
+                                 (to => Gtk.Terminal_Markup.error_handler(to));
    end Set_The_Error_Handler;
 
    procedure Handle_The_Error(the_error : in integer;
@@ -300,10 +302,15 @@ package body Gtk.Terminal is
          -- Insert the terminal into the scrolled window (creating a
          -- view port on the way through only if necessary)
          Add(the_terminal, the_terminal.terminal);
+         --Set up the key and mouse events
          On_Key_Press_Event(self=>the_terminal.terminal, 
                             call=>Scroll_Key_Press_Check'access, after=>false);
          On_Motion_Notify_Event(self=>the_terminal.terminal, 
                             call=>Motion_Notify_CB'access, after=>false);
+         On_Button_Press_Event(self=>the_terminal.terminal, 
+                               call=>Button_Press_CB'access, after=>false);
+         On_Button_Release_Event(self=>the_terminal.terminal, 
+                                 call=>Button_Release_CB'access, after=>false);
          -- Give an initial default dimension of nowrap_size (1000) characters
          -- wide x default_rows (25) lines (i.e. no wrap)
          Set_Size (terminal => the_terminal, 
@@ -700,6 +707,7 @@ package body Gtk.Terminal is
       -- configuration_parameters for this terminal's buffer.
       use Gdk.Rectangle, Gdk.Types;
       the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
+      buffer       : Gtk.Text_Buffer.Gtk_Text_Buffer;
       the_rect     : Gdk.Rectangle.Gdk_Rectangle;
       screen_length: natural renames the_terminal.rows;
       screen_width : natural renames the_terminal.cols;
@@ -714,6 +722,13 @@ package body Gtk.Terminal is
       yadj : constant float := 0.97;
       xofs : constant float := -0.001;
       yofs : constant float := -0.004;
+      -- Save off the previous row and column of mouse location in case they
+      -- are needed later
+      last_x : constant natural := mouse_details.col;
+      last_y : constant natural := mouse_details.row;
+      start_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
+      end_iter     : Gtk.Text_Iter.Gtk_Text_Iter;
+      result       : boolean;
    begin
       -- Get our boundary for scaling purposes
       Get_Visible_Rect(Gtk_Text_View(for_terminal_view), the_rect);
@@ -737,10 +752,142 @@ package body Gtk.Terminal is
       -- Note that the row and column for mouse are 1 based, so add 1 to them
       mouse_details.row := natural((float(event.Y)+yofs) * y_scale_factor) + 1;
       mouse_details.col := natural((float(event.X)+xofs) * x_scale_factor) + 1;
+      -- Check for text being selected and extend the selection if so
+      if the_terminal.buffer.alternative_screen_buffer
+      then  -- using the alternative buffer for display
+         buffer := the_terminal.buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(the_terminal.buffer);
+      end if;
+      if mouse_details.in_select and then
+         (last_x /= mouse_details.col or last_y /= mouse_details.row)
+      then  -- selecting text and a cursor position has changed since last time
+         Get_Selection_Bounds(buffer, start_iter, end_iter, result);
+         if result then
+            Apply_Tag_By_Name(buffer, "selection", start_iter, end_iter);
+         end if;
+      elsif not Selection_Exists(buffer)
+      then  -- Clear out the selection highlight
+         Get_Start_Iter(buffer, start_iter);
+         Get_End_Iter(buffer, end_iter);
+         Remove_Tag_By_Name(buffer, "selection", start_iter, end_iter);
+      end if;
       -- Error_Log.Debug_Data(at_level => 9, with_details => "Motion_Notify_CB: the_rect:(H=" & the_rect.Height'Wide_Image & ",W=" & the_rect.Width'Wide_Image & ", X=" & the_rect.X'Wide_Image & ",Y=" & the_rect.X'Wide_Image & "), scale_factor (x=" & x_scale_factor'Wide_Image & ",y=" & y_scale_factor'Wide_Image & "), event: (X=" & event.X'Wide_Image & ",Y=" & event.Y'Wide_Image & ") and mouse_details: (col=" & mouse_details.col'Wide_Image & ", row=" & mouse_details.row'Wide_Image & ").");
       return false;  -- Allow for further processing of this event
    end Motion_Notify_CB;
+      
+   function Button_Press_CB(for_terminal_view : access Gtk_Widget_Record'Class;
+                            event : Gdk.Event.Gdk_Event_Button) return boolean
+   is
+      -- Called whenever the mouse is clicked inside the terminal's
+      -- Gtk.Text_View, but not if it leaves the window.  Event contains the
+      -- details on the mouse button that was pressed.
+      -- If this function returns True, then other signal handers will not be
+      -- called, otherwise the button press signal will be propagted further.
+      use Gdk.Event, Gtk.Clipboard, Gtk.Text_Iter;
+      the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
+      mouse_details: mouse_configuration_parameters renames 
+                                              the_terminal.buffer.mouse_config;
+      buffer       : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      start_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
+      end_iter     : Gtk.Text_Iter.Gtk_Text_Iter;
+      the_clipboard: Gtk.Clipboard.Gtk_Clipboard := 
+                   Gtk.Clipboard.Get_Default(Display=>Gdk.Display.Get_Default);
+      result       : boolean;
+   begin
+      if the_terminal.buffer.alternative_screen_buffer
+      then  -- using the alternative buffer for display
+         buffer := the_terminal.buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(the_terminal.buffer);
+      end if;
+      -- Work out which button was pressed
+      if event.the_Type = Button_Press
+      then  -- Button 1: start the selection highlight process
+         -- First, unhighlight any selected text
+         Get_Start_Iter(buffer, start_iter);
+         Get_End_Iter(buffer, end_iter);
+         Remove_Tag_By_Name(buffer, "selection", start_iter, end_iter);
+         -- Now start the highlighting
+         Get_Iter_At_Mark(buffer, start_iter, Get_Insert(buffer));
+         end_iter := start_iter;
+         Apply_Tag_By_Name(buffer, "selection", start_iter, end_iter);
+         -- And signal that we are selecting text
+         mouse_details.in_select := true;
+      elsif event.the_Type = Gdk_3button_Press
+      then  -- Middle mouse button: start the paste process
+         -- Ensure cursor is correctly located
+         if the_terminal.buffer.entering_command
+         then  -- correct location depends on Insert/Overwrite mode
+            if Get_Overwrite(the_terminal.terminal)
+            then  -- correct location is cursor location
+               null;  -- do nothing
+            else  -- correct location is at the end
+               Get_End_Iter(buffer, end_iter);
+               Place_Cursor(buffer, where => end_iter);
+            end if;
+         else  -- correct location is where the mouse pointer is
+            end_iter := Home_Iterator(for_terminal => the_terminal);
+            if mouse_details.row > 1 then
+               Forward_Lines(end_iter, Gint(mouse_details.row - 1), result);
+            end if;
+            if mouse_details.col > 1 then
+               for col in 2 .. mouse_details.col - 1 loop
+                  if not Ends_Line(end_iter) then
+                     Forward_Char(end_iter, result);
+                  end if;
+               end loop;
+            end if;
+            Place_Cursor(buffer, where => end_iter);
+         end if;
+         -- If (and only if) in insert mode, paste into the buffer
+         if not Get_Overwrite(the_terminal.terminal)
+         then  -- Paste its contents to the buffer for further processing
+            Paste_Clipboard(buffer, the_clipboard);
+         else  -- Send contents directly to system's terminal emulator client
+            -- Set up the file descriptor for the call (and hope there is no
+            -- intervening click in another terminal emulator)
+            clipboard_fd := the_terminal.master_fd;
+            -- And set up the call-back request
+            Gtk.Clipboard.Request_Text(clipboard => the_clipboard, 
+                                       callback => Write_From'Access);
+         end if;
+         return true;
+      else
+         null;
+      end if;
+      return false;  -- Allow for further processing of this event
+   end Button_Press_CB;
+      
+   function Button_Release_CB(for_terminal_view:access Gtk_Widget_Record'Class;
+                              event:Gdk.Event.Gdk_Event_Button) return boolean
+   is
+      -- Called whenever the mouse is clicked inside the terminal's
+      -- Gtk.Text_View, but not if it leaves the window.  Event contains the
+      -- details on the mouse button that was pressed.
+      -- If this function returns True, then other signal handers will not be
+      -- called, otherwise the button press signal will be propagted further.
+      the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
+      mouse_details: mouse_configuration_parameters renames 
+                                              the_terminal.buffer.mouse_config;
+   begin
+      if event.the_Type = Button_Release and mouse_details.in_select
+      then  -- Button 1: finish the selection highlight process
+         null;
+         mouse_details.in_select := false;
+      end if;
+      return false;  -- Allow for further processing of this event
+   end Button_Release_CB;
 
+   procedure Write_From(the_clipboard : not null 
+                               access Gtk.Clipboard.Gtk_Clipboard_Record'Class;
+                        the_text : UTF8_string := "") is
+   begin
+      if the_text'Length > 0 then
+         Write(clipboard_fd, buffer => the_text);
+      end if;
+   end Write_From;
+     
    -------------------------------
    -- Terminal Support Routines --
    -------------------------------
@@ -969,7 +1116,7 @@ package body Gtk.Terminal is
       else  -- using the main buffer for display
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(into);
       end if;
-      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(into.parent) or into.alternative_screen_buffer) & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & " with iter_line =" & iter_line'Wide_Image & ".");
+      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(into.parent) or into.alternative_screen_buffer) & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & " with iter_line =" & iter_line'Wide_Image & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
       if (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
          and then  -- i.e. if in 'overwrite' mode
             ((Count(source=>the_text, pattern=>InsRet) = 0) and
@@ -995,7 +1142,7 @@ package body Gtk.Terminal is
          end if;  -- (otherwise delete as many as possible)
          if not Equal(at_iter, end_iter)
          then  -- there is something to be deleted (i.e. not at end of line)
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : In Overwrite - at_iter line number in buffer =" & Get_Line(at_iter)'Wide_Image & ", Deleting '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Get_Text(buffer, at_iter, end_iter)) & "'.");
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : In Overwrite - at_iter line number in buffer =" & Get_Line(at_iter)'Wide_Image & ", Deleting '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Get_Text(buffer, at_iter, end_iter)) & "' with at_iter line =" & Get_Line(at_iter)'Wide_Image & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
             Delete(buffer, at_iter, end_iter);
          end if;
       end if;
@@ -1104,7 +1251,7 @@ package body Gtk.Terminal is
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),at_iter, LF_str);
             end loop;
          else
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : doing regular insert of '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(the_text) & "'.");
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : doing regular insert of '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(the_text) & "' at_iter line ID in buffer =" & Get_Line(at_iter)'Wide_Image  & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
          end if;
       end if;
@@ -2007,6 +2154,7 @@ package body Gtk.Terminal is
       res         : Interfaces.C.int;
       start_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
       end_iter    : Gtk.Text_Iter.Gtk_Text_Iter;
+      selection   : Gtk.Text_Tag.Gtk_Text_Tag;
       history_tag : Gtk.Text_Tag.Gtk_Text_Tag;
       hypertext   : Gtk.Text_Tag.Gtk_Text_Tag;
       end_mark    : Gtk.Text_Mark.Gtk_Text_Mark;
@@ -2082,6 +2230,13 @@ package body Gtk.Terminal is
                        terminal.buffer.line_number'Image);
       Switch_The_Light(terminal.buffer, 9, false, 
                        terminal.buffer.buf_line_num'Image);
+      selection := terminal.buffer.Create_Tag("selection");
+      Set_Property(selection, Gtk.Text_Tag.Background_Set_Property, true);
+      Set_Property(selection, Gtk.Text_Tag.Background_Rgba_Property, 
+                   terminal.buffer.highlight_colour);
+      Set_Property(selection, Gtk.Text_Tag.Foreground_Set_Property, true);
+      Set_Property(selection, Gtk.Text_Tag.Foreground_Rgba_Property, 
+                   terminal.buffer.background_colour);
       history_tag := terminal.buffer.Create_Tag("history_text");
       Set_Property(history_tag, Editable_Property, false);
       Apply_Tag(terminal.buffer, history_tag,
@@ -2302,14 +2457,19 @@ package body Gtk.Terminal is
    procedure Set_Colour_Highlight (terminal: access Gtk_Terminal_Record'Class;
                                    highlight_colour :  Gdk.RGBA.Gdk_RGBA) is
      -- Set the highlight text colour to that specified.
-      -- use Gtk.Enums, Gdk.Color, Gdk.RGBA;
-      -- the_colour : Gdk.Color.Gdk_Color;
+      use Gtk.Text_Tag_Table, Gtk.Text_Tag, Glib.Properties;
+      selection : Gtk.Text_Tag.Gtk_Text_Tag;
    begin
       terminal.buffer.highlight_colour := highlight_colour;
-   --    Set_RGB(the_colour, Guint16(highlight_colour.Red), 
-         --      Guint16(highlight_colour.Green), Guint16(highlight_colour.Blue));
-      -- Modify_Text(widget => terminal.terminal, state => State_Focused,  -------------******************FIX: raises Gtk-CRITICAL **: 16:59:29.617: gtk_widget_modify_text: assertion 'state >= GTK_STATE_NORMAL && state <= GTK_STATE_INSENSITIVE' failed
-         --          color => the_colour);
+      selection := Lookup(Get_Tag_Table(terminal.buffer), "selection");
+      if selection /= null then
+         Set_Property(selection, Gtk.Text_Tag.Background_Set_Property, true);
+         Set_Property(selection, Gtk.Text_Tag.Background_Rgba_Property, 
+                      highlight_colour);
+         Set_Property(selection, Gtk.Text_Tag.Foreground_Set_Property, true);
+         Set_Property(selection, Gtk.Text_Tag.Foreground_Rgba_Property, 
+                      terminal.buffer.background_colour);
+      end if;
    end Set_Colour_Highlight;
    
    procedure Set_Font (for_terminal: access Gtk_Terminal_Record'Class;

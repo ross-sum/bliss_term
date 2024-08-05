@@ -59,6 +59,7 @@ with Gtk.Text_Buffer;         use Gtk.Text_Buffer;
 with Gtk.Text_Iter;
 with Gtk.Text_Tag_Table;
 with Gtk.Text_Mark;
+with Gtk.Clipboard;
 with Gdk.RGBA;                use Gdk.RGBA;
 with Pango.Font;              use Pango.Font;
 with Gtkada.Types;            use Gtkada.Types;
@@ -437,6 +438,7 @@ package Gtk.Terminal is
          x10_mouse : boolean := false;
          btn_event : boolean := false;
          ext_mode  : boolean := false;
+         in_select : boolean := false;
          row,
          col       : natural := 0;
       end record;
@@ -732,6 +734,22 @@ package Gtk.Terminal is
       -- Called whenever the mouse moves inside the terminal's Gtk.Text_View,
       -- but never if it leaves the window.  It also seems to only work when
       -- the button is pressed.
+      
+   function Button_Press_CB(for_terminal_view : access Gtk_Widget_Record'Class;
+                            event : Gdk.Event.Gdk_Event_Button) return boolean;
+      -- Called whenever the mouse is clicked inside the terminal's
+      -- Gtk.Text_View, but not if it leaves the window.  Event contains the
+      -- details on the mouse button that was pressed.
+      -- If this function returns True, then other signal handers will not be
+      -- called, otherwise the button press signal will be propagted further.
+      
+   function Button_Release_CB(for_terminal_view:access Gtk_Widget_Record'Class;
+                              event:Gdk.Event.Gdk_Event_Button) return boolean;
+      -- Called whenever the mouse is clicked inside the terminal's
+      -- Gtk.Text_View, but not if it leaves the window.  Event contains the
+      -- details on the mouse button that was pressed.
+      -- If this function returns True, then other signal handers will not be
+      -- called, otherwise the button press signal will be propagted further.
 --       
    -- procedure Show (the_terminal : access Gtk_Widget_Record'Class);
 --       -- Respond to being shown by ensuring the cursor is visible.
@@ -744,5 +762,18 @@ package Gtk.Terminal is
    procedure Write(fd    : in out Interfaces.C.int; Buffer : in string);
    procedure Read (fd    : in out Interfaces.C.int; 
                    buffer: in out string; Last: out natural);
-      
+                   
+   -- To Get text from the clipboard, there needs to be a callback, of type
+   -- Gtk_Clipboard_Text_Received_Func, which gets called at some random
+   -- point in time after the request to dump the clipboard text.
+   -- This text is transferred to the system's virtual terminal emulator
+   -- client via the Write function, unless the paste buffer is empty.
+   procedure Write_From(the_clipboard : not null access 
+                                      Gtk.Clipboard.Gtk_Clipboard_Record'Class;
+                        the_text : UTF8_string := "");
+   clipboard_fd : Interfaces.C.int;
+      -- because there is no obvious way to pass user data to this Write_From
+      -- procedure, we set up this clipboard_fd, wich is loaded just prior
+      -- to setting up the call-back request.
+     
 end Gtk.Terminal;
