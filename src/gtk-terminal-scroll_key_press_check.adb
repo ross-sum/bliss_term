@@ -25,6 +25,34 @@
 --  the capability of using languages like Blissymbolics, there  is  --
 --  nothing in it that specifically alligns it to Blissymbolics.     --
 --                                                                   --
+--  This particular Separate file is for the Scroll_Key_Press_Check  --
+--  That checks the keys pressed (prior to the Key_Pressed handler)  --
+--  for need to modify the key code or even to send it directly  to  --
+--  the system's terminal emulator client.                           --
+--                                                                   --
+--  For modifiers, used to work out whether Shift, Control, Alt are  --
+--  pressed,  and  in what combination the following  table,  taken  --
+--  from   https://invisible-island.net/xterm/ctlseqs/ctlseqs.html,  --
+--  is useful:                                                       --
+--       Code     Modifiers                                          --
+--       ---------+---------------------------                       --
+--          2     | Shift                                            --
+--          3     | Alt                                              --
+--          4     | Shift + Alt                                      --
+--          5     | Control                                          --
+--          6     | Shift + Control                                  --
+--          7     | Alt + Control                                    --
+--          8     | Shift + Alt + Control                            --
+--          9     | Meta                                             --
+--          10    | Meta + Shift                                     --
+--          11    | Meta + Alt                                       --
+--          12    | Meta + Alt + Shift                               --
+--          13    | Meta + Ctrl                                      --
+--          14    | Meta + Ctrl + Shift                              --
+--          15    | Meta + Ctrl + Alt                                --
+--          16    | Meta + Ctrl + Alt + Shift                        --
+--       ---------+---------------------------                       --
+--                                                                   --
 --  Version History:                                                 --
 --  $Log$
 --                                                                   --
@@ -52,8 +80,10 @@ return boolean is
    use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
    use Gdk.Key_Map;
    use Ada.Strings.UTF_Encoding.Wide_Strings;
-   esc_start : constant string(1..10) := (1 => Ada.Characters.Latin_1.Esc, 2 => '[', others => ' ');
-   app_esc_st: constant string(1..10) := (1 => Ada.Characters.Latin_1.Esc, 2 => 'O', others => ' ');
+   esc_start : constant string(1..10) := 
+                    (1 => Ada.Characters.Latin_1.Esc, 2 => '[', others => ' ');
+   app_esc_st: constant string(1..10) := 
+                    (1 => Ada.Characters.Latin_1.Esc, 2 => 'O', others => ' ');
    the_term      : Gtk_Text_View := Gtk_Text_View(for_terminal);
    the_terminal  : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
    interpret_key : constant boolean :=
