@@ -107,4 +107,13 @@ package body GDK.Key_Map is
       return Internal(Get_Object(for_keymap)) /= 0;
    end There_Are_BIDI_Layouts;
    
+   function The_Modifier_State(for_keymap : access Gdk_Keymap_Record) 
+   return natural is
+      -- Returns the current modifier state.
+      function Internal(K : System.Address) return guInt;
+      pragma Import (C, Internal, "gdk_keymap_get_modifier_state");
+   begin
+      return Natural(Internal(Get_Object(for_keymap)));
+   end The_Modifier_State;
+   
 end GDK.Key_Map;

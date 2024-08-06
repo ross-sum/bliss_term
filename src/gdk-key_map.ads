@@ -71,5 +71,12 @@ package GDK.Key_Map is
       -- Determines if keyboard layouts for both right-to-left and
       -- left-to-right languages are in use.
       -- Returns TRUE if there are layouts in both directions, FALSE otherwise.
+   function The_Modifier_State(for_keymap : access Gdk_Keymap_Record) 
+   return natural;
+      -- Returns the current modifier state.
+      -- Known modifier states are:
+      --    shift
+      --    meta
+      --    control
    
 end GDK.Key_Map;
