@@ -147,10 +147,9 @@ follows:
   moment it does not do that, rather it just displays plain text (with the 
   mark-up/mark-down displayed as plain text).
 * Code linting and automated testing is required.
-* Cut, copy and paste needs some more work.  Selection is not done well as it
-  is the native selection supplied by the Gtk.Text_Buffer/Gtk.Text_View, which
-  is not always obvious.  Paste does not yet work properly when in command
-  history mode (mostly a display issue).
+* Cut, copy and paste needs some more testing.
+* Mouse movements are yet to be implemented.  Basic code is in place, but needs
+  additions to complete the operaton and then needs testing.
 * The delete operation in the Process_Keys sub-procedure throws an error
   warning into the terminal that this terminal is called from.  The error
   warning is harmless, but is ugly.  There is another similar error that occurs
@@ -173,6 +172,7 @@ follows:
   clearing the screen in between those writes.  The first time it writes the
   file to the screen, it does it correctly, without inserting the spaces.  It
   is the second time that the space characters get inserted.
+  The issue may be the teminal type that it thinks Bliss_Term is.
 * Nano outputs spurious text at random points in time after moving around in
   the file being edited.  Sometimes it is obvious that Nano has lost what line
   number it is on and sometimes the cause is not obvious.  At either rate the
