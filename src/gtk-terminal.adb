@@ -798,35 +798,20 @@ package body Gtk.Terminal is
       then  -- Middle mouse button: start the paste process
          -- Ensure cursor is correctly located
          Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - middle button event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row =" & mouse_details.row'Wide_Image & ", mouse_details.col =" & mouse_details.col'Wide_Image & ", entering_command = " & the_terminal.buffer.entering_command'Wide_Image & ", Get_Overwrite = " & Get_Overwrite(the_terminal.terminal)'Wide_Image & ".");
-         -- if the_terminal.buffer.entering_command
-         -- then  -- correct location is the cursor location - restore it
-            end_iter := Home_Iterator(for_terminal => the_terminal);
-            if mouse_details.pre_sel_row > 1 then
-               Forward_Lines(end_iter, 
+            -- restore the cursor to the correct location
+         end_iter := Home_Iterator(for_terminal => the_terminal);
+         if mouse_details.pre_sel_row > 1 then
+            Forward_Lines(end_iter, 
                              Gint(mouse_details.pre_sel_row - 1), result);
-            end if;
-            if mouse_details.pre_sel_col > 1 then
-               for col in 2 .. mouse_details.pre_sel_col loop
-                  if not Ends_Line(end_iter) then
-                     Forward_Char(end_iter, result);
-                  end if;
-               end loop;
-            end if;
-            Place_Cursor(buffer, where => end_iter);
-         -- else  -- correct location is where the mouse pointer is
-            -- end_iter := Home_Iterator(for_terminal => the_terminal);
-            -- if mouse_details.row > 1 then
-               -- Forward_Lines(end_iter, Gint(mouse_details.row - 1), result);
-            -- end if;
-            -- if mouse_details.col > 1 then
-               -- for col in 2 .. mouse_details.col loop
-                  -- if not Ends_Line(end_iter) then
-                     -- Forward_Char(end_iter, result);
-                  -- end if;
-               -- end loop;
-            -- end if;
-            -- Place_Cursor(buffer, where => end_iter);
-         -- end if;
+         end if;
+         if mouse_details.pre_sel_col > 1 then
+            for col in 2 .. mouse_details.pre_sel_col loop
+               if not Ends_Line(end_iter) then
+                  Forward_Char(end_iter, result);
+               end if;
+            end loop;
+         end if;
+         Place_Cursor(buffer, where => end_iter);
          Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - middle button Cursor is at (row" & Get_Line(end_iter)'Wide_Image & ", col" & Get_Line_Offset(end_iter)'Wide_Image & "), bracketed_paste_mode =" & the_terminal.buffer.bracketed_paste_mode'Wide_Image & ", the_terminal.buffer.entering_command=" & the_terminal.buffer.entering_command'Wide_Image & ", the_terminal.buffer.use_buffer_editing=" & the_terminal.buffer.use_buffer_editing'Wide_Image & ".");
          -- If (and only if) in insert mode, paste into the buffer
          if the_terminal.buffer.use_buffer_editing and
@@ -885,20 +870,6 @@ package body Gtk.Terminal is
          end if;
          -- Reset the note that text is being selected
          mouse_details.in_select := false;
-      --    -- And restore the cursor location
-         -- end_iter := Home_Iterator(for_terminal => the_terminal);
-         -- if mouse_details.pre_sel_row > 1 then
-            -- Forward_Lines(end_iter, 
-               --               Gint(mouse_details.pre_sel_row - 1), result);
-         -- end if;
-         -- if mouse_details.pre_sel_col > 1 then
-            -- for col in 2 .. mouse_details.pre_sel_col loop
-               -- if not Ends_Line(end_iter) then
-                  -- Forward_Char(end_iter, result);
-               -- end if;
-            -- end loop;
-         -- end if;
-         -- Place_Cursor(buffer, where => end_iter);
       end if;
       return false;  -- Allow for further processing of this event
    end Button_Release_CB;
@@ -2690,4 +2661,5 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+
 
