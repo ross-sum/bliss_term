@@ -132,12 +132,25 @@ package Gtk.Terminal is
    ----------------------
    -- Public Callbacks --
    ----------------------
+    
+   type CSS_Load_Callback is access procedure
+                             (the_view : in out Gtk.Text_View.gtk_text_view);
+   procedure Set_CSS_View(for_terminal : access Gtk_Terminal_Record'Class;
+                          to : in CSS_Load_Callback);
+       -- Load a handle for the text view aspect of the terminal.  This
+       -- procedure is required for setting up CSS for the terminal.  The
+       -- CSS_Load_Callback is the procedure that loads the CSS for the
+       -- terminal's text view aspect.
 
    type Spawn_Title_Callback is access procedure
-        (terminal : Gtk_Terminal; title : UTF8_String);
+        (terminal : Gtk_Terminal; title : UTF8_String := "";
+                                  icon_name: UTF8_String := "");
       -- This call-back procedure is to display the title in the titlebar.
       -- The main application should provide such a procedure that displays
       -- the title.
+      -- The icon_name is the name of the applicaion when minimised.  If the
+      -- default "" is provided, then that value (either the 'title' or the
+      -- 'icon_name') should not be set, but that which is provided should.
    type Spawn_Closed_Callback is access procedure (terminal : Gtk_Terminal);
       -- This call-back procedure is to shut down the virtual terminal (or
       -- potentially the application).
@@ -308,6 +321,10 @@ package Gtk.Terminal is
     return UTF8_String;
        -- Return the title as the operating system knows it
     
+   function Get_Icon_Name(for_terminal : access Gtk_Terminal_Record'Class)
+    return UTF8_String;
+       -- Return the icon name (aka icon title) as terminal emulator knows it
+    
    function Get_Path(for_terminal : access Gtk_Terminal_Record'Class)
     return UTF8_String;
        -- Return the current file as the operating system knows it, essentially
@@ -330,7 +347,6 @@ package Gtk.Terminal is
        -- terminal's understanding of the number of lines it is displaying
        -- (which, if resized by mouse dragging rather than by command, may be
        -- incorrect).
-    
     
    ----------------------------------------------------------------------------
    private
@@ -435,12 +451,14 @@ package Gtk.Terminal is
           modify_other_keys    => disabled);
    
    type mouse_configuration_parameters is record
-         x10_mouse : boolean := false;
-         btn_event : boolean := false;
-         ext_mode  : boolean := false;
-         in_select : boolean := false;
+         x10_mouse   : boolean := false;
+         btn_event   : boolean := false;
+         ext_mode    : boolean := false;
+         in_select   : boolean := false;
          row,
-         col       : natural := 0;
+         col         : natural := 0;
+         pre_sel_row,
+         pre_sel_col : natural := 0;
       end record;
    
    -- Escape (i.e. command or formatting) strings:
@@ -699,6 +717,8 @@ package Gtk.Terminal is
          id               : natural := 0;
          title            : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
          saved_title      : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
+         icon_name        : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
+         saved_icon_name  : Gtkada.Types.Chars_Ptr := Gtkada.Types.Null_Ptr;
             -- used in window manipulation (XTWINOPS) number 22 and 23
          scrollback_size  : natural := 0;
          current_font     : Pango.Font.Pango_Font_Description := Pango.Font.
@@ -768,12 +788,13 @@ package Gtk.Terminal is
    -- point in time after the request to dump the clipboard text.
    -- This text is transferred to the system's virtual terminal emulator
    -- client via the Write function, unless the paste buffer is empty.
-   procedure Write_From(the_clipboard : not null access 
-                                      Gtk.Clipboard.Gtk_Clipboard_Record'Class;
+   procedure Write_From(the_clipboard : not null 
+                               access Gtk.Clipboard.Gtk_Clipboard_Record'Class;
                         the_text : UTF8_string := "");
-   clipboard_fd : Interfaces.C.int;
+   clipboard_id : Gtk_Terminal_Buffer;
       -- because there is no obvious way to pass user data to this Write_From
-      -- procedure, we set up this clipboard_fd, wich is loaded just prior
-      -- to setting up the call-back request.
+      -- procedure, we set up this clipboard_id, wich is loaded just prior
+      -- to setting up the call-back request.  From here the master_fd and the
+      -- bracketed_past_mode can be determined.
      
 end Gtk.Terminal;

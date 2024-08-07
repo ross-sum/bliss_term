@@ -14,6 +14,8 @@ textview* text {
   background-color: black; }
   .view:selected, iconview:selected, .view:selected:focus, iconview:selected:focus,
   .view text:selected,
+  .view text selection {  background-color: yellow;  color: black;}
+  text selection {  background-color: yellow;  color: black;}
   iconview text:selected,
   textview text:selected,
   .view text:selected:focus,

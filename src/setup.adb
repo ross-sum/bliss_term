@@ -130,7 +130,8 @@ package body Setup is
    end Adjust_Configuration_Path;
 
    procedure Title_Changed(terminal : Gtk.Terminal.Gtk_Terminal; 
-                           title    : UTF8_String) is
+                           title    : UTF8_String := "";
+                           icon_name: UTF8_String := "") is
       -- Called whenever the title is changed for the terminal by the
       -- underlying terminal driver (usually to set it to the full path name).
       use Gtk.Window;
@@ -141,7 +142,12 @@ package body Setup is
                          Get_Object(Gtkada_Builder(the_builder),"bliss_term"));
       Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Got main window.");
       if main_window /= null then
-         Gtk.Window.Set_Title(main_window, title);
+         if title'Length > 0 then
+            Gtk.Window.Set_Title(main_window, title);
+         end if;
+         if icon_name'Length > 0 then
+            Gtk.Window.Set_Wmclass(main_window, icon_name, icon_name);
+         end if;
       end if;
       Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Finish.");
    end Title_Changed;
@@ -645,6 +651,8 @@ package body Setup is
    begin
       Error_Log.Debug_Data(at_level => 5, 
                            with_details => "Load_Setup: Start");
+      -- Terminal CSS (may be overwritten by the below set-up)
+      Set_CSS_View(for_terminal=>the_terminal, to=>CSS_Management.Load'access);
       -- Terminal font (needs to be dnoe before setting terminal size)
       Error_Log.Debug_Data(at_level => 9, with_details => "Load_Setup: setting terminal font to " & Value(Setup.The_Font_Name) & "...");
       Gtk.Terminal.Set_Font(for_terminal => the_terminal,

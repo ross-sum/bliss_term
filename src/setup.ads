@@ -51,7 +51,8 @@ package Setup is
                         is_preconfigured   : in boolean := false);
       -- Load the set-up configuration to the specified terminal
    procedure Title_Changed(terminal : Gtk.Terminal.Gtk_Terminal; 
-                           title    : UTF8_String);
+                           title    : UTF8_String := "";
+                           icon_name: UTF8_String := "");
       -- Called whenever the title is changed for the terminal by the
       -- underlying terminal driver (usually to set it to the full path name).
    type editing_method is (using_textview, using_emulator);

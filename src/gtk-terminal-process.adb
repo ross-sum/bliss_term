@@ -180,7 +180,7 @@ separate (Gtk.Terminal)
                   case the_sequence(chr_pos) is
                      when 'c' =>  -- Send device attributes (Secondary DA)
                         Write(fd => on_buffer.master_fd, 
-                              Buffer => Esc_str & "[>1;10;1c");
+                              Buffer => Esc_str & "[>1;10;1c");  -- Try 1;10;0, 2;10;1, 2;10;0, 0;10;1, 0;10;0, maybe 19, 24, 41, 64, 65
                      when 'm' => null;  -- key modifier options XTMODKEYS
                         case param(1) is
                            when 0 =>   -- modifyKeyboard
@@ -221,6 +221,11 @@ separate (Gtk.Terminal)
                                          modify_cursor_keys := is_private;
                                  when others => null;  -- ignore
                               end case;
+                              Log_Data(at_level => 9, 
+                                 with_details=>"Process_Escape: Escape '"&
+                                               Ada.Characters.Conversions.
+                                                  To_Wide_String(the_sequence)&
+                                               "' not yet fully implemented.");
                            when 2 => null;  -- modifyFunctionKeys
                               case param(2) is
                                  when -1 =>   -- use shift + ctrl modifiers
@@ -240,6 +245,11 @@ separate (Gtk.Terminal)
                                        modify_cursor_keys := is_private;
                                  when others => null;  -- ignore
                               end case;
+                              Log_Data(at_level => 9, 
+                                 with_details=>"Process_Escape: Escape '"&
+                                               Ada.Characters.Conversions.
+                                                  To_Wide_String(the_sequence)&
+                                               "' not yet fully implemented.");
                            when 4 => null;  -- modifyOtherKeys
                               case param(2) is
                                  when 0 =>   -- disable the feature
@@ -255,11 +265,6 @@ separate (Gtk.Terminal)
                               end case;
                            when others => null;  -- ignore
                         end case;
-                        Log_Data(at_level => 9, 
-                                 with_details=>"Process_Escape: Escape '"&
-                                               Ada.Characters.Conversions.
-                                                  To_Wide_String(the_sequence)&
-                                               "' not yet fully implemented.");
                      when 'n' => null;  -- Disable key modifier options
                         Log_Data(at_level => 9, 
                                  with_details=>"Process_Escape: Escape '"&
@@ -830,25 +835,34 @@ separate (Gtk.Terminal)
                                                       buf_x, buf_y);
                            Delete(the_buf, dest_iter, cursor_iter);
                         when 2 =>   -- Clear the screen
-                           res:= Get_Iter_At_Position(on_buffer.parent,
-                                                      dest_iter'access, null,
-                                                      buf_x, buf_y);
-                           Get_End_Iter(the_buf, cursor_iter);
-                           Delete(the_buf, dest_iter, cursor_iter);
-                           -- Now scroll the cursor to the top
-                           Get_Iter_At_Mark(the_buf, cursor_iter,
-                                            Get_Insert(the_buf));
-                           Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - cursor pos (i.e. line-1) =" & Get_Line(cursor_iter)'Wide_Image & ", Scrolling to ensure the screen is clear.");
-                            -- Put the cursor position at the top of the screen
-                           declare  -- NO METHOD SEEMS TO WORK IF SCREEN NOT COMPLETELY CLEAR
+                           declare
                               use Gtk.Text_Mark;
                               end_mark : Gtk.Text_Mark.Gtk_Text_Mark;
+                              the_term : Gtk_Terminal := 
+                                    Gtk_Terminal(Get_Parent(on_buffer.parent));
                            begin
+                              if on_buffer.alternative_screen_buffer
+                              then  -- the top left-hand corner is the top
+                                 Get_Start_Iter(the_buf, dest_iter);
+                              else  -- the top left-hand corner is anywhere
+                                 dest_iter := 
+                                         Home_Iterator(for_terminal=>the_term);
+                              end if;
+                              Get_End_Iter(the_buf, cursor_iter);
+                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - deleting from (i.e. line-1) " & Get_Line(dest_iter)'Wide_Image & " to (i.e. line-1) " & Get_Line(cursor_iter)'Wide_Image & ".");
+                              Delete(the_buf, dest_iter, cursor_iter);
+                           -- Now scroll the cursor to the top
+                              Get_Iter_At_Mark(the_buf, cursor_iter,
+                                            Get_Insert(the_buf));
+                              Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - cursor pos (i.e. line-1) =" & Get_Line(cursor_iter)'Wide_Image & ", Scrolling to ensure the screen is clear.");
+                            -- Put the cursor position at the top of the screen
+                              -- NO METHOD SEEMS TO WORK IF SCREEN NOT COMPLETELY CLEAR
                               Set_Line_Offset(cursor_iter, 0);  -- move to start of line
                               -- res := Scroll_To_Iter(on_buffer.parent, cursor_iter, 0.0, true, 0.0, 0.0);
                               Gtk.Text_Mark.Gtk_New(end_mark, "End", false);
                               Add_Mark(the_buf, end_mark, cursor_iter);
-                              Scroll_To_Mark(on_buffer.parent, end_mark, 0.0, true, 0.0, 0.0);
+                              Scroll_To_Mark(on_buffer.parent, end_mark, 0.0, 
+                                             true, 0.0, 0.0);
                               Delete_Mark(the_buf, end_mark);
                            end;
                         when 3 =>   -- Clear the entire buffer
@@ -1192,17 +1206,32 @@ separate (Gtk.Terminal)
                      on_buffer.saved_cursor_pos:= Get_Mark(on_buffer,"insert");
                   when 't' => null;  -- Window manipulation (XTWINOPS)
                      -- format is <Esc>[nn;a;0t (e.g. nn=22 or nn=23)
+                     -- nn=20;0 : Report terminal's icon name (aka icon title)
                      -- nn=21;0 : Report terminal's title
                      -- nn=22;0 : Save xterm icon and window title on stack.
                      -- nn=23;0 : Restore xterm icon + window title from stack.
                      -- a=0     : both xterm icon and window title
-                     -- a=1     : xterm icon title
+                     -- a=1     : xterm icon title/xterm icon name
                      -- a=2     : xterm window title
                      declare
                         the_term : Gtk_Terminal := 
                                     Gtk_Terminal(Get_Parent(on_buffer.parent));
                      begin
-                        if param(1) = 21 and (param(2) = 0 or param(2) = 2) and
+                        if param(1) = 20 and param(2) = 0 and param(3) = 0
+                        then
+                           if the_term.icon_name /= Gtkada.Types.Null_Ptr
+                           then
+                              Write(fd => on_buffer.master_fd, 
+                                    Buffer=> Esc_str& "]l" & 
+                                             Value(the_term.icon_name) &
+                                             Esc_str & "\");
+                           else
+                              Write(fd => on_buffer.master_fd, 
+                                    Buffer=> Esc_str& "]l" & 
+                                             Get_Icon_Name(the_term) &
+                                             Esc_str & "\");
+                           end if;
+                        elsif param(1) = 21 and (param(2) = 0 or param(2) = 2) and
                            param(3) = 0
                         then
                            Write(fd => on_buffer.master_fd, 
@@ -1214,12 +1243,32 @@ separate (Gtk.Terminal)
                            Free(the_term.saved_title);
                            the_term.saved_title := 
                                              New_String(Value(the_term.title));
+                        elsif param(1) = 22 and param(2) = 1 and  param(3) = 0
+                        then
+                           Free(the_term.saved_icon_name);
+                           if the_term.icon_name /= Gtkada.Types.Null_Ptr
+                           then
+                              the_term.saved_icon_name:= 
+                                         New_String(Value(the_term.icon_name));
+                           else
+                              the_term.saved_icon_name:= Gtkada.Types.Null_Ptr;
+                           end if;
                         elsif param(1) = 23 and (param(2) = 0 or param(2) = 2)
                               and param(3) = 0
                         then
                            Free(the_term.title);
                            the_term.title :=
                                        New_String(Value(the_term.saved_title));
+                        elsif param(1) = 23 and param(2) = 1 and param(3) = 0
+                        then
+                           Free(the_term.icon_name);
+                           if the_term.saved_icon_name /= Gtkada.Types.Null_Ptr
+                           then
+                              the_term.icon_name :=
+                                   New_String(Value(the_term.saved_icon_name));
+                           else
+                              the_term.icon_name := Gtkada.Types.Null_Ptr;
+                           end if;
                         else
                            Log_Data(at_level => 9, 
                               with_details=>"Process_Escape: Escape XTWINOPS '"&
@@ -1657,25 +1706,29 @@ begin  -- Process
       if not for_buffer.just_wrapped
       then  -- do a new line
          if for_buffer.alternative_screen_buffer
-         then  -- in Alternative buffer, do  the LF at the end of current line
+         then  -- in Alternative buffer, do LF at the end of current line
+            -- We want to go to the end of the current line because the
+            -- system's virtual terminal client sends a CR through first.
             if for_buffer.scroll_region_bottom = 0 or else
                (for_buffer.scroll_region_bottom > 0 and then
                 natural(Get_Line_Count(the_buf)) <=
                                             (for_buffer.scroll_region_bottom - 
                                              for_buffer.scroll_region_top + 1))
-            then  -- but only if within range of the screen
+            then  -- but only if within the scrolling region
                Get_Iter_At_Mark(the_buf, end_iter, Get_Insert(the_buf));
-               if not Ends_Line(end_iter)
-               then -- (don't want to go to next line)
+               if not Ends_Line(end_iter)  -- (don't want to go to next line)
+               then  -- do want to go to the end of the current line
                   Forward_To_Line_End(end_iter, res);
                end if;
                res := true;
-            else 
-               res := false;
+            else  -- within range, don't go to line end, just current cursor
+               res := true; --false;
+               Get_Iter_At_Mark(the_buf, end_iter, Get_Insert(the_buf));
             end if;
-         else  -- otherwise as we only place cursor at the line end if not in
-            res := true;  --  alternative buffer, do nothing here
+         else  -- otherwise not alternative buffer, always do LF
+            res := true;  --  end_iter is alread set at buffer end
          end if;
+         Error_Log.Debug_Data(at_level => 9, with_details => "Process : LF - res = " & res'Wide_Image & " (if TRUE, calling the Insert internal operation), alternative_screen_buffer = " & for_buffer.alternative_screen_buffer'Wide_Image & ", Get_Line_Count =" & Get_Line_Count(the_buf)'Wide_Image & ", scroll_region_bottom =" & for_buffer.scroll_region_bottom'Wide_Image & ", scroll_region_top =" & for_buffer.scroll_region_top'Wide_Image & ".");
          if res  then  -- only do if allowed
             Place_Cursor(the_buf, where => end_iter);
             Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);

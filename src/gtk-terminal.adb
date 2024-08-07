@@ -659,12 +659,22 @@ package body Gtk.Terminal is
       Obj : constant Gtk_Terminal := 
                          Gtk_Terminal (Unchecked_To_Object (Params, 0));
    begin
-      -- See https://stackoverflow.com/questions/63834897/is-it-possible-to-get-cursor-coordinates-in-textview-gtk for getting mouse pointer position.
-      -- use Gtk.Text_View.Get_Iter_At_Position here to do local processing 1st?
       H (Obj);
       exception 
          when E : others => Process_Exception (E);
    end Marsh_Gtk_Terminal_Clicked_Void;
+   
+   -- type CSS_Load_Callback is access procedure
+   --                          (the_view : in out Gtk.Text_View.gtk_text_view);
+   procedure Set_CSS_View(for_terminal : access Gtk_Terminal_Record'Class;
+                          to : in CSS_Load_Callback) is
+       -- Load a handle for the text view aspect of the terminal.  This
+       -- procedure is required for setting up CSS for the terminal.  The
+       -- CSS_Load_Callback is the procedure that loads the CSS for the
+       -- terminal's text view aspect.
+   begin
+      to(for_terminal.terminal);
+   end Set_CSS_View;
 
    function Scroll_Key_Press_Check(for_terminal : access Gtk_Widget_Record'Class;
                                    for_event : Gdk.Event.Gdk_Event_Key)
@@ -707,7 +717,6 @@ package body Gtk.Terminal is
       -- configuration_parameters for this terminal's buffer.
       use Gdk.Rectangle, Gdk.Types;
       the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
-      buffer       : Gtk.Text_Buffer.Gtk_Text_Buffer;
       the_rect     : Gdk.Rectangle.Gdk_Rectangle;
       screen_length: natural renames the_terminal.rows;
       screen_width : natural renames the_terminal.cols;
@@ -722,13 +731,6 @@ package body Gtk.Terminal is
       yadj : constant float := 0.97;
       xofs : constant float := -0.001;
       yofs : constant float := -0.004;
-      -- Save off the previous row and column of mouse location in case they
-      -- are needed later
-      last_x : constant natural := mouse_details.col;
-      last_y : constant natural := mouse_details.row;
-      start_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
-      end_iter     : Gtk.Text_Iter.Gtk_Text_Iter;
-      result       : boolean;
    begin
       -- Get our boundary for scaling purposes
       Get_Visible_Rect(Gtk_Text_View(for_terminal_view), the_rect);
@@ -752,26 +754,6 @@ package body Gtk.Terminal is
       -- Note that the row and column for mouse are 1 based, so add 1 to them
       mouse_details.row := natural((float(event.Y)+yofs) * y_scale_factor) + 1;
       mouse_details.col := natural((float(event.X)+xofs) * x_scale_factor) + 1;
-      -- Check for text being selected and extend the selection if so
-      if the_terminal.buffer.alternative_screen_buffer
-      then  -- using the alternative buffer for display
-         buffer := the_terminal.buffer.alt_buffer;
-      else  -- using the main buffer for display
-         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(the_terminal.buffer);
-      end if;
-      if mouse_details.in_select and then
-         (last_x /= mouse_details.col or last_y /= mouse_details.row)
-      then  -- selecting text and a cursor position has changed since last time
-         Get_Selection_Bounds(buffer, start_iter, end_iter, result);
-         if result then
-            Apply_Tag_By_Name(buffer, "selection", start_iter, end_iter);
-         end if;
-      elsif not Selection_Exists(buffer)
-      then  -- Clear out the selection highlight
-         Get_Start_Iter(buffer, start_iter);
-         Get_End_Iter(buffer, end_iter);
-         Remove_Tag_By_Name(buffer, "selection", start_iter, end_iter);
-      end if;
       -- Error_Log.Debug_Data(at_level => 9, with_details => "Motion_Notify_CB: the_rect:(H=" & the_rect.Height'Wide_Image & ",W=" & the_rect.Width'Wide_Image & ", X=" & the_rect.X'Wide_Image & ",Y=" & the_rect.X'Wide_Image & "), scale_factor (x=" & x_scale_factor'Wide_Image & ",y=" & y_scale_factor'Wide_Image & "), event: (X=" & event.X'Wide_Image & ",Y=" & event.Y'Wide_Image & ") and mouse_details: (col=" & mouse_details.col'Wide_Image & ", row=" & mouse_details.row'Wide_Image & ").");
       return false;  -- Allow for further processing of this event
    end Motion_Notify_CB;
@@ -785,6 +767,7 @@ package body Gtk.Terminal is
       -- If this function returns True, then other signal handers will not be
       -- called, otherwise the button press signal will be propagted further.
       use Gdk.Event, Gtk.Clipboard, Gtk.Text_Iter;
+      Esc_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.Esc);
       the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
       mouse_details: mouse_configuration_parameters renames 
                                               the_terminal.buffer.mouse_config;
@@ -802,58 +785,65 @@ package body Gtk.Terminal is
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(the_terminal.buffer);
       end if;
       -- Work out which button was pressed
-      if event.the_Type = Button_Press
-      then  -- Button 1: start the selection highlight process
-         -- First, unhighlight any selected text
-         Get_Start_Iter(buffer, start_iter);
-         Get_End_Iter(buffer, end_iter);
-         Remove_Tag_By_Name(buffer, "selection", start_iter, end_iter);
-         -- Now start the highlighting
-         Get_Iter_At_Mark(buffer, start_iter, Get_Insert(buffer));
-         end_iter := start_iter;
-         Apply_Tag_By_Name(buffer, "selection", start_iter, end_iter);
-         -- And signal that we are selecting text
+      if event.Button = 1  -- left mouse button
+      then  -- Left mouse button: start the selection highlight process
+         -- First, save away the cursor position before selecting
+         -- (Note: 1-based row and column)
+         Get_Iter_At_Mark(buffer, end_iter, Get_Insert(buffer));
+         mouse_details.pre_sel_row := natural(Get_Line(end_iter)) + 1;
+         mouse_details.pre_sel_col := natural(Get_Line_Offset(end_iter)) + 1;
+         -- Then signal that we are selecting text
          mouse_details.in_select := true;
-      elsif event.the_Type = Gdk_3button_Press
+      elsif event.Button = 2  -- middle mouse button
       then  -- Middle mouse button: start the paste process
          -- Ensure cursor is correctly located
-         if the_terminal.buffer.entering_command
-         then  -- correct location depends on Insert/Overwrite mode
-            if Get_Overwrite(the_terminal.terminal)
-            then  -- correct location is cursor location
-               null;  -- do nothing
-            else  -- correct location is at the end
-               Get_End_Iter(buffer, end_iter);
-               Place_Cursor(buffer, where => end_iter);
-            end if;
-         else  -- correct location is where the mouse pointer is
+         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - middle button event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row =" & mouse_details.row'Wide_Image & ", mouse_details.col =" & mouse_details.col'Wide_Image & ", entering_command = " & the_terminal.buffer.entering_command'Wide_Image & ", Get_Overwrite = " & Get_Overwrite(the_terminal.terminal)'Wide_Image & ".");
+         -- if the_terminal.buffer.entering_command
+         -- then  -- correct location is the cursor location - restore it
             end_iter := Home_Iterator(for_terminal => the_terminal);
-            if mouse_details.row > 1 then
-               Forward_Lines(end_iter, Gint(mouse_details.row - 1), result);
+            if mouse_details.pre_sel_row > 1 then
+               Forward_Lines(end_iter, 
+                             Gint(mouse_details.pre_sel_row - 1), result);
             end if;
-            if mouse_details.col > 1 then
-               for col in 2 .. mouse_details.col - 1 loop
+            if mouse_details.pre_sel_col > 1 then
+               for col in 2 .. mouse_details.pre_sel_col loop
                   if not Ends_Line(end_iter) then
                      Forward_Char(end_iter, result);
                   end if;
                end loop;
             end if;
             Place_Cursor(buffer, where => end_iter);
-         end if;
+         -- else  -- correct location is where the mouse pointer is
+            -- end_iter := Home_Iterator(for_terminal => the_terminal);
+            -- if mouse_details.row > 1 then
+               -- Forward_Lines(end_iter, Gint(mouse_details.row - 1), result);
+            -- end if;
+            -- if mouse_details.col > 1 then
+               -- for col in 2 .. mouse_details.col loop
+                  -- if not Ends_Line(end_iter) then
+                     -- Forward_Char(end_iter, result);
+                  -- end if;
+               -- end loop;
+            -- end if;
+            -- Place_Cursor(buffer, where => end_iter);
+         -- end if;
+         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - middle button Cursor is at (row" & Get_Line(end_iter)'Wide_Image & ", col" & Get_Line_Offset(end_iter)'Wide_Image & "), bracketed_paste_mode =" & the_terminal.buffer.bracketed_paste_mode'Wide_Image & ", the_terminal.buffer.entering_command=" & the_terminal.buffer.entering_command'Wide_Image & ", the_terminal.buffer.use_buffer_editing=" & the_terminal.buffer.use_buffer_editing'Wide_Image & ".");
          -- If (and only if) in insert mode, paste into the buffer
-         if not Get_Overwrite(the_terminal.terminal)
+         if the_terminal.buffer.use_buffer_editing and
+            the_terminal.buffer.entering_command and
+            not Get_Overwrite(the_terminal.terminal)
          then  -- Paste its contents to the buffer for further processing
             Paste_Clipboard(buffer, the_clipboard);
          else  -- Send contents directly to system's terminal emulator client
             -- Set up the file descriptor for the call (and hope there is no
             -- intervening click in another terminal emulator)
-            clipboard_fd := the_terminal.master_fd;
+            clipboard_id := the_terminal.buffer;
             -- And set up the call-back request
             Gtk.Clipboard.Request_Text(clipboard => the_clipboard, 
                                        callback => Write_From'Access);
          end if;
          return true;
-      else
+      else  -- Button probably = 3 - right mouse button
          null;
       end if;
       return false;  -- Allow for further processing of this event
@@ -867,14 +857,48 @@ package body Gtk.Terminal is
       -- details on the mouse button that was pressed.
       -- If this function returns True, then other signal handers will not be
       -- called, otherwise the button press signal will be propagted further.
+      use Gdk.Event, Gtk.Clipboard, Gtk.Text_Iter;
       the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
       mouse_details: mouse_configuration_parameters renames 
                                               the_terminal.buffer.mouse_config;
+      the_clipboard: Gtk.Clipboard.Gtk_Clipboard := 
+                   Gtk.Clipboard.Get_Default(Display=>Gdk.Display.Get_Default);
+      buffer       : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      start_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
+      end_iter     : Gtk.Text_Iter.Gtk_Text_Iter;
+      result       : boolean;
    begin
-      if event.the_Type = Button_Release and mouse_details.in_select
-      then  -- Button 1: finish the selection highlight process
-         null;
+      if event.Button = 1 and mouse_details.in_select
+      then  -- Button 1 release: finish the selection highlight process
+         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row=" & mouse_details.row'Wide_Image & ", mouse_details.col=" & mouse_details.col'Wide_Image & ", mouse_details.in_select=" & mouse_details.in_select'Wide_Image & ".");
+         if the_terminal.buffer.alternative_screen_buffer
+         then  -- using the alternative buffer for display
+            buffer := the_terminal.buffer.alt_buffer;
+         else  -- using the main buffer for display
+            buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(the_terminal.buffer);
+         end if;
+         -- Get the selection and load into the clipboard
+         Get_Selection_Bounds(buffer, start_iter, end_iter, result);
+         if result then  -- some text was selected to paste
+            Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: Loading clipboard with '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, start_iter, end_iter)) & "'.");
+            Set_Text(the_clipboard, Get_Text(buffer, start_iter, end_iter));
+         end if;
+         -- Reset the note that text is being selected
          mouse_details.in_select := false;
+      --    -- And restore the cursor location
+         -- end_iter := Home_Iterator(for_terminal => the_terminal);
+         -- if mouse_details.pre_sel_row > 1 then
+            -- Forward_Lines(end_iter, 
+               --               Gint(mouse_details.pre_sel_row - 1), result);
+         -- end if;
+         -- if mouse_details.pre_sel_col > 1 then
+            -- for col in 2 .. mouse_details.pre_sel_col loop
+               -- if not Ends_Line(end_iter) then
+                  -- Forward_Char(end_iter, result);
+               -- end if;
+            -- end loop;
+         -- end if;
+         -- Place_Cursor(buffer, where => end_iter);
       end if;
       return false;  -- Allow for further processing of this event
    end Button_Release_CB;
@@ -882,9 +906,16 @@ package body Gtk.Terminal is
    procedure Write_From(the_clipboard : not null 
                                access Gtk.Clipboard.Gtk_Clipboard_Record'Class;
                         the_text : UTF8_string := "") is
+      Esc_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.Esc);
    begin
       if the_text'Length > 0 then
-         Write(clipboard_fd, buffer => the_text);
+         if clipboard_id.bracketed_paste_mode
+         then
+            Write(clipboard_id.master_fd,
+                  buffer => Esc_Str & "[200~" & the_text & Esc_Str & "[201~");
+         else
+            Write(clipboard_id.master_fd, buffer => the_text);
+         end if;
       end if;
    end Write_From;
      
@@ -1202,14 +1233,15 @@ package body Gtk.Terminal is
                                    the_text(Index(the_text, LF_str)-
                                         the_text'First+num_lf..the_text'Last));
          else  -- CR/LF must be at the start
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & " - going forward 1 line.");
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & " - going forward " & num_lf'Wide_Image & " line.");
             Forward_Lines(at_iter, Glib.Gint(num_lf), result);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : attempted to move forward" & num_lf'Wide_Image & " line with result of " & result'Wide_Image & ", now at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
             if result
             then  -- Successfully gone one line forward
                Place_Cursor(buffer, where => at_iter);
             end if;
             if the_text'Length > 1 then
-               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1abd Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting the text '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting the text '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                the_text(the_text'First+num_lf..the_text'Last));
             end if;
@@ -1327,8 +1359,6 @@ package body Gtk.Terminal is
             if Natural(Get_Line(last_iter))>= for_buffer.scroll_region_bottom-1
                and then Compare(last_iter, end_iter) <= 0
             then  -- lines go up to the bottom of the scrolled region
-               -- Protect the starting_from iter
-               insert_mk := Create_Mark(buffer, "InsertPt", starting_from);
                -- Now, if the starting_from is at the bottom of the scrolled
                -- region, then we scroll with the top line disappearing.
                --  Otherwise, we push the last line out.
@@ -1352,12 +1382,18 @@ package body Gtk.Terminal is
                   end if;
                   -- and tip it over the end (so we delete the whole line)
                   Forward_Char(end_iter, result);
+                  -- compensate by moving starting_from iter down one
+                  Forward_Line(starting_from, result);
+                  -- Protect the starting_from iter
+                  insert_mk := Create_Mark(buffer, "InsertPt", starting_from);
                else  -- scroll by removing the bottom line
                   end_iter  := last_iter;
                   home_iter := last_iter;
                   Set_Line_Index(home_iter, 0);
                   -- and tip it over the start (so we delete the whole line)
                   Backward_Char(home_iter, result);
+                  -- Protect the starting_from iter
+                  insert_mk := Create_Mark(buffer, "InsertPt", starting_from);
                end if;
                -- Delete the line at the top of the scrolled region
                Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert : home_iter line number in buffer =" & Get_Line(home_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, home_iter, end_iter)) & "'.");
@@ -2154,7 +2190,6 @@ package body Gtk.Terminal is
       res         : Interfaces.C.int;
       start_iter  : Gtk.Text_Iter.Gtk_Text_Iter;
       end_iter    : Gtk.Text_Iter.Gtk_Text_Iter;
-      selection   : Gtk.Text_Tag.Gtk_Text_Tag;
       history_tag : Gtk.Text_Tag.Gtk_Text_Tag;
       hypertext   : Gtk.Text_Tag.Gtk_Text_Tag;
       end_mark    : Gtk.Text_Mark.Gtk_Text_Mark;
@@ -2230,13 +2265,6 @@ package body Gtk.Terminal is
                        terminal.buffer.line_number'Image);
       Switch_The_Light(terminal.buffer, 9, false, 
                        terminal.buffer.buf_line_num'Image);
-      selection := terminal.buffer.Create_Tag("selection");
-      Set_Property(selection, Gtk.Text_Tag.Background_Set_Property, true);
-      Set_Property(selection, Gtk.Text_Tag.Background_Rgba_Property, 
-                   terminal.buffer.highlight_colour);
-      Set_Property(selection, Gtk.Text_Tag.Foreground_Set_Property, true);
-      Set_Property(selection, Gtk.Text_Tag.Foreground_Rgba_Property, 
-                   terminal.buffer.background_colour);
       history_tag := terminal.buffer.Create_Tag("history_text");
       Set_Property(history_tag, Editable_Property, false);
       Apply_Tag(terminal.buffer, history_tag,
@@ -2255,6 +2283,8 @@ package body Gtk.Terminal is
       Place_Cursor(terminal.buffer, end_iter);
       end_mark := Create_Mark(terminal.buffer, "end_paste", end_iter, 
                               left_gravity=>true);
+      end_mark := Create_Mark(terminal.buffer.alt_buffer, "end_paste",
+                              end_iter, left_gravity=>true);
       -- Make sure cursor movement controls are not inserted into buffer text
       Set_Accepts_Tab(terminal.terminal, true);
       Set_Cursor_Shape(for_terminal => terminal.terminal);
@@ -2457,19 +2487,15 @@ package body Gtk.Terminal is
    procedure Set_Colour_Highlight (terminal: access Gtk_Terminal_Record'Class;
                                    highlight_colour :  Gdk.RGBA.Gdk_RGBA) is
      -- Set the highlight text colour to that specified.
+     -- This highlight colour gets applied to the background of selected text.
       use Gtk.Text_Tag_Table, Gtk.Text_Tag, Glib.Properties;
-      selection : Gtk.Text_Tag.Gtk_Text_Tag;
+      -- selection : Gtk.Text_Tag.Gtk_Text_Tag;
    begin
       terminal.buffer.highlight_colour := highlight_colour;
-      selection := Lookup(Get_Tag_Table(terminal.buffer), "selection");
-      if selection /= null then
-         Set_Property(selection, Gtk.Text_Tag.Background_Set_Property, true);
-         Set_Property(selection, Gtk.Text_Tag.Background_Rgba_Property, 
-                      highlight_colour);
-         Set_Property(selection, Gtk.Text_Tag.Foreground_Set_Property, true);
-         Set_Property(selection, Gtk.Text_Tag.Foreground_Rgba_Property, 
-                      terminal.buffer.background_colour);
-      end if;
+      -- Now load this into the CSS with the text colour being the current
+      -- background colour and the background colour being this highlight
+      -- colour.
+      null; 
    end Set_Colour_Highlight;
    
    procedure Set_Font (for_terminal: access Gtk_Terminal_Record'Class;
@@ -2514,6 +2540,18 @@ package body Gtk.Terminal is
          return Gtkada.Types.Value(for_terminal.title);
       end if;
    end Get_Title;
+   
+   function Get_Icon_Name(for_terminal : access Gtk_Terminal_Record'Class)
+    return UTF8_String is
+       -- Return the title as the operating system knows it
+   begin
+      if for_terminal.icon_name = Gtkada.Types.Null_Ptr
+      then
+         return "bliss_term";
+      else
+         return Gtkada.Types.Value(for_terminal.icon_name);
+      end if;
+   end Get_Icon_Name;
     
    function Get_Path(for_terminal : access Gtk_Terminal_Record'Class)
     return UTF8_String is
@@ -2652,3 +2690,4 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+

@@ -390,6 +390,10 @@ begin
          for_event.keyval = GDK_Return
       then  -- Actually a single back-space, Escape or Return character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
+      elsif the_key(3) = '2' or the_key(3) = '4' 
+            or the_key(3) = '5' or the_key(3) = '6'
+      then  -- Actually a 4 character non-standard sequence
+         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3) & '~');
       elsif for_event.keyval = GDK_Tab
       then  -- Actually a single tab character
          Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
