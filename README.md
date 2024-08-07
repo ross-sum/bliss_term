@@ -172,7 +172,7 @@ follows:
   clearing the screen in between those writes.  The first time it writes the
   file to the screen, it does it correctly, without inserting the spaces.  It
   is the second time that the space characters get inserted.
-  The issue may be the teminal type that it thinks Bliss_Term is.
+  The issue looked like being the teminal type, but most were tried out.
 * Nano outputs spurious text at random points in time after moving around in
   the file being edited.  Sometimes it is obvious that Nano has lost what line
   number it is on and sometimes the cause is not obvious.  At either rate the

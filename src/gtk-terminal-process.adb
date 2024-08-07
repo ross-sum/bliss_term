@@ -180,7 +180,8 @@ separate (Gtk.Terminal)
                   case the_sequence(chr_pos) is
                      when 'c' =>  -- Send device attributes (Secondary DA)
                         Write(fd => on_buffer.master_fd, 
-                              Buffer => Esc_str & "[>1;10;1c");  -- Try 1;10;0, 2;10;1, 2;10;0, 0;10;1, 0;10;0, maybe 19, 24, 41, 64, 65
+                              Buffer => Esc_str & "[>1;10;1c");
+                                -- also tried 1;10;1,1;10;0,2,0,19,24,41,64,65
                      when 'm' => null;  -- key modifier options XTMODKEYS
                         case param(1) is
                            when 0 =>   -- modifyKeyboard
