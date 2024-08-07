@@ -46,10 +46,10 @@ Command		Meaning
 <esc>[<P1>P		Delete <P1> characters
 <esc>[<P1>S		Scroll up <P1> lines
 <esc>[<P1>T		Scroll down <P1> lines
-<esc>[<P1>Z		Cursor Backward Tabulation <P1> tab stops
+<esc>[<P1>Z		Cursor Backward Tabulation <P1> tab stops (tab stops are not yet implemented)
 <esc>[<P1>c		Send device attributes (Primary DA) [currently sends back "<esc>[?1;0c"]
 <esc>[<P1>d		Position the cursor on the current line at the absolute <P1> position
-<esc>[<P1>g		Clear the tab stops: <P1>=0 -> at the current position, <P1>=3 -> all tab stops
+<esc>[<P1>g		Clear the tab stops: <P1>=0 -> at the current position, <P1>=3 -> all tab stops (tab stops are not yet implemented)
 <esc>[<P1>h		Reset Mode: <P1>=2 -> Keyboard action mode on, <P1>=4 -> switch to insert, <P1>=12 Send/receive, <P1>=20 -> Automatic new line on
 <esc>[<P1>i		Serial port control (media copy)
 <esc>[<P1>l		Reset Mode: <P1>=2 -> Keyboard action mode off, <P1>=4 -> switch to overwrite, <P1>=12 Send/receive, <P1>=20 -> Automatic new line off
@@ -57,7 +57,7 @@ Command		Meaning
 <esc>[<P1>n		Device status request: <P1>=5 -> status report 'OK' [sends back "<esc>[0n"], <P1>=6 report cursor position [sends back "<esc>[<line>;<col>R"]
 <esc>[<P1>;<P2>r	Set scrolling region to between line <P1> and <P2> inclusive (top line = line 1)
 <esc>[s		Save cursor position
-<esc>[<P1>;<P2>t	Window manipulation: <P1>=21 -> report terminal's title, <P1>=22 -> Save icon (<P2>=0 or 1) and window title (<P2>=0 or 2) on stack, <P1>=23 -> restore icon and/or title from stack
+<esc>[<P1>;<P2>t	Window manipulation: <P1>=20 -> report terminal's icon name, <P1>=21 -> report terminal's title, <P1>=22 -> Save icon (<P2>=0 or 1) and window title (<P2>=0 or 2) on stack, <P1>=23 -> restore icon and/or title from stack
 <esc>[u		Restore cursor position
 <esc>[<P1>~		Non-standard, but used for going to end (VT)
 <esc>H		Set a tab stop for the current column that the cursor is in
