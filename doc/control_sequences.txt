@@ -23,8 +23,10 @@ Command		Meaning
 <esc>[?1002l		switch Cell Motion mouse tracking off
 <esc>[?1004h		enable reporting focus
 <esc>[?1004l		disable reporting focus
-<esc>[?1006h		enable mouse mode
-<esc>[?1006l		disable mouse mode
+<esc>[?1006h		enable SGR extended (coordinates) mouse mode
+<esc>[?1006l		disable SGR extended mouse mode
+<esc>[?1007h		enable Alternate (buffer) mouse scroll mode
+<esc>[?1007l		disable Alternate scroll mode
 <esc>[?1049h		switch to alternative screen buffer
 <esc>[?1049l		switch back to main screen buffer
 <esc>[?2004h		switch bracketed paste mode on
