@@ -37,7 +37,7 @@ endif
 BIN=/usr/local/bin
 ETC=/usr/local/etc
 VAR=/var/local/lib
-ICON=/usr/share/icons/hicolor/32x32/apps
+ICON=/usr/local/share/icons/hicolor/32x32/apps
 TD=obj_$(TARGET)
 SD=system
 ifeq ("$1.",".")
