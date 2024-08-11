@@ -8,6 +8,7 @@ TA=bliss_term
 TS=$(TA).gpr
 CONF=$(TA).conf
 GLADE=$(TA).glade
+XPM=$(TA).xpm
 #BA=tobase64
 #BS=$(BA).gpr
 #DB=$(TA).db
@@ -36,6 +37,7 @@ endif
 BIN=/usr/local/bin
 ETC=/usr/local/etc
 VAR=/var/local/lib
+ICON=/usr/share/icons/hicolor/32x32/apps
 TD=obj_$(TARGET)
 SD=system
 ifeq ("$1.",".")
@@ -73,6 +75,7 @@ install:
 	cp $(TD)/$(TA) $(BIN)
 	cp $(SD)/$(CONF) $(ETC)
 	cp $(SD)/$(GLADE) $(ETC)
+	cp $(SD)/$(XPM) $(ICON)
 #	cp $(TD)/$(BA) $(BIN)
 #ifneq (,$(wildcard $(VAR)/$(DB))) 
 #	echo "Not overwriting $(VAR)/$(DB)."
