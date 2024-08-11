@@ -75,6 +75,7 @@ install:
 	cp $(TD)/$(TA) $(BIN)
 	cp $(SD)/$(CONF) $(ETC)
 	cp $(SD)/$(GLADE) $(ETC)
+	mkdir -p $(ICON)
 	cp $(SD)/$(XPM) $(ICON)
 #	cp $(TD)/$(BA) $(BIN)
 #ifneq (,$(wildcard $(VAR)/$(DB))) 
