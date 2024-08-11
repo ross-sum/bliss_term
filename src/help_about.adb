@@ -132,7 +132,8 @@ package body Help_About is
    procedure Switch_The_Light(for_terminal : Gtk.Terminal.Gtk_Terminal;
                               at_light_number : in natural; 
                               to_on : in boolean := false;
-                              with_status : Glib.UTF8_String := "") is
+                              with_status : Glib.UTF8_String := "";
+                              and_status_b: Glib.UTF8_String := "") is
       -- A debugging procedure to switch a status light
       use Gtk.Check_Button, Gtk.Label, Gtk.GEntry;
       the_light  : Gtk.Check_Button.gtk_check_button;
@@ -142,58 +143,60 @@ package body Help_About is
       case at_light_number is
          when 1 => 
             the_light := gtk_check_button(Get_Object(the_builder, 
-                                          "status_checkbox_1"));
+                                                     "status_checkbox_1"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_1"));
             the_status.Set_Label(with_status);
          when 2 => 
             the_light := gtk_check_button(Get_Object(the_builder, 
-                                          "status_checkbox_2"));
+                                                     "status_checkbox_2"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_2"));
             the_status.Set_Label(with_status);
          when 3 => 
             the_light := gtk_check_button(Get_Object(the_builder, 
-                                          "status_checkbox_3"));
+                                                     "status_checkbox_3"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_3"));
             the_status.Set_Label(with_status);
          when 4 => 
             the_light := gtk_check_button(Get_Object(the_builder, 
-                                          "status_checkbox_4"));
+                                                     "status_checkbox_4"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_4"));
             the_status.Set_Label(with_status);
          when 5 => 
             the_light := gtk_check_button(Get_Object(the_builder, 
-                                          "status_checkbox_5"));
+                                                     "status_checkbox_5"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_5"));
             the_status.Set_Label(with_status);
          when 6 => 
             the_light := gtk_check_button(Get_Object(the_builder, 
-                                          "status_checkbox_6"));
+                                                     "status_checkbox_6"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_6"));
             the_status.Set_Label(with_status);
          when 7 => 
             the_light := gtk_check_button(Get_Object(the_builder, 
-                                          "status_checkbox_7"));
+                                                     "status_checkbox_7"));
             Set_Active(the_light, to_on);
             the_status := Gtk_Label(the_builder.Get_Object("status_label_7"));
             the_status.Set_Label(with_status);
          when 8 => 
-            the_entry := gtk_entry(Get_Object(the_builder, 
-                                          "status_entry_8"));
+            the_entry := gtk_entry(Get_Object(the_builder, "status_entry_8"));
             Set_Text(the_entry, with_status);
          when 9 => 
-            the_entry := gtk_entry(Get_Object(the_builder, 
-                                          "status_entry_9"));
+            the_entry := gtk_entry(Get_Object(the_builder,"status_entry_9"));
             Set_Text(the_entry, with_status);
          when 10 => 
-            the_entry := gtk_entry(Get_Object(the_builder, 
-                                          "status_entry_10"));
+            the_entry := gtk_entry(Get_Object(the_builder, "status_entry_10"));
             Set_Text(the_entry, with_status);
+         when 11 => 
+            the_entry := gtk_entry(Get_Object(the_builder,"status_entry_11a"));
+            Set_Text(the_entry, with_status);
+            the_entry := gtk_entry(Get_Object(the_builder,"status_entry_11b"));
+            Set_Text(the_entry, and_status_b);
          when others => null;  -- ignore
       end case;
    end Switch_The_Light;

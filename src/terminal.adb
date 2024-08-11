@@ -39,6 +39,7 @@ with System;
 with Ada.Strings.UTF_Encoding, Ada.Strings.UTF_Encoding.Wide_Strings;
 with Ada.Characters.Conversions;
 with Glib, Glib.Error;
+with Gdk.Event;
 with Gtk.Widget, Gtk.Image;
 with Gtk.Main, Gtk.Window;
 with Gtk.Menu;
@@ -144,6 +145,8 @@ package body Terminal is
                              usage => usage);
       CSS_Management.Load(the_window => main_window);
       Error_Log.Debug_Data(at_level => 9, with_details => "Initialise_Terminal: CSS_Management.Load run.");
+      -- Scroll mask needs to be applied to get the scroll wheel to be recognised.
+      Add_Events(Gtk.Widget.Gtk_Widget(main_window), Gdk.Event.Scroll_Mask);
       
       -- Initialise
       Do_Connect (Builder);

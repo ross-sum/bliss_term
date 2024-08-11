@@ -410,6 +410,11 @@ separate (Gtk.Terminal)
                                                      Ada.Characters.Conversions.
                                                      To_Wide_String(for_sequence)&
                                                      "' not yet implemented.");
+                           when 9 =>   -- Send Mouse X & Y on X10 button press
+                                       -- and release
+                                       -- "SET_X10_MOUSE"
+                              on_buffer.mouse_config.x10_mouse := 
+                                                   for_sequence(chr_pos) = 'h';
                            when 12 => null;  -- cursor blinking/not blinking
                               if for_sequence(chr_pos) = 'h'
                               then  -- switch on blinking
@@ -444,35 +449,31 @@ separate (Gtk.Terminal)
                                     --             Get_Insert(the_buf), 0.0, 
                                     --             false, 0.0, 0.0);
                               end if;
-                           when 1000 => null;  -- Send Mouse X & Y on button
-                                               -- press and release
-                              on_buffer.mouse_config.x10_mouse := 
+                           when 1000 =>   -- Send Mouse X & Y on VT200 X11
+                                          -- button press and release
+                                          -- "SET_VT200_MOUSE"
+                              on_buffer.mouse_config.x11_mouse := 
                                                    for_sequence(chr_pos) = 'h';
-                              Log_Data(at_level => 9, 
-                                       with_details=>"Process_Escape: Escape "&
-                                                     "SET_X10_MOUSE '" &
-                                                     Ada.Characters.Conversions.
-                                                     To_Wide_String(for_sequence)&
-                                                     "' not yet fully implemented.");
-                           when 1002 => null;  --Use Cell Motion Mouse Tracking
+                           when 1002 =>   --Use Cell Motion Mouse Tracking
+                                          -- "SET_BTN_EVENT_MOUSE"
                               on_buffer.mouse_config.btn_event := 
                                                    for_sequence(chr_pos) = 'h';
-                              Log_Data(at_level => 9, 
-                                       with_details=>"Process_Escape: Escape "&
-                                                     "SET_BTN_EVENT_MOUSE ;" &
-                                                     Ada.Characters.Conversions.
-                                                     To_Wide_String(for_sequence)&
-                                                     "' not yet fully implemented.");
                            when 1004 =>  -- reporting focus enable/disable
                               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1004' - Setting on_buffer.reporting_focus_enabled.");
                               on_buffer.reporting_focus_enabled := 
                                                    for_sequence(chr_pos) = 'h';
-                           when 1006 => null;  -- SGR Mouse Mode enable/disable
+                           when 1006 =>   -- SGR Mouse Mode enable/disable
+                                          -- "SET_SGR_EXT_MODE_MOUSE"
                               on_buffer.mouse_config.ext_mode := 
+                                                   for_sequence(chr_pos) = 'h';
+                           when 1007 => null;  -- Enable Alternate Scroll Mode
+                                               -- for the mouse wheel operation
+                                               -- "SET_ALTERNATE_SCROLL"
+                              on_buffer.mouse_config.alt_scroll := 
                                                    for_sequence(chr_pos) = 'h';
                               Log_Data(at_level => 9, 
                                        with_details=>"Process_Escape: Escape "&
-                                                     "SET_EXT_MODE_MOUSE ;" &
+                                                     "SET_ALTERNATE_SCROLL ;" &
                                                      Ada.Characters.Conversions.
                                                      To_Wide_String(for_sequence)&
                                                      "' not yet fully implemented.");
@@ -1640,8 +1641,13 @@ begin  -- Process
          if (not for_buffer.history_review) and 
             (not for_buffer.alternative_screen_buffer)
          then  -- but only if not searching through history
-            Set_Overwrite(for_buffer.parent, false);
-            Switch_The_Light(for_buffer, 5, true);
+            if for_buffer.mouse_config.in_paste
+            then  -- reset the in_paste flag + don't switch off overwrite
+               for_buffer.mouse_config.in_paste := false;
+            else  -- not in paste - behave as per normal
+               Set_Overwrite(for_buffer.parent, false);
+               Switch_The_Light(for_buffer, 5, true);
+            end if;
          end if;
       elsif for_buffer.escape_position < escape_length 
       then --else  -- escape sequence is incomplete - keep capturing it
@@ -1656,8 +1662,13 @@ begin  -- Process
          -- Switch overwrite off if not searching history
          if (not for_buffer.history_review) and
             (not for_buffer.alternative_screen_buffer) then
-            Set_Overwrite(for_buffer.parent, false);
-            Switch_The_Light(for_buffer, 5, true);
+            if for_buffer.mouse_config.in_paste
+            then  -- reset the in_paste flag + don't switch off overwrite
+               for_buffer.mouse_config.in_paste := false;
+            else  -- not in paste - behave as per normal
+               Set_Overwrite(for_buffer.parent, false);
+               Switch_The_Light(for_buffer, 5, true);
+            end if;
          end if;
          -- And note we are exiting the escape sequence
          for_buffer.in_esc_sequence := false;

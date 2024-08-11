@@ -44,7 +44,8 @@ package Help_About is
    procedure Switch_The_Light(for_terminal : Gtk.Terminal.Gtk_Terminal;
                               at_light_number : in natural; 
                               to_on : in boolean := false;
-                              with_status : Glib.UTF8_String := "");
+                              with_status : Glib.UTF8_String := "";
+                              and_status_b: Glib.UTF8_String := "");
       -- A debugging procedure to switch a status light on for display on one
       -- of the help tabs.
 

@@ -148,8 +148,6 @@ follows:
   mark-up/mark-down displayed as plain text).
 * Code linting and automated testing is required.
 * Cut, copy and paste needs some more testing.
-* Mouse movements are yet to be implemented.  Basic code is in place, but needs
-  additions to complete the operaton and then needs testing.
 * The delete operation in the Process_Keys sub-procedure throws an error
   warning into the terminal that this terminal is called from.  The error
   warning is harmless, but is ugly.  There is another similar error that occurs

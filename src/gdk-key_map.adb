@@ -45,6 +45,7 @@ with Interfaces.C;
 with Ada.Unchecked_Conversion;
 with Glib;                       use Glib;
 with Glib.Type_Conversion_Hooks; use Glib.Type_Conversion_Hooks;
+with Gdk.Types;
 package body GDK.Key_Map is
 
 --    type Gdk_Keymap_Record is new GObject_Record with null record;
@@ -115,5 +116,27 @@ package body GDK.Key_Map is
    begin
       return Natural(Internal(Get_Object(for_keymap)));
    end The_Modifier_State;
+
+   procedure Translate_Modifiers(for_keymap : access Gdk_Keymap_Record;
+                                 for_state : in out natural) is
+         -- Maps the non-virtual modifiers (i.e Mod2, Mod3, …) which are set in
+         -- state to the virtual modifiers (i.e. Super, Hyper and Meta) and set
+         -- the corresponding bits in state.
+         -- GDK already does this before delivering key events, but for
+         -- compatibility reasons, it only sets the first virtual modifier it
+         -- finds, whereas this function sets all matching virtual modifiers.
+         -- This procedure is useful when matching key events against
+         -- accelerators.
+         -- for_state: Pointer to the modifier mask to change.  The argument
+         -- will be modified by the procedure.
+      use Gdk.Types;
+      procedure Internal(K : System.Address; state : access Gdk_Modifier_Type);
+      pragma Import (C, Internal, "gdk_keymap_add_virtual_modifiers");
+      the_state : aliased Gdk_Modifier_Type;
+   begin
+      the_state := Gdk_Modifier_Type(for_state);
+      Internal(Get_Object(for_keymap), the_state'access);
+      for_state := natural(the_state);
+   end ;
    
 end GDK.Key_Map;

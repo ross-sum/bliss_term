@@ -306,11 +306,13 @@ package body Gtk.Terminal is
          On_Key_Press_Event(self=>the_terminal.terminal, 
                             call=>Scroll_Key_Press_Check'access, after=>false);
          On_Motion_Notify_Event(self=>the_terminal.terminal, 
-                            call=>Motion_Notify_CB'access, after=>false);
+                                call=>Motion_Notify_CB'access, after=>false);
          On_Button_Press_Event(self=>the_terminal.terminal, 
                                call=>Button_Press_CB'access, after=>false);
          On_Button_Release_Event(self=>the_terminal.terminal, 
                                  call=>Button_Release_CB'access, after=>false);
+         On_Scroll_Event(self=>the_terminal.terminal, 
+                         call=>Mouse_Scroll_CB'access, after=>false);
          -- Give an initial default dimension of nowrap_size (1000) characters
          -- wide x default_rows (25) lines (i.e. no wrap)
          Set_Size (terminal => the_terminal, 
@@ -687,7 +689,8 @@ package body Gtk.Terminal is
    procedure Switch_The_Light (for_buffer : access Gtk_Terminal_Buffer_Record'Class;
                                at_light_number : natural;
                                to_on : boolean := false;
-                               with_status : UTF8_String := "") is
+                               with_status : UTF8_String := "";
+                               and_status_b: Glib.UTF8_String := "") is
       -- Check that the switch_light_cb call back procedure is assigned.  If
       -- so, execute it, otherwise, just ignore and continue processing.
       the_term  : Gtk_Text_View := for_buffer.parent;
@@ -696,7 +699,8 @@ package body Gtk.Terminal is
       if for_buffer.switch_light_cb /= null
       then  -- it is assigned, so process it
          for_buffer.switch_light_cb (the_terminal, 
-                                     at_light_number, to_on, with_status);
+                                     at_light_number, to_on, 
+                                     with_status, and_status_b);
       end if;
    end Switch_The_Light;
 -- 
@@ -709,6 +713,106 @@ package body Gtk.Terminal is
 --       Set_Cursor_Visible(this_terminal.terminal, true);
 --       res := Place_Cursor_Onscreen(this_terminal.terminal);
 --    end Show;
+     
+   -----------------------------
+   -- Mouse Movement Routines --
+   -----------------------------
+   
+   procedure Report_Mouse_Position(at_terminal : Gtk_Terminal;
+                                   for_button : in positive;
+                                   at_button_press : in boolean := true;
+                                   at_button_release: in boolean := false) is
+      -- Provide the service to motion notify and button press events to report
+      -- the current button state and mouse position to the virtual terminal
+      -- emulator client.
+      use Gdk.Types;
+      Esc_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.Esc);
+      function To_Characters(the_number : in natural;
+                             apply_offset: in boolean:= false) return string is
+         result : string := " ";
+         offset : natural := 16#20#;
+      begin
+         if apply_offset
+         then  -- crank up the offset to add in the motion indicator
+            offset := offset + 16#20#;
+         end if;
+         result(1) := Character'Val(the_number + offset);
+         return result;
+      end To_Characters;
+      function Button_ID(for_button : in positive;
+                         with_offset : in natural := 16#20#;
+                         apply_offset : in boolean := false) return string is
+         use GDK.Key_Map;
+         function "and"(Left, Right: Gdk_Modifier_Type) 
+         return Gdk_Modifier_Type is
+            type Mod_Natural is mod 2**Gdk_Modifier_Type'Size;
+         begin
+            return Gdk_Modifier_Type(Mod_Natural(Left) and Mod_Natural(Right));
+         end "and";
+         total_id : natural := for_button - 1;
+         offset : natural := with_offset;
+         key_state: natural := The_Modifier_State(for_keymap => key_map);
+         result   : string := " ";
+      begin
+         if apply_offset
+         then  -- crank up the offset to add in the motion indicator
+            offset := offset + 16#20#;
+         end if;
+         Translate_Modifiers(for_keymap => key_map, for_state => key_state);
+         if (Gdk_Modifier_Type(key_state) and Shift_Mask) > 0
+         then  -- set the shift bit
+            total_id := total_id + 2#100#;
+         end if;
+         if ((Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0) or
+            ((Gdk_Modifier_Type(key_state) and Meta_Mask) > 0)
+         then  -- set the Meta bit
+            total_id := total_id + 2#1000#;
+         end if;
+         if (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
+         then  -- set the control bit
+            total_id := total_id + 2#10000#;
+         end if;
+         result(1) := Character'Val(total_id + offset);
+         return result;
+      end Button_ID;
+      mouse_details: mouse_configuration_parameters renames  
+                                              at_terminal.buffer.mouse_config;
+      depress_type : Character;
+   begin
+      if mouse_details.x10_mouse
+      then  -- Report mouse details viz CSI M CbCxCy
+         Write(at_terminal.master_fd, 
+               buffer => Esc_str & "[M" & 
+                         To_Characters(for_button-1, 
+                                       apply_offset=>(not at_button_press)) &
+                         To_Characters(mouse_details.col) &
+                         To_Characters(mouse_details.row));
+      elsif mouse_details.x11_mouse and not mouse_details.ext_mode
+      then  -- Report mouse details viz CSI M CbCxCy
+         Write(at_terminal.master_fd, 
+               buffer => Esc_str & "[M" & 
+                         Button_ID(for_button, 
+                                   apply_offset => (not at_button_press)) &
+                         To_Characters(mouse_details.col) &
+                         To_Characters(mouse_details.row));
+      elsif mouse_details.x11_mouse and mouse_details.ext_mode
+      then  -- Report mouse details viz CSI < Cb ; Cx ; Cy M/m
+         if at_button_release
+         then
+            depress_type := 'm';
+         else  -- button must be pressed in
+            depress_type := 'M';
+         end if;
+         Write(at_terminal.master_fd, 
+               buffer => Esc_str & "[<" & 
+                         Button_ID(for_button, 
+                                   with_offset => 0,
+                                   apply_offset => (not at_button_press)) &
+                         ";" & As_String(mouse_details.col) & ";" &
+                         As_String(mouse_details.row) &
+                         depress_type);
+      end if;
+   end Report_Mouse_Position;
    
    function Motion_Notify_CB (for_terminal_view: access Gtk_Widget_Record'Class;
                               event : Gdk_Event_Motion) return boolean is
@@ -716,12 +820,19 @@ package body Gtk.Terminal is
       -- that the mouse is over.  That information is stored in the mouse_
       -- configuration_parameters for this terminal's buffer.
       use Gdk.Rectangle, Gdk.Types;
+      function "and"(Left, Right: Gdk_Modifier_Type) 
+         return Gdk_Modifier_Type is
+         type Mod_Natural is mod 2**Gdk_Modifier_Type'Size;
+      begin
+         return Gdk_Modifier_Type(Mod_Natural(Left) and Mod_Natural(Right));
+      end "and";
       the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
       the_rect     : Gdk.Rectangle.Gdk_Rectangle;
       screen_length: natural renames the_terminal.rows;
       screen_width : natural renames the_terminal.cols;
       mouse_details: mouse_configuration_parameters renames 
                                               the_terminal.buffer.mouse_config;
+      mouse_button : natural;
       x_scale_factor: float;
       y_scale_factor: float;
       -- The following adjustment and offset constants were determined through
@@ -731,6 +842,10 @@ package body Gtk.Terminal is
       yadj : constant float := 0.97;
       xofs : constant float := -0.001;
       yofs : constant float := -0.004;
+      -- The following preseve the x- and y- coordinates of the cursor for
+      -- checking whether there has been a change in character position
+      old_row : constant natural := mouse_details.row;
+      old_col : constant natural := mouse_details.col;
    begin
       -- Get our boundary for scaling purposes
       Get_Visible_Rect(Gtk_Text_View(for_terminal_view), the_rect);
@@ -754,6 +869,31 @@ package body Gtk.Terminal is
       -- Note that the row and column for mouse are 1 based, so add 1 to them
       mouse_details.row := natural((float(event.Y)+yofs) * y_scale_factor) + 1;
       mouse_details.col := natural((float(event.X)+xofs) * x_scale_factor) + 1;
+      Switch_The_Light(the_terminal.buffer, 11, false,mouse_details.col'Image,
+                                                      mouse_details.row'Image);
+      -- Report the mouse position if there has been a change in position and
+      -- if there is a button press of any kind provding SET_BTN_EVENT_MOUSE is
+      -- set
+      if mouse_details.btn_event and then
+         (mouse_details.row /= old_row or mouse_details.col /= old_col) and then
+         ((event.state and Button1_Mask) > 0 or 
+          (event.state and Button2_Mask) > 0 or
+          (event.state and Button3_Mask) > 0)
+      then  -- SET_BTN_EVENT_MOUSE set and a mouse button is down 
+         if (event.state and Button1_Mask) > 0
+         then  -- Left mouse button
+            mouse_button := 1;
+         elsif (event.state and Button2_Mask) > 0
+         then  -- middle mouse button
+            mouse_button := 2;
+         elsif (event.state and Button3_Mask) > 0
+         then  -- right mouse button
+            mouse_button := 3;
+         end if;
+         Report_Mouse_Position(at_terminal => the_terminal, 
+                               for_button => mouse_button,
+                               at_button_press => false);
+      end if;
       -- Error_Log.Debug_Data(at_level => 9, with_details => "Motion_Notify_CB: the_rect:(H=" & the_rect.Height'Wide_Image & ",W=" & the_rect.Width'Wide_Image & ", X=" & the_rect.X'Wide_Image & ",Y=" & the_rect.X'Wide_Image & "), scale_factor (x=" & x_scale_factor'Wide_Image & ",y=" & y_scale_factor'Wide_Image & "), event: (X=" & event.X'Wide_Image & ",Y=" & event.Y'Wide_Image & ") and mouse_details: (col=" & mouse_details.col'Wide_Image & ", row=" & mouse_details.row'Wide_Image & ").");
       return false;  -- Allow for further processing of this event
    end Motion_Notify_CB;
@@ -767,7 +907,6 @@ package body Gtk.Terminal is
       -- If this function returns True, then other signal handers will not be
       -- called, otherwise the button press signal will be propagted further.
       use Gdk.Event, Gtk.Clipboard, Gtk.Text_Iter;
-      Esc_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.Esc);
       the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
       mouse_details: mouse_configuration_parameters renames 
                                               the_terminal.buffer.mouse_config;
@@ -792,12 +931,18 @@ package body Gtk.Terminal is
          Get_Iter_At_Mark(buffer, end_iter, Get_Insert(buffer));
          mouse_details.pre_sel_row := natural(Get_Line(end_iter)) + 1;
          mouse_details.pre_sel_col := natural(Get_Line_Offset(end_iter)) + 1;
+         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: -Left button Cursor was at (row" & mouse_details.pre_sel_row'Wide_Image & ", col" & mouse_details.pre_sel_col'Wide_Image & "), bracketed_paste_mode =" & the_terminal.buffer.bracketed_paste_mode'Wide_Image & ", the_terminal.buffer.entering_command=" & the_terminal.buffer.entering_command'Wide_Image & ", the_terminal.buffer.use_buffer_editing=" & the_terminal.buffer.use_buffer_editing'Wide_Image & ".");
          -- Then signal that we are selecting text
          mouse_details.in_select := true;
+         -- Do mouse management for this button
+         Report_Mouse_Position(at_terminal => the_terminal, 
+                               for_button => natural(event.button));
       elsif event.Button = 2  -- middle mouse button
       then  -- Middle mouse button: start the paste process
+         -- Note that a paste operation has commenced
+         mouse_details.in_paste := true;
          -- Ensure cursor is correctly located
-         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - middle button event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row =" & mouse_details.row'Wide_Image & ", mouse_details.col =" & mouse_details.col'Wide_Image & ", entering_command = " & the_terminal.buffer.entering_command'Wide_Image & ", Get_Overwrite = " & Get_Overwrite(the_terminal.terminal)'Wide_Image & ".");
+         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - Middle button event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row =" & mouse_details.row'Wide_Image & ", mouse_details.col =" & mouse_details.col'Wide_Image & ", entering_command = " & the_terminal.buffer.entering_command'Wide_Image & ", Get_Overwrite = " & Get_Overwrite(the_terminal.terminal)'Wide_Image & ".");
             -- restore the cursor to the correct location
          end_iter := Home_Iterator(for_terminal => the_terminal);
          if mouse_details.pre_sel_row > 1 then
@@ -827,11 +972,26 @@ package body Gtk.Terminal is
             Gtk.Clipboard.Request_Text(clipboard => the_clipboard, 
                                        callback => Write_From'Access);
          end if;
-         return true;
-      else  -- Button probably = 3 - right mouse button
-         null;
+         Report_Mouse_Position(at_terminal => the_terminal, 
+                               for_button => natural(event.button));
+         -- return true;
+      elsif event.Button = 3  -- right mouse button
+      then
+         null;  -- other than mouse click reporting, nothing to do here
+         Report_Mouse_Position(at_terminal => the_terminal, 
+                               for_button => natural(event.button));
+      else  -- which button??
+         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: button =" & event.Button'Wide_Image & ".");
       end if;
-      return false;  -- Allow for further processing of this event
+      -- For button 2, don't allow further processing, for button 1 and 3,
+      -- potentially allow for further processing of this event, but
+      -- only if NOT doing a 'Cell Motion Mouse Tracking' type of mouse
+      -- reporting (when not, 'true'=don't allow, otherwise 'false'=allow).
+      Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: finishing up - ((x10_mouse=" & mouse_details.x10_mouse'Wide_Image & " OR x11_mouse=" & mouse_details.x11_mouse'Wide_Image & ") AND NOT Cell Motion Mouse Tracking (btn_event) =" & mouse_details.btn_event'Wide_Image & ") and event.Button=" & event.Button'Wide_Image & ".");
+      return (((mouse_details.x10_mouse or mouse_details.x11_mouse) and
+               not mouse_details.btn_event) and 
+              (event.Button = 3)) or (event.Button =2);
+              -- (event.Button = 1 or event.Button = 3)) or (event.Button =2);
    end Button_Press_CB;
       
    function Button_Release_CB(for_terminal_view:access Gtk_Widget_Record'Class;
@@ -871,8 +1031,66 @@ package body Gtk.Terminal is
          -- Reset the note that text is being selected
          mouse_details.in_select := false;
       end if;
-      return false;  -- Allow for further processing of this event
+      -- Work out if mouse position reporting is required on button release,
+      -- then report if so
+      if (mouse_details.x11_mouse and mouse_details.ext_mode) and then
+         (event.Button  >= 1 and event.Button <= 3)
+      then  -- SET_VT200_MOUSE + SET_SGR_EXT_MODE_MOUSE set + a button going up
+         Report_Mouse_Position(at_terminal => the_terminal, 
+                               for_button => positive(event.Button),
+                               at_button_press => true,  -- i.e. no offset
+                               at_button_release => true);
+      end if;
+      -- For button 2, don't allow further processing, for button 1 and 3,
+      -- potentially allow for further processing of this event, pending it
+      -- being an X10 or VT200 X11 type of mouse reporting (when not, 'true'=
+      -- don't allow further processing, otherwise 'false'=allow it).
+      Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: finishing up - (x10_mouse=" & mouse_details.x10_mouse'Wide_Image & " OR x11_mouse=" & mouse_details.x11_mouse'Wide_Image & ") [Cell Motion Mouse Tracking (btn_event) =" & mouse_details.btn_event'Wide_Image & "] AND event.Button=" & event.Button'Wide_Image & ".");
+      return ((mouse_details.x10_mouse or mouse_details.x11_mouse) and
+              (event.Button = 1 or event.Button = 3)) or (event.Button =2);
    end Button_Release_CB;
+      
+   function Mouse_Scroll_CB(for_terminal_view:access Gtk_Widget_Record'Class;
+                            event:Gdk.Event.Gdk_Event_Scroll) return boolean is
+      -- Called whenever the mouse is scrolled inside the terminal's
+      -- Gtk.Text_View, but not if it leaves the window.  Event contains the
+      -- details on the scroll wheel motion.
+      -- If this function returns True, then no other signal handers will be
+      -- called, otherwise the scroll wheel signal will be propagted further.
+      use Gdk.Event, Gtk.Text_Iter;
+      Esc_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.Esc);
+      the_terminal : Gtk_Terminal:=Gtk_Terminal(Get_Parent(for_terminal_view));
+      mouse_details: mouse_configuration_parameters renames 
+                                              the_terminal.buffer.mouse_config;
+      direction : Gdk.Event.Gdk_Scroll_Direction;
+   begin
+      Error_Log.Debug_Data(at_level => 9, with_details => "Mouse_Scroll_CB: (mouse_details.alt_scroll=" & mouse_details.alt_scroll'Wide_Image & " AND alternative_screen_buffer=" & the_terminal.buffer.alternative_screen_buffer'Wide_Image & ") AND THEN event.Direction = " & event.Direction'Wide_Image & ". event.The_Type = " & event.The_Type'Wide_Image & ", event.State = " & event.State'Wide_Image & ", event.Delta_X =" & event.Delta_X'Wide_Image & ", event.Delta_Y =" & event.Delta_Y'Wide_Image & ", event.X =" & event.X'Wide_Image & ", event.Y =" & event.Y'Wide_Image & ".");
+      if (mouse_details.alt_scroll and 
+          the_terminal.buffer.alternative_screen_buffer) and then
+         (event.Direction = scroll_up or event.Direction = scroll_down or
+         event.Direction = scroll_smooth)
+      then  -- Pass on the scroll operation of the wheel as up or down motion
+         if event.Direction = scroll_smooth
+         then  -- extract the direction
+            -- Gdk.Event.Get_Scroll_Direction(event, direction);
+            if event.Delta_Y > 0.0
+            then direction := scroll_up;
+            else direction := scroll_down;
+            end if;
+         end if;
+         -- Work out direction of wheel (up or down)
+         if event.Direction = scroll_up or else direction = scroll_up
+         then  -- do the up direction (which means go down)
+            Write(the_terminal.master_fd, buffer => Esc_Str & "OB");
+         elsif event.Direction = scroll_down or else direction = scroll_down
+         then  -- do the down direction (which means go up)
+            Write(the_terminal.master_fd, buffer => Esc_Str & "OA");
+         end if;
+         return true;
+      else  -- Allow normal scroll operations to proceed
+         return false;
+      end if;
+   end Mouse_Scroll_CB;
 
    procedure Write_From(the_clipboard : not null 
                                access Gtk.Clipboard.Gtk_Clipboard_Record'Class;
@@ -1793,8 +2011,13 @@ package body Gtk.Terminal is
                for_buffer.history_review := false;
                Switch_The_Light(for_buffer, 2, false);
                if not for_buffer.alternative_screen_buffer then
-                  Set_Overwrite(for_buffer.parent, false);
-                  Switch_The_Light(for_buffer, 5, true);
+                  if for_buffer.mouse_config.in_paste
+                  then  -- reset the in_paste flag + don't switch off overwrite
+                     for_buffer.mouse_config.in_paste := false;
+                  else  -- not in paste - behave as per normal
+                     Set_Overwrite(for_buffer.parent, false);
+                     Switch_The_Light(for_buffer, 5, true);
+                  end if;
                end if;
                for_buffer.entering_command := false;  -- command now entered
                Switch_The_Light(for_buffer, 6, false);
@@ -2256,6 +2479,8 @@ package body Gtk.Terminal is
                               left_gravity=>true);
       end_mark := Create_Mark(terminal.buffer.alt_buffer, "end_paste",
                               end_iter, left_gravity=>true);
+      Set_Colour_Highlight(terminal, 
+                           highlight_colour=>terminal.buffer.highlight_colour);
       -- Make sure cursor movement controls are not inserted into buffer text
       Set_Accepts_Tab(terminal.terminal, true);
       Set_Cursor_Shape(for_terminal => terminal.terminal);
@@ -2460,13 +2685,38 @@ package body Gtk.Terminal is
      -- Set the highlight text colour to that specified.
      -- This highlight colour gets applied to the background of selected text.
       use Gtk.Text_Tag_Table, Gtk.Text_Tag, Glib.Properties;
+      use Gtk.CSS_Provider, Gtk.Style_Context, Gtk.Style_Provider;
       -- selection : Gtk.Text_Tag.Gtk_Text_Tag;
    begin
       terminal.buffer.highlight_colour := highlight_colour;
       -- Now load this into the CSS with the text colour being the current
       -- background colour and the background colour being this highlight
       -- colour.
-      null; 
+      declare
+         highlight : constant string := Gdk.RGBA.To_String(highlight_colour);
+         background: constant string := 
+                         Gdk.RGBA.To_String(terminal.buffer.background_colour);
+         the_error : aliased Glib.Error.GError;
+         provider  : Gtk.CSS_Provider.Gtk_CSS_Provider;
+         context   : Gtk.Style_Context.Gtk_Style_Context;
+      begin
+         Error_Log.Debug_Data(at_level => 9, with_details => "Set_Colour_Highlight : highlight - sending '" & "textview* { .view text selection { background-color: "& Ada.Characters.Conversions.To_Wide_String(highlight) & ";  color: " & Ada.Characters.Conversions.To_Wide_String(background) & ";} text selection { background-color: " & Ada.Characters.Conversions.To_Wide_String(highlight) & ";  color: " & Ada.Characters.Conversions.To_Wide_String(background) & ";} }" & "'.");
+         Gtk_New(provider);
+         if Load_From_Data(provider, 
+                           "textview* {" &
+                                  " .view text selection { background-color: "&
+                                  highlight & ";  color: " & background & ";} "&
+                                  "text selection { background-color: " &
+                                  highlight & ";  color: " & background & ";} "&
+                                      "}",
+                              the_error'access)
+         then  -- successful load
+            Error_Log.Debug_Data(at_level => 9, with_details => "Set_Colour_Highlight : Load_From_Data(provider) successful.");
+            context := Get_Style_Context(terminal);
+            Gtk.Style_Context.Add_Provider(context, +provider,
+                                           Priority_Application);
+         end if;
+      end;
    end Set_Colour_Highlight;
    
    procedure Set_Font (for_terminal: access Gtk_Terminal_Record'Class;
@@ -2661,5 +2911,3 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
-
-

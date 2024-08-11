@@ -78,5 +78,17 @@ package GDK.Key_Map is
       --    shift
       --    meta
       --    control
+   procedure Translate_Modifiers(for_keymap : access Gdk_Keymap_Record;
+                                 for_state : in out natural);
+         -- Maps the non-virtual modifiers (i.e Mod2, Mod3, …) which are set in
+         -- state to the virtual modifiers (i.e. Super, Hyper and Meta) and set
+         -- the corresponding bits in state.
+         -- GDK already does this before delivering key events, but for
+         -- compatibility reasons, it only sets the first virtual modifier it
+         -- finds, whereas this function sets all matching virtual modifiers.
+         -- This procedure is useful when matching key events against
+         -- accelerators.
+         -- for_state: Pointer to the modifier mask to change.  The argument
+         -- will be modified by the procedure.
    
 end GDK.Key_Map;

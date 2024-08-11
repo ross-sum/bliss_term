@@ -157,7 +157,8 @@ package Gtk.Terminal is
    type Switch_Light_Callback is access procedure (for_terminal : Gtk_Terminal;
                                                    at_light_number : natural;
                                                    to_on : boolean := false;
-                                                   with_status:UTF8_String:="");
+                                                   with_status:UTF8_String:="";
+                                                 and_status_b:UTF8_String:="");
       -- This call-back is to display status switch lights and values.  It is
       -- provided mainly for fault finding purposes.  The statuses are what the
       -- system 'thinks' is the case.
@@ -188,6 +189,7 @@ package Gtk.Terminal is
       --       will most likely be different (i.e. if it is the alternative
       --       buffer).
       --    10: column number where the cursor is.
+      --    11: (column,row) of where the mouse pointer currently is
 
    type Cb_Gtk_Terminal_Void is access 
                            procedure (Self : access Gtk_Terminal_Record'Class);
@@ -452,9 +454,12 @@ package Gtk.Terminal is
    
    type mouse_configuration_parameters is record
          x10_mouse   : boolean := false;
+         x11_mouse   : boolean := false;
          btn_event   : boolean := false;
          ext_mode    : boolean := false;
+         alt_scroll  : boolean := true;  -- default as apps generally don't set
          in_select   : boolean := false;
+         in_paste    : boolean := false;
          row,
          col         : natural := 0;
          pre_sel_row,
@@ -686,10 +691,11 @@ package Gtk.Terminal is
       -- For it to work, every terminal must register it's buffer into the
       -- display_output_handling_buffer (done as a part of Spawn_Shell).
 
-   procedure Switch_The_Light (for_buffer : access Gtk_Terminal_Buffer_Record'Class;
-                               at_light_number : natural;
-                               to_on : boolean := false;
-                               with_status : UTF8_String := "");
+   procedure Switch_The_Light(for_buffer:access Gtk_Terminal_Buffer_Record'Class;
+                              at_light_number : natural;
+                              to_on : boolean := false;
+                              with_status : UTF8_String := "";
+                              and_status_b: Glib.UTF8_String := "");
       -- Check that the switch_light_cb call back procedure is assigned.  If
       -- so, execute it, otherwise, just ignore and continue processing.
 
@@ -749,6 +755,14 @@ package Gtk.Terminal is
       -- right arrow key has been been pressed.  If so, it gets passed to the
       -- terminal emulator and not to the buffer for processing.
       
+   procedure Report_Mouse_Position(at_terminal : Gtk_Terminal; 
+                                   for_button : in positive;
+                                   at_button_press : in boolean := true;
+                                   at_button_release: in boolean := false);
+      -- Provide the service to motion notify and button press events to report
+      -- the current button state and mouse position to the virtual terminal
+      -- emulator client.
+            
    function Motion_Notify_CB(for_terminal_view: access Gtk_Widget_Record'Class;
                              event : Gdk_Event_Motion) return boolean;
       -- Called whenever the mouse moves inside the terminal's Gtk.Text_View,
@@ -770,6 +784,14 @@ package Gtk.Terminal is
       -- details on the mouse button that was pressed.
       -- If this function returns True, then other signal handers will not be
       -- called, otherwise the button press signal will be propagted further.
+      
+   function Mouse_Scroll_CB(for_terminal_view:access Gtk_Widget_Record'Class;
+                            event:Gdk.Event.Gdk_Event_Scroll) return boolean;
+      -- Called whenever the mouse is scrolled inside the terminal's
+      -- Gtk.Text_View, but not if it leaves the window.  Event contains the
+      -- details on the scroll wheel motion.
+      -- If this function returns True, then no other signal handers will be
+      -- called, otherwise the scroll wheel signal will be propagted further.
 --       
    -- procedure Show (the_terminal : access Gtk_Widget_Record'Class);
 --       -- Respond to being shown by ensuring the cursor is visible.
