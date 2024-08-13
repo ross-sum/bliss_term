@@ -9,6 +9,7 @@ TS=$(TA).gpr
 CONF=$(TA).conf
 GLADE=$(TA).glade
 XPM=$(TA).xpm
+DTF=$(TA).desktop
 #BA=tobase64
 #BS=$(BA).gpr
 #DB=$(TA).db
@@ -38,6 +39,7 @@ BIN=/usr/local/bin
 ETC=/usr/local/etc
 VAR=/var/local/lib
 ICON=/usr/local/share/icons/hicolor/32x32/apps
+DTOP=/usr/local/share/applications
 TD=obj_$(TARGET)
 SD=system
 ifeq ("$1.",".")
@@ -77,6 +79,8 @@ install:
 	cp $(SD)/$(GLADE) $(ETC)
 	mkdir -p $(ICON)
 	cp $(SD)/$(XPM) $(ICON)
+	mkdir -p $(DTOP)
+	cp $(SD)/$(DTF) $(DTOP)
 #	cp $(TD)/$(BA) $(BIN)
 #ifneq (,$(wildcard $(VAR)/$(DB))) 
 #	echo "Not overwriting $(VAR)/$(DB)."
