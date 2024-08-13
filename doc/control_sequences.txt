@@ -11,8 +11,8 @@ Command		Meaning
 <esc>[?<P1>n	Device Status Report: <P1>=6 - Report Cursor Position (DECXCPR) [sends back "<esc>[?<row>;<col>R"], <P1>=anything else - not implemented.
 <esc>[?1h		Put Cursor Keys in App mode
 <esc>[?1l		Take cursor keys out of App mode
-<esc>[?7h		Switch on Auto-Wrap
-<esc>[?7l		Switch off Auto-Wrap
+<esc>[?7h		Switch on Auto-Wrap (automatic wrapping is not yet implemented)
+<esc>[?7l		Switch off Auto-Wrap (automatic wrapping is not yet implemented)
 <esc>[?12h		switch on cursor blinking
 <esc>[?12l		switch off cursor blinking
 <esc>[?25h		make cursor visible
@@ -50,11 +50,11 @@ Command		Meaning
 <esc>[<P1>T		Scroll down <P1> lines
 <esc>[<P1>Z		Cursor Backward Tabulation <P1> tab stops (tab stops are not yet implemented)
 <esc>[<P1>c		Send device attributes (Primary DA) [currently sends back "<esc>[?1;0c"]
-<esc>[<P1>d		Position the cursor on the current line at the absolute <P1> position
+<esc>[<P1>d		Position the cursor on the current column and with the line at the absolute <P1> position
 <esc>[<P1>g		Clear the tab stops: <P1>=0 -> at the current position, <P1>=3 -> all tab stops (tab stops are not yet implemented)
 <esc>[<P1>h		Reset Mode: <P1>=2 -> Keyboard action mode on, <P1>=4 -> switch to insert, <P1>=12 Send/receive, <P1>=20 -> Automatic new line on
 <esc>[<P1>i		Serial port control (media copy)
-<esc>[<P1>l		Reset Mode: <P1>=2 -> Keyboard action mode off, <P1>=4 -> switch to overwrite, <P1>=12 Send/receive, <P1>=20 -> Automatic new line off
+<esc>[<P1>l		Reset Mode: <P1>=2 -> Keyboard action mode off, <P1>=4 -> switch to overwrite, <P1>=12 Send/receive, <P1>=20 -> Automatic new line off (only set to overwrite is implemented)
 <esc>[<P1>;..m	Set or reset font colouring and styles
 <esc>[<P1>n		Device status request: <P1>=5 -> status report 'OK' [sends back "<esc>[0n"], <P1>=6 report cursor position [sends back "<esc>[<line>;<col>R"]
 <esc>[<P1>;<P2>r	Set scrolling region to between line <P1> and <P2> inclusive (top line = line 1)
