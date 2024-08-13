@@ -943,8 +943,14 @@ package body Gtk.Terminal is
          mouse_details.in_paste := true;
          -- Ensure cursor is correctly located
          Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - Middle button event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row =" & mouse_details.row'Wide_Image & ", mouse_details.col =" & mouse_details.col'Wide_Image & ", entering_command = " & the_terminal.buffer.entering_command'Wide_Image & ", Get_Overwrite = " & Get_Overwrite(the_terminal.terminal)'Wide_Image & ".");
-            -- restore the cursor to the correct location
-         end_iter := Home_Iterator(for_terminal => the_terminal);
+            -- restore the cursor to the correct location, but only if
+            -- the copy took place within the current virtual terminal (tab)
+         if mouse_details.pre_sel_row > 0 or mouse_details.pre_sel_col > 0
+         then  -- a valid location has been recorded
+            end_iter := Home_Iterator(for_terminal => the_terminal);
+         else  -- set end_iter to the current cursor location, which is valid
+            Get_Iter_At_Mark(buffer, end_iter, Get_Insert(buffer));
+         end if;
          if mouse_details.pre_sel_row > 1 then
             Forward_Lines(end_iter, 
                              Gint(mouse_details.pre_sel_row - 1), result);
@@ -974,6 +980,9 @@ package body Gtk.Terminal is
          end if;
          Report_Mouse_Position(at_terminal => the_terminal, 
                                for_button => natural(event.button));
+         -- Invalidate the pre-copy cursor location as the paste is now done
+         mouse_details.pre_sel_row := 0;
+         mouse_details.pre_sel_col := 0;
          -- return true;
       elsif event.Button = 3  -- right mouse button
       then
@@ -1081,10 +1090,20 @@ package body Gtk.Terminal is
          -- Work out direction of wheel (up or down)
          if event.Direction = scroll_up or else direction = scroll_up
          then  -- do the up direction (which means go down)
-            Write(the_terminal.master_fd, buffer => Esc_Str & "OB");
+            if the_terminal.buffer.cursor_keys_in_app_mode
+            then
+               Write(the_terminal.master_fd, buffer => Esc_Str & "OB");
+            else
+               Write(the_terminal.master_fd, buffer => Esc_Str & "[B");
+            end if;
          elsif event.Direction = scroll_down or else direction = scroll_down
          then  -- do the down direction (which means go up)
-            Write(the_terminal.master_fd, buffer => Esc_Str & "OA");
+            if the_terminal.buffer.cursor_keys_in_app_mode
+            then
+               Write(the_terminal.master_fd, buffer => Esc_Str & "OA");
+            else
+               Write(the_terminal.master_fd, buffer => Esc_Str & "[A");
+            end if;
          end if;
          return true;
       else  -- Allow normal scroll operations to proceed

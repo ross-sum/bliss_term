@@ -462,6 +462,10 @@ package Gtk.Terminal is
          in_paste    : boolean := false;
          row,
          col         : natural := 0;
+         -- To know where to paste to, record the cursor position immediately
+         -- before the copy operation.  But this is only valid for copy taking
+         -- place within the terminal emulator tab.  A value of 0 signifies
+         -- that it is not a valid location.
          pre_sel_row,
          pre_sel_col : natural := 0;
       end record;
