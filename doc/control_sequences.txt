@@ -32,7 +32,7 @@ Command		Meaning
 <esc>[?2004h		switch bracketed paste mode on
 <esc>[?2004l		switch bracketed paste mode off
 <esc>[<P1>@		insert <P1> space characters ahead of the cursor position
-<esc>[<P1>A		Move cursor up by <P1> lines (no <P1> = 1 line)
+<esc>[<P1>A	Move cursor up by <P1> lines (no <P1> = 1 line)
 <esc>[<P1>B		Move cursor down by <P1> lines (no <P1> = 1 line)
 <esc>[<P1>C		Move cursor forward by <P1> characters (no <P1> = 1 character)
 <esc>[<P1>D		Move cursor back by <P1> characters (no <P1> = 1 character)
@@ -78,6 +78,7 @@ Command		Meaning
 <esc>^		Privacy Message (not implemented, with a log message at level 9 saying so)
 <esc>_		Application Program Command (not implemented, with a log message at level 9 saying so)
 <esc><P1>#		Test (not implemented, with a log message at level 9 saying so)
+<esc>%		UTF8 (not implemented, with a log message at level 9 saying so)
 <esc>=		Set keypad keys into Application mode
 <esc>>		Take keypad keys out of Application mode
 <esc><		Exit the terminal (this is a Bliss_Term specific implementation of this command)
