@@ -777,6 +777,7 @@ package body Gtk.Terminal is
       end Button_ID;
       mouse_details: mouse_configuration_parameters renames  
                                               at_terminal.buffer.mouse_config;
+      the_button   : positive := for_button;
       depress_type : Character;
    begin
       if mouse_details.x10_mouse
@@ -789,9 +790,12 @@ package body Gtk.Terminal is
                          To_Characters(mouse_details.row));
       elsif mouse_details.x11_mouse and not mouse_details.ext_mode
       then  -- Report mouse details viz CSI M CbCxCy
+         if at_button_release then
+            the_button := 2#100#;  -- 1 more than what it becomes (2#11#)
+         end if;
          Write(at_terminal.master_fd, 
                buffer => Esc_str & "[M" & 
-                         Button_ID(for_button, 
+                         Button_ID(the_button, 
                                    apply_offset => (not at_button_press)) &
                          To_Characters(mouse_details.col) &
                          To_Characters(mouse_details.row));
@@ -804,13 +808,13 @@ package body Gtk.Terminal is
             depress_type := 'M';
          end if;
          Write(at_terminal.master_fd, 
-               buffer => Esc_str & "[<" & 
-                         Button_ID(for_button, 
-                                   with_offset => 0,
-                                   apply_offset => (not at_button_press)) &
-                         ";" & As_String(mouse_details.col) & ";" &
-                         As_String(mouse_details.row) &
-                         depress_type);
+               buffer=> Esc_str & "[<" & As_String(Character'Pos(
+                           Button_ID(for_button, 
+                                     with_offset => 0,
+                                     apply_offset=>(not at_button_press))(1)))&
+                        ";" & As_String(mouse_details.col) & ";" &
+                        As_String(mouse_details.row) &
+                        depress_type);
       end if;
    end Report_Mouse_Position;
    
@@ -1845,7 +1849,7 @@ package body Gtk.Terminal is
       res       : Interfaces.C.int;
    begin
       if fd = -1 then
-         Handle_The_Error(the_error  => 8, 
+         Handle_The_Error(the_error  => 11, 
                           error_intro=> "Read(fd): File error",
                           error_message => "File not opened.");
          buffer := (buffer'First..Buffer'Last => ' ');
@@ -1855,7 +1859,7 @@ package body Gtk.Terminal is
       end if;
       res := C_Read(fd => fd, data => in_buffer, length => int(len));
       if res <= -1 or res > int(len) then
-         Handle_The_Error(the_error  => 9, 
+         Handle_The_Error(the_error  => 12, 
                           error_intro=> "Read(fd): File error",
                           error_message => "Read failed.");
          buffer := (buffer'First..Buffer'Last => ' ');
@@ -1886,7 +1890,7 @@ package body Gtk.Terminal is
    
    begin
       if fd <= 0 then
-         Handle_The_Error(the_error  => 10, 
+         Handle_The_Error(the_error  => 13, 
                           error_intro=> "Write(fd): File error",
                           error_message => "File not opened.");
          Free (out_buffer);
@@ -1898,7 +1902,7 @@ package body Gtk.Terminal is
       Free (out_buffer);
    
       if res <= -1 then
-         Handle_The_Error(the_error  => 11, 
+         Handle_The_Error(the_error  => 14, 
                           error_intro=> "Write(fd): Write error",
                           error_message => "Write Failed  with length " &
                                         Interfaces.C.int'Wide_Image(-res)&".");
@@ -2428,7 +2432,7 @@ package body Gtk.Terminal is
       Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Did fork.");
       if child_pid = -1
       then -- failed to fork
-         Handle_The_Error(the_error  => 12, 
+         Handle_The_Error(the_error  => 15, 
                           error_intro=> "Spawn_Shell: Fork error",
                           error_message => "Fork_Process failed.");
          raise Terminal_Creation_Error;
@@ -2519,7 +2523,7 @@ package body Gtk.Terminal is
                    to => terminal.terminal);
       -- Final sanity check on the creation of the input handler task
       if terminal.term_input = null then  -- it failed out
-         Handle_The_Error(the_error  => 13, 
+         Handle_The_Error(the_error  => 16, 
                         error_intro=> "Spawn_Shell: Terminal input task error",
                         error_message => "terminal.term_input is unassigned.");
          raise Terminal_Creation_Error;
@@ -2607,7 +2611,7 @@ package body Gtk.Terminal is
          if IO_Control(for_file => terminal.master_fd, request => TIOCGWINSZ, 
                        params => term_size'Address) < 0
          then  -- failed to get the current size :-(
-            Handle_The_Error(the_error => 14, 
+            Handle_The_Error(the_error => 17, 
                           error_intro  => "Set_Size: Terminal resize error",
                           error_message=> "Couldn't get current window size.");
          else  -- Second, set the new number of rows and columns
@@ -2616,7 +2620,7 @@ package body Gtk.Terminal is
             if IO_Control(for_file => terminal.master_fd, request=> TIOCSWINSZ,
                           params => term_size'Address) < 0
             then -- Error in rezizing :-(
-               Handle_The_Error(the_error => 15, 
+               Handle_The_Error(the_error => 18, 
                              error_intro  => "Set_Size: Terminal resize error",
                              error_message=> "Couldn't set window size to " & 
                                              "rows =" & rows'Wide_Image & 
