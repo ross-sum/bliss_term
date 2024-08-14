@@ -546,7 +546,7 @@ separate (Gtk.Terminal)
                               end if;
                               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?2004' - Setting on_buffer.bracketed_paste_mode to " & on_buffer.bracketed_paste_mode'Wide_Image & ".");
                            when others =>  -- not valid and not interpreted
-                              Handle_The_Error(the_error => 3, 
+                              Handle_The_Error(the_error => 4, 
                                       error_intro=> "Process_Escape: " & 
                                                     "Control string error",
                                       error_message => "Unrecognised private "&
@@ -578,15 +578,15 @@ separate (Gtk.Terminal)
                         param(1) := 1;
                      end if;
                      -- Get the column number (to preserve it)
-                     column := UTF8_Length(Get_Line_From_Start(on_buffer, 
-                                                               cursor_iter));
+                     column := natural(Get_Line_Index(cursor_iter)) + 1;
                      Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape [ A : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going up by" & param(1)'Wide_Image & " lines.  Current column =" & column'Wide_Image & ".");
                      -- Move the cursor up
                      for line_num in 1 .. param(1) loop
-                        if Backward_Display_Line(on_buffer.parent,cursor_iter)
-                        then  -- Successfully gone one line back
+                        Backward_Line(cursor_iter, res);
+                        if res or else Get_Line(cursor_iter) = 0
+                        then  -- Successfully gone one line back or at start
                            if line_num = param(1) then -- at desired line
-                              for col in 1 .. column loop
+                              for col in 1 .. column - 1 loop
                                  Forward_Char(cursor_iter, res);
                                  if not res then  -- no more characters right
                                     if Starts_Display_Line(on_buffer.parent, 
@@ -991,34 +991,74 @@ separate (Gtk.Terminal)
                   when 'h' => null;  -- Reset Mode (RM)
                      case param(count) is
                         when 2 => null; -- Keyboard Action Mode (KAM)
+                           Log_Data(at_level => 9, 
+                                    with_details=>"Process_Escape : Escape '" &
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                                  "' not yet implemented.");
                         when 4 => null;  -- insert - Insert/Replace Mode (IRM)
                            -- Switch to insert?
                            Set_Overwrite(on_buffer.parent, false);
                         when 12 => null;  -- Send/receive (SRM)
-                        when 20 => null;  -- Automatic Newline (LNM)
-                        when others => null;
-                     end case;
-                  when 'i' => null;  -- Serial port control (media copy)
-                     Log_Data(at_level => 9, 
-                              with_details=> "Process_Escape : Escape '" &
+                           Log_Data(at_level => 9, 
+                                    with_details=>"Process_Escape : Escape '" &
                                              Ada.Characters.Conversions.
                                                  To_Wide_String(for_sequence) &
-                                             "' not yet implemented.");
+                                                  "' not yet implemented.");
+                        when 20 => null;  -- Automatic Newline (LNM)
+                           Log_Data(at_level => 9, 
+                                    with_details=>"Process_Escape : Escape '" &
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                                  "' not yet implemented.");
+                        when others => null;
+                           Handle_The_Error(the_error => 5, 
+                                            error_intro=>"Process_Escape: " &
+                                                         "Control string error",
+                                            error_message=> 
+                                               "Unrecognised control sequence"&
+                                               " with Reset Mode (RM) not " &
+                                               "recognised for '" & 
+                                               Ada.Characters.Conversions.
+                                                  To_Wide_String(for_sequence)&
+                                               "'.");
+                     end case;
+                  when 'i' => null;  -- Serial port control (media copy)
                   when 'l' => null;  -- Reset Mode (RM)
                      case param(count) is
                         when 2 => null; -- Keyboard Action Mode (KAM)
+                           Log_Data(at_level => 9, 
+                                    with_details=>"Process_Escape : Escape '" &
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                                  "' not yet implemented.");
                         when 4 => null;  -- replace - Insert/Replace Mode (IRM)
                            -- switch to overwrite?
                            Set_Overwrite(on_buffer.parent, true);
                         when 12 => null;  -- Send/receive (SRM)
-                        when 20 => null;  -- Normal Linefeed (LNM)
-                        when others => null;
-                     end case;
-                     Log_Data(at_level => 9, 
-                              with_details=> "Process_Escape : Escape '" &
+                           Log_Data(at_level => 9, 
+                                    with_details=>"Process_Escape : Escape '" &
                                              Ada.Characters.Conversions.
                                                  To_Wide_String(for_sequence) &
-                                             "' not yet implemented.");
+                                                  "' not yet implemented.");
+                        when 20 => null;  -- Normal Linefeed (LNM)
+                           Log_Data(at_level => 9, 
+                                    with_details=>"Process_Escape : Escape '" &
+                                             Ada.Characters.Conversions.
+                                                 To_Wide_String(for_sequence) &
+                                                  "' not yet implemented.");
+                        when others => null;
+                           Handle_The_Error(the_error => 6, 
+                                            error_intro=>"Process_Escape: " &
+                                                         "Control string error",
+                                            error_message=> 
+                                               "Unrecognised control sequence"&
+                                               " with Reset Mode (RM) not " &
+                                               "recognised for '" & 
+                                               Ada.Characters.Conversions.
+                                                  To_Wide_String(for_sequence)&
+                                               "'.");
+                     end case;
                   when 'm' =>   -- set or reset font colouring and styles
                      while count <= pnum loop
                         case param(count) is
@@ -1162,7 +1202,7 @@ separate (Gtk.Terminal)
                            when 50 =>  -- Disable proportional spacing
                               Append_To_Markup(on_buffer.markup, mono);
                            when others => null;  -- style or colour not recognised
-                              Handle_The_Error(the_error => 4, 
+                              Handle_The_Error(the_error => 7, 
                                                error_intro=>"Process_Escape: " &
                                                             "Control string error",
                                                error_message=> 
@@ -1338,7 +1378,7 @@ separate (Gtk.Terminal)
                               Switch_The_Light(on_buffer, 4, false);
                            end if;
                         when others => -- not yet implemented
-                           Handle_The_Error(the_error => 5, 
+                           Handle_The_Error(the_error => 8, 
                                       error_intro=> "Process_Escape: " & 
                                                     "Control string error",
                                       error_message=>"Unrecognised VT non-" &
@@ -1348,7 +1388,7 @@ separate (Gtk.Terminal)
                                                      "'.");
                      end case;
                   when others => 
-                     Handle_The_Error(the_error => 6, 
+                     Handle_The_Error(the_error => 9, 
                                       error_intro=> "Process_Escape: " & 
                                                     "Control string error",
                                       error_message => "Unrecognised control " &
@@ -1576,7 +1616,7 @@ separate (Gtk.Terminal)
                Gtk_Terminal(Get_Parent(on_buffer.parent)).closed_callback(
                                   Gtk_Terminal(Get_Parent(on_buffer.parent)));
             when others =>   -- unrecognised control sequence - log and ignore
-               Handle_The_Error(the_error => 7, 
+               Handle_The_Error(the_error => 10, 
                           error_intro=> "Process_Escape: Control string error",
                             error_message => "Unrecognised control sequence " &
                                               "for '" & 
