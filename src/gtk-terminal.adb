@@ -76,6 +76,7 @@ with Ada.Unchecked_Deallocation;
 with GNAT.Strings;
 with Glib.Values;
 with Glib.Properties;
+with Glib.Convert;
 with Gdk.Color;
 with Gdk.Types.Keysyms;
 with Gdk.Rectangle;
