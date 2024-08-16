@@ -1820,8 +1820,10 @@ begin  -- Process
          -- Now Insert/Overwrite the_input into the buffer
          Insert_At_Cursor(for_buffer, the_text=>the_input);
       else  -- in some kind of mark-up - append it to the mark-up string
-         -- Insert_At_Cursor(for_buffer, the_text=>the_input);
-         Append_To_Markup(for_buffer.markup, the_value => the_input);
+         -- Make sure that the mark-up text has any special mark-up characters
+         -- escaped on the way through.
+         Append_To_Markup(for_buffer.markup, 
+                          the_value => Glib.Convert.Escape_Text(the_input));
       end if;
       for_buffer.just_wrapped := false;
       null;
