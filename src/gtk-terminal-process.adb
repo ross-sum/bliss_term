@@ -94,7 +94,6 @@ separate (Gtk.Terminal)
       count   : natural := 1;  -- current parameter
       res     : boolean;  -- result
       cursor_iter : aliased Gtk.Text_Iter.Gtk_Text_Iter;
-      cursor_mk   : Gtk.Text_Mark.Gtk_Text_Mark;
       dest_iter   : aliased Gtk.Text_Iter.Gtk_Text_Iter;
       buf_x   : Glib.Gint := 0;
       buf_y   : Glib.Gint := 0;
@@ -969,8 +968,10 @@ separate (Gtk.Terminal)
                                                  To_Wide_String(for_sequence) &
                                               "' not yet implemented.");
                   when 'c' =>   -- Send Device Attributes (Primary DA)
+                     -- See https://terminalguide.namepad.de/seq/csi_sc/ for
+                     -- possible options
                      Write(fd => on_buffer.master_fd, 
-                              Buffer => Esc_str & "[?1;0c");
+                              Buffer => Esc_str & "[?1;2c");
                   when 'd' =>   -- Line Position Absolute (default=[1,column])
                      -- Get the column number (to preserve it)
                      Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
@@ -1245,7 +1246,10 @@ separate (Gtk.Terminal)
                      on_buffer.scroll_region_top    := param(1);
                      on_buffer.scroll_region_bottom := param(2);
                   when 's' =>  -- Save cursor position
-                     on_buffer.saved_cursor_pos:= Get_Mark(on_buffer,"insert");
+                     on_buffer.saved_cursor_pos := Get_Insert(the_buf);
+                     Get_Iter_At_Mark(the_buf, cursor_iter, 
+                                      on_buffer.saved_cursor_pos);
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Saving cursor_iter for (row=" &  Get_Line(cursor_iter)'Wide_Image & ", col=" & Get_Line_Offset(cursor_iter)'Wide_Image & ").");
                   when 't' => null;  -- Window manipulation (XTWINOPS)
                      -- format is <Esc>[nn;a;0t (e.g. nn=22 or nn=23)
                      -- nn=20;0 : Report terminal's icon name (aka icon title)
@@ -1322,7 +1326,8 @@ separate (Gtk.Terminal)
                   when 'u' =>  -- Restore cursor position
                      Get_Iter_At_Mark(the_buf, cursor_iter, 
                                       on_buffer.saved_cursor_pos);
-                     Move_Mark_By_Name(the_buf, "insert", cursor_iter);
+                     Place_Cursor(the_buf, where => cursor_iter);
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : restoring cursor_iter to (row=" &  Get_Line(cursor_iter)'Wide_Image & ", col=" & Get_Line_Offset(cursor_iter)'Wide_Image & ").");
                   when '~' =>  -- Non-standard, but used for going to end (VT)
                      case param(1) is
                         when 2 => -- VT sequence for Insert/Overwrite [non-standard]
@@ -1397,6 +1402,16 @@ separate (Gtk.Terminal)
                                                   To_Wide_String(for_sequence)&
                                               "'.");
                end case;
+            when '7' =>   -- Save Cursor (DECSC)
+               -- Save the current cursor position. (Old VT100 command)
+               -- Just call the CSI s command to do the same thing
+               Process_Escape(for_sequence => Esc_Str & '[' & "s",
+                              on_buffer => on_buffer);
+            when '8' =>   --Restore Cursor (DECRC)
+               -- Restore the saved cursor position. (Old VT100 command)
+               -- Just call the CSI u command to do the same thing
+               Process_Escape(for_sequence => Esc_Str & '[' & "u",
+                              on_buffer => on_buffer);
             when 'H' => null;  -- Horizontal Tab Set
                -- Sets a tab stop in the current column the cursor is in.
                Log_Data(at_level => 9, 
@@ -1404,72 +1419,28 @@ separate (Gtk.Terminal)
                                        Ada.Characters.Conversions.
                                                  To_Wide_String(for_sequence) &
                                        "' not yet implemented.");
+            when 'D' =>   -- Index
+               -- Move the cursor to the next line in the scrolling region,
+               -- scrolling the buffer if necessary.  If it is not in the
+               -- scrolling region, move down one line if the cursor is not at
+               -- the bottom-most line.
+               Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
+               Scroll_Down (number_of_lines => 1, for_buffer => on_buffer, 
+                            starting_from => cursor_iter);
+               Place_Cursor(the_buf, where => cursor_iter);
+               -- Scroll buffer if necessary
+               Scroll_Mark_Onscreen(on_buffer.parent, Get_Insert(the_buf));
+               Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape D : Done. Cursor cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), current column =" & Get_Line_Index(cursor_iter)'Wide_Image & ".");
             when 'M' =>   -- Reverse Index
-               -- move the cursor up one line, maintaining horizontal position,
+               -- perform the reverse operation of "\n" (line feed), move the
+               -- cursor up one line, maintaining horizontal position,
                -- scrolling the buffer if necessary
                Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
-               -- Get the column number (to preserve it)
-               column := natural(Get_Line_Index(cursor_iter));
-               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), going up by 1 line.  Current column =" & column'Wide_Image & ".");
-               -- Move the cursor up
-               if Backward_Display_Line(on_buffer.parent,cursor_iter)
-               then  -- Successfully gone one line back
-                  res := true;
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : Success.  Current line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), current column =" & column'Wide_Image & ".");
-               else  -- Must be already at the first line
-                  -- Insert a new line at the beginning
-                  res := 
-                     Backward_Display_Line_Start(on_buffer.parent,cursor_iter);
-                  Gtk.Text_Buffer.Insert(the_buf, cursor_iter, LF_str);
-                  -- then go back a line
-                  res := Backward_Display_Line(on_buffer.parent,cursor_iter);
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : Failed.  Inserted line with cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), going up by 1 line.  Current column =" & column'Wide_Image & ".");
-                  -- If within a scrolling region, delete the line at just past
-                  -- the bottom of the scrolling region
-                  if on_buffer.scroll_region_bottom > 0
-                  then  -- it's a possibility: 1 more check...
-                     Get_End_Iter(the_buf, dest_iter);
-                     if Natural(Get_Line(dest_iter))>= 
-                                               on_buffer.scroll_region_bottom-1
-                     then  -- Yes, need to scroll the last line off the bottom
-                        -- save the cursor position to survive the delete op'n
-                        cursor_mk:= Create_Mark(the_buf,"InsertPt",cursor_iter);
-                        -- set up cursor_iter to be at the start of the line
-                        -- less the carriage return/line feed position
-                        cursor_iter := dest_iter;
-                        Set_Line_Index(cursor_iter, 0);
-                        Backward_Char(cursor_iter, res);
-                        -- Delete the line at the bottom of the scrolled region
-                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : cursor_iter line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(the_buf, cursor_iter, dest_iter)) & "'.");
-                        Delete(the_buf, cursor_iter, dest_iter);
-                        -- Restore the cursor_iter iter
-                        Get_Iter_At_Mark(the_buf, cursor_iter, cursor_mk);
-                        -- And clean up the mark
-                        Delete_Mark(the_buf, cursor_mk);
-                     end if;
-                  end if;
-               end if;
-               -- Ensure cursor_iter starts at the first column (column 0)
-               if Get_Line_Offset(cursor_iter) > 0
-               then  -- not at the start of the line
-                  Set_Line_Offset(cursor_iter, 0);
-               end if;
-               if res and column > 0
-               then  -- Successfully gone one line back (+ not at right column)
-                  -- now go to the correct (i.e. original) column number
-                  for col in 1 .. column loop
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M :going forward a character.");
-                     Forward_Char(cursor_iter, res);
-                     if not res then  -- no more characters right
-                        if Starts_Display_Line(on_buffer.parent, cursor_iter)
-                        then  -- go back to previous position
-                           Backward_Char(cursor_iter, res);
-                        end if;
-                         -- Pad out with a space character
-                        Insert(on_buffer, at_iter=>cursor_iter, the_text=>" ");
-                     end if;
-                  end loop;
-               end if;
+               -- Do a scrolling region type of cursor movement
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : Calling Scroll_Up as line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), going up by 1 line.  on_buffer.scroll_region_top =" & on_buffer.scroll_region_top'Wide_Image & " and on_buffer.scroll_region_bottom =" & on_buffer.scroll_region_bottom'Wide_Image & ".");
+               Scroll_Up (number_of_lines => 1, for_buffer => on_buffer, 
+                             starting_from => cursor_iter);
                Place_Cursor(the_buf, where => cursor_iter);
                -- Scroll buffer if necessary
                Scroll_Mark_Onscreen(on_buffer.parent, Get_Insert(the_buf));
@@ -1646,20 +1617,23 @@ begin  -- Process
    for_buffer.cmd_prompt_check.Check(the_character => the_input(ist));
    if for_buffer.escape_sequence(escape_str_range'First) = Esc_str(1) and then
       the_input /= LF_str
-   then
+   then  -- Processing an Escape Sequence
       -- add in and process the escape sequence
       for_buffer.escape_sequence(for_buffer.escape_position) := the_input(ist);
-      if Is_In(element => the_input(ist), set => Osc_Term) or else
-         (the_input(ist)='\' and 
-          for_buffer.escape_sequence(for_buffer.escape_position-1)=Esc_str(1))
-          or else
-         (for_buffer.escape_sequence(escape_str_range'First+1) /= ']' and then
-          (Is_In(element => the_input(ist), set => Esc_Term) and not
-           ((the_input(ist) = '>' and 
-             for_buffer.escape_sequence(1..for_buffer.escape_position) = Esc_str & "[>")
-            or -- also not <Esc>P, which must be terminated by <Esc>\ or ST
-            (the_input(ist) = 'P' and 
-             for_buffer.escape_sequence(for_buffer.escape_position-1)=Esc_str(1)))))
+      if Is_In(element => the_input(ist), set => Osc_Term) 
+         or else
+          (the_input(ist)='\' and 
+           for_buffer.escape_sequence(for_buffer.escape_position-1)=Esc_str(1))
+         or else
+          (for_buffer.escape_sequence(escape_str_range'First+1) /= ']' and then
+           (Is_In(element => the_input(ist), set => Esc_Term) and not
+            ((the_input(ist) = '>' and 
+              for_buffer.escape_sequence(1..for_buffer.escape_position) = Esc_str & "[>")
+             or -- also not <Esc>P, which must be terminated by <Esc>\ or ST
+             (the_input(ist) = 'P' and 
+              for_buffer.escape_sequence(for_buffer.escape_position-1)=Esc_str(1)))))
+         or else (for_buffer.escape_position = 2 and then 
+                  (the_input(ist) = '7' or the_input(ist) = '8'))
       then  -- escape sequence is complete - process it
          Error_Log.Debug_Data(at_level => 9, with_details => "Process : Escape sequence finished with '" & Ada.Characters.Conversions.To_Wide_String(for_buffer.escape_sequence(1..for_buffer.escape_position)) & "'; Set_Overwrite(for_buffer.parent) to true");
          -- Make sure that terminal is in overwrite mode as the escape sequence

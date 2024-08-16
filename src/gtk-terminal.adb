@@ -1727,16 +1727,250 @@ package body Gtk.Terminal is
    end Scrolled_Delete;
    
    procedure Scroll_Down(number_of_lines : in positive; 
-                         for_buffer : Gtk_Text_Buffer; 
+                         for_buffer :  access Gtk_Terminal_Buffer_Record'Class; 
                          starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter) is
       -- Scroll down the specified number of lines between scroll_region_top
-      -- and scroll_region_bottom, making sure that lines that scroll above or
-      -- below the scroll region are discarded and that the original lines
-      -- outside of the scroll region are protected.  If the scroll regions are
-      -- undefined (i.e. set to 0), then this procedure does nothing.
+      -- and scroll_region_bottom, making sure that lines that scroll above the
+      -- scroll region are discarded and that the original lines outside of the
+      -- scroll region are protected. If the scroll regions are undefined (i.e.
+      -- set to 0), then this procedure does nothing other than go down a line
+      -- if possible.  If not possible, then it will not add any new line.
+      use Gtk.Text_Iter;
+      LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
+      starting_line : constant natural := natural(Get_Line(starting_from)) + 1;
+      buffer   : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      home_iter: Gtk_Text_Iter;
+      last_iter: Gtk_Text_Iter;
+      cursor_mk: Gtk.Text_Mark.Gtk_Text_Mark;
+      start_mk : Gtk.Text_Mark.Gtk_Text_Mark;
+      column   : natural := natural(Get_Line_Index(starting_from));
+      result   : boolean;
+      the_terminal: Gtk_Terminal:= Gtk_Terminal(Get_Parent(for_buffer.parent));
    begin
-      null;  -- To be implemented
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
+      for line in 1 .. number_of_lines loop
+         if (for_buffer.scroll_region_top > 0 and 
+             for_buffer.scroll_region_bottom > 0) and then
+            (starting_line >= for_buffer.scroll_region_top and
+             starting_line <= for_buffer.scroll_region_bottom)
+         then  -- scroll down from below current cursor
+            -- Set the home_iter to the top of the screen.  A line gets
+            -- deleted at the top of the screen.
+            home_iter := Home_Iterator(for_terminal => the_terminal);
+            -- Set last_iter to the last character on the last line in the
+            -- scrolled region.  A blank line gets inserted after this to
+            -- replace the line that gets deleted at home_iter.
+            last_iter := home_iter;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
+            Forward_Lines(last_iter, 
+                          Glib.Gint(for_buffer.scroll_region_bottom-1),
+                          result);
+            if not Ends_Line(last_iter)
+            then  -- Not at end, set up the last_iter to be the end of the line
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               Forward_To_Line_End(last_iter, result);
+            end if;
+            -- Now set home_iter to be at the scroll_region_top
+            if for_buffer.scroll_region_top > 1
+            then  -- Not at the top of the scroll region - go there
+               Forward_Lines(home_iter, 
+                             Glib.Gint(for_buffer.scroll_region_top-1),
+                             result);
+            end if;
+            -- and preserve that location
+            start_mk := Create_Mark(buffer, "StartPt", home_iter);
+            -- If starting_from is before last_iter, then just move down a line
+            if Get_Line(starting_from) >= 
+                                   Glib.Gint(for_buffer.scroll_region_bottom-1)
+            then  -- already at the top, need to scroll the screen
+               -- Preserve starting_from into a mark
+               cursor_mk := Create_Mark(buffer, "CursorPt", starting_from);
+               -- Insert a line at the bottom
+               Insert(buffer, iter=>last_iter, text=>LF_str);
+               -- Set last_iter to be the end of the first line
+               Get_Iter_At_Mark(buffer, home_iter, start_mk);
+               last_iter := home_iter;
+               if not Ends_Line(last_iter)
+               then  -- Not at end, so set to the end of the line
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+                  Forward_To_Line_End(last_iter, result);
+               end if;
+                  -- and tip it over the end (so we delete the whole line)
+               Forward_Char(last_iter, result);
+               -- and delete it
+               Delete(buffer, home_iter, last_iter);
+               -- Restore the starting_from iter
+               Get_Iter_At_Mark(buffer, starting_from, cursor_mk);
+               -- And clean up the marks
+               Delete_Mark(buffer, cursor_mk);
+               Delete_Mark(buffer, start_mk);
+            end if;
+            -- Now move down a line
+            Forward_Line(starting_from, result);
+            if line = number_of_lines
+            then  -- make sure that we are in the correct column
+               while (not Ends_Line(starting_from)) and then
+                     (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Forward_Char(starting_from, result);
+               end loop;
+               -- Pad out with spaces if necessary to get to correct column
+               while (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Insert(buffer, iter=>starting_from, text=>" ");
+               end loop;
+            end if;
+         else  -- Not a scroll region
+            if Get_Line(starting_from) > 0
+            then  -- lines to go
+               Forward_Line(starting_from, result);
+            end if;
+            if line = number_of_lines
+            then  -- make sure that we are in the correct column
+               while (not Ends_Line(starting_from)) and then
+                     (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Forward_Char(starting_from, result);
+               end loop;
+               -- Pad out with spaces if necessary to get to correct column
+               while (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Insert(buffer, iter=>starting_from, text=>" ");
+               end loop;
+            end if;
+         end if;
+      end loop;
    end Scroll_Down;
+   
+   procedure Scroll_Up (number_of_lines : in positive; 
+                        for_buffer :  access Gtk_Terminal_Buffer_Record'Class; 
+                        starting_from :in out Gtk.Text_Iter.Gtk_Text_Iter) is
+      -- Scroll up the specified number of lines between scroll_region_top
+      -- and scroll_region_bottom, making sure that lines that scroll below the
+      -- scroll region are discarded and that the original lines outside of the
+      -- scroll region are protected. If the scroll regions are undefined (i.e.
+      -- set to 0), then this procedure does nothing other than go up a line if
+      -- possible.  If not possible, it does not insert any new line at the
+      -- start.
+      use Gtk.Text_Iter;
+      LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
+      starting_line : constant natural := natural(Get_Line(starting_from)) + 1;
+      buffer   : Gtk.Text_Buffer.Gtk_Text_Buffer;
+      home_iter: Gtk_Text_Iter;
+      last_iter: Gtk_Text_Iter;
+      cursor_mk: Gtk.Text_Mark.Gtk_Text_Mark;
+      end_mark : Gtk.Text_Mark.Gtk_Text_Mark;
+      column   : natural := natural(Get_Line_Index(starting_from));
+      result   : boolean;
+      the_terminal: Gtk_Terminal:= Gtk_Terminal(Get_Parent(for_buffer.parent));
+   begin
+      if for_buffer.alternative_screen_buffer
+       then  -- using the alternative buffer for display
+         buffer := for_buffer.alt_buffer;
+      else  -- using the main buffer for display
+         buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
+      end if;
+      Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(for_buffer.parent) or for_buffer.alternative_screen_buffer) & " and starting_from index =" & Get_Line_Index(starting_from)'Wide_Image & " (column" & Get_Line_Offset(starting_from)'Wide_Image & ").");
+      for line in 1 .. number_of_lines loop
+         if (for_buffer.scroll_region_top > 0 and 
+             for_buffer.scroll_region_bottom > 0) and then
+            (starting_line >= for_buffer.scroll_region_top and
+             starting_line <= for_buffer.scroll_region_bottom)
+         then  -- scroll up from below current cursor as lines are deleted
+            -- Set the home_iter to the top of the screen.  A line gets
+            -- inserted at the top of the screen.
+            home_iter := Home_Iterator(for_terminal => the_terminal);
+            -- Set last_iter to the last character on the last line in the
+            -- scrolled region.  This line gets deleted, being replaced by the
+            -- line that gets inserted at home_iter.
+            last_iter := home_iter;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
+            Forward_Lines(last_iter, 
+                          Glib.Gint(for_buffer.scroll_region_bottom-1),
+                          result);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: last_iter =(" & Get_Line(last_iter)'Wide_Image & ", column" & Get_Line_Offset(last_iter)'Wide_Image & "),  checking for Ends_Line(last_iter) (=" & Ends_Line(last_iter)'Wide_Image & ").");
+            if not Ends_Line(last_iter)
+            then  -- Not at end, set up the last_iter to be the end of the line
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               Forward_To_Line_End(last_iter, result);
+            end if;
+            -- and preserve that location
+            end_mark := Create_Mark(buffer, "EndPt", last_iter);
+            -- Now set home_iter to be at the scroll_region_top
+            if for_buffer.scroll_region_top > 1
+            then  -- Not at the top of the scroll region - go there
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 1, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_top-1)'Wide_Image & " lines...");
+               Forward_Lines(home_iter, 
+                             Glib.Gint(for_buffer.scroll_region_top-1),
+                             result);
+            end if;
+            -- If starting_from is after home_iter, then just move it up a line
+            if Get_Line(starting_from) <= 
+                                      Glib.Gint(for_buffer.scroll_region_top-1)
+            then  -- already at the top, need to scroll the screen
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line(starting_from) (=" & Get_Line(starting_from)'Wide_Image & ") <= Glib.Gint(for_buffer.scroll_region_top-1) (=" & Glib.Gint(for_buffer.scroll_region_top-1)'Wide_Image & ").");
+               -- Preserve starting_from into a mark
+               cursor_mk := Create_Mark(buffer, "CursorPt", starting_from);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Preserved starting_from into a mark.");
+               -- Insert a line at the top
+               Insert(buffer, iter=>home_iter, text=>LF_str);
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Inserted new line at home_iter.");
+               -- Set home_iter to be the start of the last line
+               Get_Iter_At_Mark(buffer, last_iter, end_mark);
+               home_iter := last_iter;
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: set home_iter := last_iter.");
+               if Get_Line_Offset(home_iter) > 0
+               then  -- not at the start of the line
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line_Offset(home_iter) > 0, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") to column 0...");
+                  Set_Line_Offset(home_iter, 0);
+               end if;      
+               -- and tip home_iter over prev end (so we delete the whole line)
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: home_iter is now at line" & Get_Line(home_iter)'Wide_Image & ", column" & Get_Line_Offset(home_iter)'Wide_Image & ", tipping home_iter over the previous end...");
+               Backward_Char(home_iter, result);
+               -- and delete it
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: doing Delete(buffer, home_iter, last_iter)...");
+               Delete(buffer, home_iter, last_iter);
+               -- Restore the starting_from iter
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Restoring the starting_from iter...");
+               Get_Iter_At_Mark(buffer, starting_from, cursor_mk);
+               -- And clean up the marks
+            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: And cleaning up the marks...");
+               Delete_Mark(buffer, cursor_mk);
+               Delete_Mark(buffer, end_mark);
+            end if;
+            -- Now move up a line
+            Backward_Line(starting_from, result);
+            if line = number_of_lines
+            then  -- make sure that we are in the correct column
+               while (not Ends_Line(starting_from)) and then
+                     (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Forward_Char(starting_from, result);
+               end loop;
+               -- Pad out with spaces if necessary to get to correct column
+               while (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Insert(buffer, iter=>starting_from, text=>" ");
+               end loop;
+            end if;
+         else  -- Not a scroll region
+            if Get_Line(starting_from) > 0
+            then  -- lines to go
+               Backward_Line(starting_from, result);
+            end if;
+            if line = number_of_lines
+            then  -- make sure that we are in the correct column
+               while (not Ends_Line(starting_from)) and then
+                     (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Forward_Char(starting_from, result);
+               end loop;
+               -- Pad out with spaces if necessary to get to correct column
+               while (natural(Get_Line_Offset(starting_from)) < column) loop
+                  Insert(buffer, iter=>starting_from, text=>" ");
+               end loop;
+            end if;
+         end if;
+      end loop;
+   end Scroll_Up;
    
    -- buffer_length : constant positive := 255;
    -- type buf_index is mod buffer_length;

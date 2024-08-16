@@ -171,12 +171,9 @@ follows:
   file to the screen, it does it correctly, without inserting the spaces.  It
   is the second time that the space characters get inserted.
   The issue looked like being the teminal type, but most were tried out.
-* Nano outputs spurious text at random points in time after moving around in
-  the file being edited.  Sometimes it is obvious that Nano has lost what line
-  number it is on and sometimes the cause is not obvious.  At either rate the
-  root cause has not been detected from the information streams passing between
-  the terminal emulator and Nano via the terminal client in the operating
-  system.  It otherwise works with Blissymbolics characters.
+* Nano appears to be okay.  There are, however, currently a few meta (alt)
+  characters that have yet to be implemented and therefore not available to
+  Nano.  It works with Blissymbolics characters.
 * Emacs has yet to be tested against Bliss_Term.
 
 There are probably numerous other errors that I have yet to discover.  I am
