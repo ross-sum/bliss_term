@@ -86,6 +86,7 @@ return boolean is
                     (1 => Ada.Characters.Latin_1.Esc, 2 => 'O', others => ' ');
    the_term      : Gtk_Text_View := Gtk_Text_View(for_terminal);
    the_terminal  : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
+   key_state     : natural := The_Modifier_State(for_keymap => key_map);
    interpret_key : constant boolean :=
                             the_terminal.buffer.history_review or
                             (not the_terminal.buffer.use_buffer_editing) or
@@ -95,6 +96,8 @@ return boolean is
    the_character : wide_string(1..1);
 begin
    Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ", last_key_pressed=" & the_terminal.buffer.last_key_pressed'Wide_Image & ".");
+   Translate_Modifiers(for_keymap => key_map, for_state => key_state);
+   -------(Gdk_Modifier_Type(key_state) and Shift_Mask) > 0
    if the_terminal.buffer.cursor_keys_in_app_mode
    then  -- substitute the '[' for a 'O'
       the_key := app_esc_st;
@@ -129,7 +132,12 @@ begin
       when GDK_Left =>
          if interpret_key
          then
-            the_key(3) := 'D';
+            if (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
+            then  -- Ctrl-Left arrow
+               the_key(3..6) := "1;5D";
+            else
+               the_key(3) := 'D';
+            end if;
          end if;
       when GDK_Right =>
          if interpret_key
@@ -145,7 +153,8 @@ begin
       when GDK_Tab =>  --16#FF09# / 10#65289#
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: tab key = pressed.");
          if the_terminal.buffer.last_key_pressed = GDK_Control_L or
-            the_terminal.buffer.last_key_pressed = GDK_Control_R
+            the_terminal.buffer.last_key_pressed = GDK_Control_R or
+            (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
          then  -- Control-Tab
             case the_terminal.buffer.modifiers.modify_other_keys is
                when disabled =>  -- <esc> then shift by 128
@@ -161,7 +170,9 @@ begin
          elsif the_terminal.buffer.last_key_pressed = GDK_Meta_L or
                the_terminal.buffer.last_key_pressed = GDK_Meta_R or
                the_terminal.buffer.last_key_pressed = GDK_Alt_L or
-               the_terminal.buffer.last_key_pressed = GDK_Alt_R
+               the_terminal.buffer.last_key_pressed = GDK_Alt_R or
+               ((Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0) or
+               ((Gdk_Modifier_Type(key_state) and Meta_Mask) > 0)
          then  -- Alt-Tab
             case the_terminal.buffer.modifiers.modify_other_keys is
                when disabled =>  -- <esc> then shift by 128
