@@ -29,9 +29,12 @@
 --  That checks the keys pressed (prior to the Key_Pressed handler)  --
 --  for need to modify the key code or even to send it directly  to  --
 --  the system's terminal emulator client.                           --
+--  A number of the sequences were determined from the command:      --
+--     od -c                                                         --
+--  and then typing the key stroke to see the result.                --
 --                                                                   --
 --  For modifiers, used to work out whether Shift, Control, Alt are  --
---  pressed,  and  in what combination the following  table,  taken  --
+--  pressed  and  in what combination, the following  table,  taken  --
 --  from   https://invisible-island.net/xterm/ctlseqs/ctlseqs.html,  --
 --  is useful:                                                       --
 --       Code     Modifiers                                          --
@@ -52,6 +55,12 @@
 --          15    | Meta + Ctrl + Alt                                --
 --          16    | Meta + Ctrl + Alt + Shift                        --
 --       ---------+---------------------------                       --
+--                                                                   --
+-- According to https://invisible-island.net/xterm/ctlseqs/          --
+--                      ctlseqs.html#h2-The-Alternate-Screen-Buffer  --
+-- the codes in the form of "CSI n ~" should work for Page Up, Page  --
+-- Down,  Insert  and End.  That is corroborated by the  DEC  VT240  --
+-- Programmer Reference Manual.                                      --
 --                                                                   --
 --  Version History:                                                 --
 --  $Log$
@@ -80,109 +89,182 @@ return boolean is
    use Gdk.Event, Gdk.Types, Gdk.Types.Keysyms;
    use Gdk.Key_Map;
    use Ada.Strings.UTF_Encoding.Wide_Strings;
-   esc_start : constant string(1..10) := 
+   esc_str_length : constant natural := 10;
+   subtype esc_string is string(1..esc_str_length);
+   key_state      : natural := The_Modifier_State(for_keymap => key_map);
+   procedure Apply_Modifier(to : in out esc_string; of_length : in out natural;
+                            for_keytype: in natural; with_key: in character) is
+      -- Based on the modifiers in action, build the key to be sent to the 
+      -- virtual terminal's operating system terminal client.
+      the_keytype : constant string := As_String(for_keytype);
+   begin
+      if (Gdk_Modifier_Type(key_state) and Shift_Mask) > 0 and
+         (Gdk_Modifier_Type(key_state) and Control_Mask) > 0 and
+         ((Gdk_Modifier_Type(key_state) and Meta_Mask) > 0 or
+            (Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0)
+      then  -- Ctrl-Shift- modifier
+         of_length := 5 + the_keytype'Length;
+         to(3..of_length) := the_keytype & ";8" & with_key;
+      elsif (Gdk_Modifier_Type(key_state) and Shift_Mask) > 0 and
+         (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
+      then  -- Ctrl-Shift- modifier
+         of_length := 5 + the_keytype'Length;
+         to(3..of_length) := the_keytype & ";6" & with_key;
+      elsif (Gdk_Modifier_Type(key_state) and Shift_Mask) > 0 and
+         ((Gdk_Modifier_Type(key_state) and Meta_Mask) > 0 or
+            (Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0)
+      then  -- Shift-Alt- modifier
+         of_length := 5 + the_keytype'Length;
+         to(3..of_length) := the_keytype & ";4" & with_key;
+      elsif (Gdk_Modifier_Type(key_state) and Control_Mask) > 0 and
+         ((Gdk_Modifier_Type(key_state) and Meta_Mask) > 0 or
+            (Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0)
+      then  -- Ctrl-Alt- modifier
+         of_length := 5 + the_keytype'Length;
+         to(3..of_length) := the_keytype & ";7" & with_key;
+      elsif (Gdk_Modifier_Type(key_state) and Shift_Mask) > 0
+      then  -- Shift- modifier
+         of_length := 5 + the_keytype'Length;
+         to(3..of_length) := the_keytype & ";2" & with_key;
+      elsif (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
+      then  -- Ctrl- modifier
+         of_length := 5 + the_keytype'Length;
+         to(3..of_length) := the_keytype & ";5" & with_key;
+      elsif (Gdk_Modifier_Type(key_state) and Meta_Mask) > 0 or
+            (Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0
+      then  -- Alt- modifier
+         of_length := 5 + the_keytype'Length;
+         to(3..of_length) := the_keytype & ";3" & with_key;
+      else  -- no modifier
+         if for_keytype = 1
+         then
+            of_length := 3;
+            to(of_length) := with_key;
+         else
+            of_length := 3 + the_keytype'Length;
+            to(3..of_length) := the_keytype & with_key;
+         end if;
+      end if;
+   end Apply_Modifier;
+   esc_start : constant esc_string := 
                     (1 => Ada.Characters.Latin_1.Esc, 2 => '[', others => ' ');
-   app_esc_st: constant string(1..10) := 
+   app_esc_st: constant esc_string := 
                     (1 => Ada.Characters.Latin_1.Esc, 2 => 'O', others => ' ');
    the_term      : Gtk_Text_View := Gtk_Text_View(for_terminal);
    the_terminal  : Gtk_Terminal := Gtk_Terminal(Get_Parent(the_term));
-   key_state     : natural := The_Modifier_State(for_keymap => key_map);
    interpret_key : constant boolean :=
                             the_terminal.buffer.history_review or
                             (not the_terminal.buffer.use_buffer_editing) or
                             Get_Overwrite(the_terminal.terminal) or
                              the_terminal.buffer.alternative_screen_buffer;
-   the_key       : string(1..10) := esc_start;
+   the_key       : esc_string := esc_start;
+   key_length    : natural range 0..esc_str_length := 0;  -- 0 = no key
    the_character : wide_string(1..1);
 begin
    Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ", last_key_pressed=" & the_terminal.buffer.last_key_pressed'Wide_Image & ".");
    Translate_Modifiers(for_keymap => key_map, for_state => key_state);
-   -------(Gdk_Modifier_Type(key_state) and Shift_Mask) > 0
    if the_terminal.buffer.cursor_keys_in_app_mode
    then  -- substitute the '[' for a 'O'
       the_key := app_esc_st;
    end if;
    case for_event.keyval is
       when GDK_Up => 
-         the_key(3) := 'A';
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 1, with_key => 'A');
       when GDK_Down =>
-         the_key(3) := 'B';
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 1, with_key => 'B');
       when GDK_Home =>
-         if interpret_key
-         then
-            the_key(3) := 'H';
-         end if;
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 1, with_key => 'H');
       when GDK_End =>
          if interpret_key
          then
-            the_key(3) := 'F';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'F');
          end if;
       when GDK_Page_Up =>
          if interpret_key
          then
             the_key(2) := '[';  -- always CSI
-            the_key(3) := '5';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 5, with_key => '~');
          end if;
       when GDK_Page_Down =>
          if interpret_key
          then
             the_key(2) := '[';  -- always CSI
-            the_key(3) := '6';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 6, with_key => '~');
          end if;
       when GDK_Left =>
          if interpret_key
          then
-            if (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
-            then  -- Ctrl-Left arrow
-               the_key(3..6) := "1;5D";
-            else
-               the_key(3) := 'D';
-            end if;
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'D');
          end if;
       when GDK_Right =>
          if interpret_key
          then
-            the_key(3) := 'C';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'C');
          end if;
+      when GDK_Insert =>
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 2, with_key => '~');
+      when GDK_Delete =>
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 3, with_key => '~');
       when GDK_BackSpace =>  --16#FF08# / 10#65288#
          if interpret_key
          then
             the_key(1) := Ada.Characters.Latin_1.BS;
-            the_key(2) := ' ';
+            key_length := 1;
          end if;
       when GDK_Tab =>  --16#FF09# / 10#65289#
          Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: tab key = pressed.");
-         if the_terminal.buffer.last_key_pressed = GDK_Control_L or
-            the_terminal.buffer.last_key_pressed = GDK_Control_R or
-            (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
+         if (Gdk_Modifier_Type(key_state) and Shift_Mask) > 0
+         then  -- Shift-Tab
+            case the_terminal.buffer.modifiers.modify_other_keys is
+               when disabled =>  -- <esc> [ Z
+                  the_key(2..3) := "[Z";
+                  key_length := 3;
+               when all_except_special | all_including_special =>
+                  -- Define as alt, + character as number
+                  the_key(3..7) := "27;2;";  -- 2=Shift (3=Alt,5=Ctl,6=Shft-Ctl)
+                  the_key(8) := 
+                        As_String(Character'Pos(Ada.Characters.Latin_1.HT))(1);
+                  key_length := 8;
+            end case;
+         elsif (Gdk_Modifier_Type(key_state) and Control_Mask) > 0
          then  -- Control-Tab
             case the_terminal.buffer.modifiers.modify_other_keys is
                when disabled =>  -- <esc> then shift by 128
                   the_key(2) := 
                      Character'Val(Character'Pos(Ada.Characters.Latin_1.HT)+128);
-                  the_key(3) := ' ';
+                  key_length := 2;
                when all_except_special | all_including_special =>
                   -- Define as alt, + character as number
                   the_key(3..7) := "27;5;";  -- 5=Ctl (3=Alt,2=Shift,6=Shft-Ctl)
                   the_key(8) := 
                         As_String(Character'Pos(Ada.Characters.Latin_1.HT))(1);
+                  key_length := 8;
             end case;
-         elsif the_terminal.buffer.last_key_pressed = GDK_Meta_L or
-               the_terminal.buffer.last_key_pressed = GDK_Meta_R or
-               the_terminal.buffer.last_key_pressed = GDK_Alt_L or
-               the_terminal.buffer.last_key_pressed = GDK_Alt_R or
-               ((Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0) or
-               ((Gdk_Modifier_Type(key_state) and Meta_Mask) > 0)
+         elsif (Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0 or
+               (Gdk_Modifier_Type(key_state) and Meta_Mask) > 0
          then  -- Alt-Tab
             case the_terminal.buffer.modifiers.modify_other_keys is
-               when disabled =>  -- <esc> then shift by 128
+               when disabled =>  -- <esc> but no shift
                   the_key(2) := Ada.Characters.Latin_1.HT;
-                  the_key(3) := ' ';
+                  key_length := 2;
                when all_except_special | all_including_special =>
                   -- Define as alt, + Tab as number
                   the_key(3..7) := "27;3;";  -- 3=Alt (2=Shift,...)
                   the_key(8) := 
                         As_String(Character'Pos(Ada.Characters.Latin_1.HT))(1);
+                  key_length := 8;
             end case;
          -- if in command line, but not history_review, put it in that state
          elsif (the_terminal.buffer.use_buffer_editing and
@@ -200,57 +282,69 @@ begin
             the_terminal.buffer.history_review := true;
             -- then just let the Tab key pass on through...
             the_key(1) := Ada.Characters.Latin_1.HT;
-            the_key(2) := ' ';
+            key_length := 1;
          end if;
       when GDK_Escape =>  --16#FF1B#
          the_key(1) := Ada.Characters.Latin_1.Esc;
-         the_key(2) := ' ';
+         key_length := 1;
       when GDK_Return =>
-         if interpret_key and then -- the_terminal.buffer.keypad_keys_in_app_mode and then
+         if interpret_key and then
             the_terminal.buffer.alternative_screen_buffer
          then  -- send the control sequence for this key
             the_key(1) := Ada.Characters.Latin_1.CR;
-            the_key(2) := ' ';
+            key_length := 1;
          end if;
       when GDK_KP_0 | GDK_KP_Insert =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := '2';
+            the_key(2) := '[';  -- always CSI
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 2, with_key => '~');
          else  -- send the numeric key
-            the_key(1..2) := "0 ";
+            the_key(1) := '0';
+            key_length := 1;
          end if;
       when GDK_KP_1 | GDK_KP_End =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := '4';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'F');
          else  -- send the numeric key
-            the_key(1..2) := "1 ";
+            the_key(1) := '1';
+            key_length := 1;
          end if;
       when GDK_KP_2 | GDK_KP_Down =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := 'B';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'B');
          else  -- send the numeric key
-            the_key(1..2) := "2 ";
+            the_key(1) := '2';
+            key_length := 1;
          end if;
       when GDK_KP_3 | GDK_KP_Page_Down =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := '6';
+            the_key(2) := '[';  -- always CSI
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 6, with_key => '~');
          else  -- send the numeric key
-            the_key(1..2) := "3 ";
+            the_key(1) := '3';
+            key_length := 1;
          end if;
       when GDK_KP_4 | GDK_KP_Left =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := 'D';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'D');
          else  -- send the numeric key
-            the_key(1..2) := "4 ";
+            the_key(1) := '4';
+            key_length := 1;
          end if;
       when GDK_KP_5 =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
@@ -258,96 +352,138 @@ begin
          then  -- send the control sequence for this key
             null;
          else  -- send the numeric key
-            the_key(1..2) := "5 ";
+            the_key(1) := '5';
+            key_length := 1;
          end if;
       when GDK_KP_6 | GDK_KP_Right =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := 'C';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'C');
          else  -- send the numeric key
-            the_key(1..2) := "6 ";
+            the_key(1) := '6';
+            key_length := 1;
          end if;
       when GDK_KP_7 | GDK_KP_Home =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := 'G';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'H');
          else  -- send the numeric key
-            the_key(1..2) := "7 ";
+            the_key(1) := '7';
+            key_length := 1;
          end if;
       when GDK_KP_8 | GDK_KP_Up =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := 'A';
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 1, with_key => 'A');
          else  -- send the numeric key
-            the_key(1..2) := "8 ";
+            the_key(1) := '8';
+            key_length := 1;
          end if;
       when GDK_KP_9 | GDK_KP_Page_Up =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := '5';
+            the_key(2) := '[';  -- always CSI
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 5, with_key => '~');
          else  -- send the numeric key
-            the_key(1..2) := "9 ";
+            the_key(1) := '9';
+            key_length := 1;
          end if;
       when GDK_KP_Decimal | GDK_KP_Delete =>
          if the_terminal.buffer.keypad_keys_in_app_mode and
             not Num_Lock_Is_On(for_keymap => key_map)
          then  -- send the control sequence for this key
-            the_key(3) := 'P';
+            the_key(2) := '[';  -- always CSI
+            Apply_Modifier(to => the_key, of_length => key_length,
+                           for_keytype => 3, with_key => '~');
+         else  -- send the 'numeric' key
+            the_key(1) := '.';
+            key_length := 1;
          end if;
-      when GDK_F1 => 
-         the_key(2..3) := "OP";  -- always SS3
-      when GDK_F2 => 
-         the_key(2..3) := "OQ";  -- always SS3
-      when GDK_F3 => 
-         the_key(2..3) := "OR";  -- always SS3
-      when GDK_F4 => 
-         the_key(2..3) := "OS";  -- always SS3
+      when GDK_F1 | GDK_KP_F1 => 
+         the_key(2) := 'O';  -- always SS3
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 1, with_key => 'P');
+      when GDK_F2 | GDK_KP_F2 => 
+         the_key(2) := 'O';  -- always SS3
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 1, with_key => 'Q');
+      when GDK_F3 | GDK_KP_F3 => 
+         the_key(2) := 'O';  -- always SS3
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 1, with_key => 'R');
+      when GDK_F4 | GDK_KP_F4 => 
+         the_key(2) := 'O';  -- always SS3
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 1, with_key => 'S');
       when GDK_F5 => 
-         the_key(2..4) := "[15";  -- always CSI
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 15, with_key => '~');
       when GDK_F6 => 
-         the_key(2..4) := "[17";  -- always CSI
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 17, with_key => '~');
       when GDK_F7 => 
-         the_key(2..4) := "[18";  -- always CSI
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 18, with_key => '~');
       when GDK_F8 => 
-         the_key(2..4) := "[19";  -- always CSI
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 19, with_key => '~');
       when GDK_F9 => 
-         the_key(2..4) := "[20";  -- always CSI
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 20, with_key => '~');
       when GDK_F10 => 
-         the_key(2..4) := "[21";  -- always CSI
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 21, with_key => '~');
       when GDK_F11 => 
-         the_key(2..4) := "[23";  -- always CSI
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 23, with_key => '~');
       when GDK_F12 => 
-         the_key(2..4) := "[24";  -- always CSI
-      when GDK_LC_a .. GDK_LC_z =>
-         if the_terminal.buffer.last_key_pressed = GDK_Control_L or
-            the_terminal.buffer.last_key_pressed = GDK_Control_R
+         the_key(2) := '[';  -- always CSI
+         Apply_Modifier(to => the_key, of_length => key_length,
+                        for_keytype => 24, with_key => '~');
+      when GDK_parenleft | GDK_parenright | GDK_slash | GDK_less..GDK_greater |
+           GDK_bracketleft .. GDK_bracketright | GDK_LC_a .. GDK_LC_z | 
+           GDK_braceleft .. GDK_braceright =>
+         if (Gdk_Modifier_Type(key_state) and Control_Mask) > 0 and then
+            (for_event.keyval >= GDK_LC_a and for_event.keyval <= GDK_LC_z)
          then  -- Control-A - Control-Z
             the_key(1) := Character'Val(for_event.keyval-Character'Pos('a')+1);
-            the_key(2) := ' ';
-         elsif the_terminal.buffer.last_key_pressed = GDK_Meta_L or
-               the_terminal.buffer.last_key_pressed = GDK_Meta_R or
-               the_terminal.buffer.last_key_pressed = GDK_Alt_L or
-               the_terminal.buffer.last_key_pressed = GDK_Alt_R
-         then  -- Alt-A - Alt-Z
+            key_length := 1;
+         elsif (Gdk_Modifier_Type(key_state) and Mod1_Mask) > 0 or
+               (Gdk_Modifier_Type(key_state) and Meta_Mask) > 0
+         then  -- Alt-A - Alt-Z, Alt-
             case the_terminal.buffer.modifiers.modify_other_keys is
                when disabled =>  -- <esc> then (lower case) character
                   the_key(2) := Character'Val(for_event.keyval);
-                  the_key(3) := ' ';
+                  key_length := 2;
                when all_except_special | all_including_special =>
                   -- Define as alt, + character as number
                   the_key(3..7) := "27;3;";  -- 3=Alt (2=Shift)
                   if for_event.keyval < 10
                   then
                      the_key(8) := Gdk_Key_Type'Image(for_event.keyval)(1);
+                     key_length := 8;
                   elsif for_event.keyval < 100
                   then
                      the_key(8..9):=Gdk_Key_Type'Image(for_event.keyval)(1..2);
+                     key_length := 9;
                   else
                      the_key(8..10):=Gdk_Key_Type'Image(for_event.keyval)(1..3);
+                     key_length := 10;
                   end if;
             end case;
          end if;
@@ -387,50 +523,11 @@ begin
          end if;
       end;
    end if;
-   -- Check if modifier keys are in effect and, if so, act upon them
-   null;
    -- Operate on any key interpretations where required
-   if the_terminal.buffer.bracketed_paste_mode and then
-      (((not the_terminal.buffer.cursor_keys_in_app_mode) and 
-        the_key /= esc_start) or 
-       (the_terminal.buffer.cursor_keys_in_app_mode and 
-        the_key /= app_esc_st))
+   if the_terminal.buffer.bracketed_paste_mode and then key_length > 0
    then  -- at command prompt: we have set it to pass to the write routine
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
-      if for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape or
-         for_event.keyval = GDK_Return
-      then  -- Actually a single back-space, Escape or Return character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-      elsif the_key(3) = '2' or the_key(3) = '4' 
-            or the_key(3) = '5' or the_key(3) = '6'
-      then  -- Actually a 4 character non-standard sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3) & '~');
-      elsif for_event.keyval = GDK_Tab
-      then  -- Actually a single tab character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-      elsif the_key(2) = ' ' and  the_key(3) = ' ' and 
-            the_key(1) /= Ada.Characters.Latin_1.Esc
-      then  -- A single control character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-      elsif the_key(2) /= ' ' and  the_key(3) = ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A single alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..2));
-      elsif the_key(7) = ';' and  the_key(9) = ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A shift, control or alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..8));
-      elsif the_key(7) = ';' and  the_key(10) = ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A shift, control or alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..9));
-      elsif the_key(7) = ';' and  the_key(10) /= ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A shift, control or alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..10));
-      else  -- standard sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3));
-      end if;
+      Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..key_length));
       if for_event.keyval = GDK_Up or for_event.keyval = GDK_Down
       then  -- these keys are about starting/continuing history review
          the_terminal.buffer.history_review := true;
@@ -439,51 +536,10 @@ begin
          Switch_The_Light(the_terminal.buffer, 5, false);
       end if;
       return true;
-   elsif (not the_terminal.buffer.bracketed_paste_mode) and then
-         (((not the_terminal.buffer.cursor_keys_in_app_mode) and 
-           the_key /= esc_start) or 
-          (the_terminal.buffer.cursor_keys_in_app_mode and 
-           the_key /= app_esc_st))
+   elsif (not the_terminal.buffer.bracketed_paste_mode) and then key_length > 0
    then  -- in an app: we have set it to pass to the write routine
       Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
-      -- According to https://invisible-island.net/xterm/ctlseqs/
-      --                         ctlseqs.html#h2-The-Alternate-Screen-Buffer
-      -- the following codes in the form of "CSI n ~" should work.  That is
-      -- corroborated by the DEC VT240 Programmer Reference Manual.
-      if the_key(3) = '2' or the_key(3) = '4' 
-         or the_key(3) = '5' or the_key(3) = '6'
-      then  -- Actually a 4 character non-standard sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3) & '~');
-      elsif for_event.keyval in GDK_F5..GDK_F12
-      then  -- Acutally a 5 character sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..4) & '~');
-      elsif for_event.keyval = GDK_BackSpace or for_event.keyval = Gdk_Escape or
-            for_event.keyval = GDK_Return
-      then  -- Actually a single back-space, Escape or Return character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-      elsif the_key(2) = ' ' and  the_key(3) = ' ' and 
-            the_key(1) /= Ada.Characters.Latin_1.Esc
-      then  -- A single control character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..1));
-      elsif the_key(2) /= ' ' and  the_key(3) = ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A single alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..2));
-      elsif the_key(7) = ';' and  the_key(9) = ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A shift, control or alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..8));
-      elsif the_key(7) = ';' and  the_key(10) = ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A shift, control or alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..9));
-      elsif the_key(7) = ';' and  the_key(10) /= ' ' and 
-            the_key(1) = Ada.Characters.Latin_1.Esc
-      then  -- A shift, control or alt character
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..10));
-      else  -- standard sequence
-         Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..3));
-      end if;
+      Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..key_length));
       return true;
    elsif the_terminal.buffer.alternative_screen_buffer and then
          (for_event.keyval>=GDK_space and for_event.keyval<GDK_3270_Duplicate)
