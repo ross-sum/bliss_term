@@ -129,6 +129,7 @@ package Gtk.Terminal_Markup is
       -- Clean up ready for shut-down of the terminal
       
 private
+   too_many_times    : constant natural := 100;  -- Finish's error loop counter
    the_error_handler : error_handler := null;
    the_log_handler   : log_handler := null;
    procedure Handle_The_Error(the_error : in integer;

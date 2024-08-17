@@ -49,7 +49,8 @@ with Interfaces.C, Interfaces.C.Strings;
 with Ada.Strings.Fixed;
 with Ada.Characters.Conversions;
 with Gtk.Text_Iter;
-with Error_Log;  ----------------------------*********DELETE ME*********----------------------------
+with Error_Log;  -----------------------------------------*********DELETE ME*********----------------------------
+with Ada.Strings.UTF_Encoding.Wide_Strings;  -------------*********DELETE ME*********----------------------------
 
 package body Gtk.Terminal_Markup is
       
@@ -450,7 +451,8 @@ package body Gtk.Terminal_Markup is
          end loop;
          return result;
       end Maximum;
-      modifier : font_modifier;
+      modifier    : font_modifier;
+      loop_counter : natural := 0;
    begin  -- Finish
       if for_modifier /= none
       then  -- Just close off that modifier
@@ -485,6 +487,7 @@ package body Gtk.Terminal_Markup is
                on_markup.modifier_array(modifier).n := 
                                      on_markup.modifier_array(modifier).n - 1;
             else  -- Something is out of wack!
+               loop_counter := loop_counter + 1;
                Handle_The_Error(the_error => 1, 
                                 error_intro => "Finish: Modifier error",
                                 error_message => "Mis-match in number of " &
@@ -492,6 +495,13 @@ package body Gtk.Terminal_Markup is
                                                  "of '" & modifier'Wide_Image &
                                                  "' but there are 0 of those "&
                                                  "modifiers left!");
+               -- Flush it out to stop the error reoccurrence
+               Clear_Last(from_modifier_array => on_markup.modifier_array,
+                          for_modifier => modifier);
+               if loop_counter > too_many_times
+               then  -- This error has repeated too many times already!
+                  exit;  -- quit the loop
+               end if;
             end if;
             modifier:= Maximum(from_modifier_array=>on_markup.modifier_array);
          end loop;
@@ -635,7 +645,7 @@ package body Gtk.Terminal_Markup is
       -- return false;  -- If we got here then nothing found
       -- The one-liner way:
       return (for some modifier in 
-                       font_modifier'Range => for_array(modifier).n>0);
+                          font_modifier'Range => for_array(modifier).n>0);
    end Modifier_In_Markup;
    
    function Length(of_markup_text : Gtkada.Types.Chars_Ptr) return Gint is
@@ -756,7 +766,7 @@ package body Gtk.Terminal_Markup is
          -- Then output the mark-up text
          Insert_Markup(for_markup.buffer, cursor_iter, 
                           Value(for_markup.markup_text), -1);
-         Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: executing Insert_Markup on '" & Ada.Characters.Conversions.To_Wide_String(Value(for_markup.markup_text)) & "'.");
+         Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: executing Insert_Markup on '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(for_markup.markup_text)) & "'.");
          -- Then clean up
          Free(for_markup.markup_text);
          for_markup.markup_text := Null_Ptr;
