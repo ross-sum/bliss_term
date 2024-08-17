@@ -1793,18 +1793,25 @@ package body Gtk.Terminal is
                cursor_mk := Create_Mark(buffer, "CursorPt", starting_from);
                -- Insert a line at the bottom
                Insert(buffer, iter=>last_iter, text=>LF_str);
-               -- Set last_iter to be the end of the first line
+               -- Restore the home_iter (as it has been destroyed by 'Insert')
                Get_Iter_At_Mark(buffer, home_iter, start_mk);
-               last_iter := home_iter;
-               if not Ends_Line(last_iter)
-               then  -- Not at end, so set to the end of the line
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
-                  Forward_To_Line_End(last_iter, result);
+               -- Check that the last_iter is actually at the end of the screen
+               -- as, if not, don't delete the line at the top
+               if natural(Get_Line(last_iter))+1 >= 
+                                                for_buffer.scroll_region_bottom
+               then  -- Okay - there is a line at the top to delete
+                  -- Set last_iter to be the end of the first line
+                  last_iter := home_iter;
+                  if not Ends_Line(last_iter)
+                  then  -- Not at end, so set to the end of the line
+                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+                     Forward_To_Line_End(last_iter, result);
+                  end if;
+                  -- and tip it over the end (so that we delete the whole line)
+                  Forward_Char(last_iter, result);
+                  -- and delete it
+                  Delete(buffer, home_iter, last_iter);
                end if;
-                  -- and tip it over the end (so we delete the whole line)
-               Forward_Char(last_iter, result);
-               -- and delete it
-               Delete(buffer, home_iter, last_iter);
                -- Restore the starting_from iter
                Get_Iter_At_Mark(buffer, starting_from, cursor_mk);
                -- And clean up the marks
@@ -1901,7 +1908,7 @@ package body Gtk.Terminal is
             -- Now set home_iter to be at the scroll_region_top
             if for_buffer.scroll_region_top > 1
             then  -- Not at the top of the scroll region - go there
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 1, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_top-1)'Wide_Image & " lines...");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 1, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_top-1)'Wide_Image & " lines...");
                Forward_Lines(home_iter, 
                              Glib.Gint(for_buffer.scroll_region_top-1),
                              result);
@@ -1910,33 +1917,41 @@ package body Gtk.Terminal is
             if Get_Line(starting_from) <= 
                                       Glib.Gint(for_buffer.scroll_region_top-1)
             then  -- already at the top, need to scroll the screen
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line(starting_from) (=" & Get_Line(starting_from)'Wide_Image & ") <= Glib.Gint(for_buffer.scroll_region_top-1) (=" & Glib.Gint(for_buffer.scroll_region_top-1)'Wide_Image & ").");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line(starting_from) (=" & Get_Line(starting_from)'Wide_Image & ") <= Glib.Gint(for_buffer.scroll_region_top-1) (=" & Glib.Gint(for_buffer.scroll_region_top-1)'Wide_Image & ").");
                -- Preserve starting_from into a mark
                cursor_mk := Create_Mark(buffer, "CursorPt", starting_from);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Preserved starting_from into a mark.");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Preserved starting_from into a mark.");
                -- Insert a line at the top
                Insert(buffer, iter=>home_iter, text=>LF_str);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Inserted new line at home_iter.");
-               -- Set home_iter to be the start of the last line
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Inserted new line at home_iter.");
+               -- Restore the last_iter (as it has been destroyed by 'Insert')
                Get_Iter_At_Mark(buffer, last_iter, end_mark);
-               home_iter := last_iter;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: set home_iter := last_iter.");
-               if Get_Line_Offset(home_iter) > 0
-               then  -- not at the start of the line
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line_Offset(home_iter) > 0, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") to column 0...");
-                  Set_Line_Offset(home_iter, 0);
-               end if;      
-               -- and tip home_iter over prev end (so we delete the whole line)
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: home_iter is now at line" & Get_Line(home_iter)'Wide_Image & ", column" & Get_Line_Offset(home_iter)'Wide_Image & ", tipping home_iter over the previous end...");
-               Backward_Char(home_iter, result);
-               -- and delete it
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: doing Delete(buffer, home_iter, last_iter)...");
-               Delete(buffer, home_iter, last_iter);
+               -- Check that the last_iter is actually at the end of the screen
+               -- as, if not, don't delete the line at the bottom
+               if natural(Get_Line(last_iter))+1 >= 
+                                                for_buffer.scroll_region_bottom
+               then  -- Okay - there is a line at the bottom to delete
+                  -- Set home_iter to be the start of the last line
+                  home_iter := last_iter;
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: set home_iter := last_iter.");
+                  if Get_Line_Offset(home_iter) > 0
+                  then  -- not at the start of the line
+                     Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line_Offset(home_iter) > 0, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") to column 0...");
+                     Set_Line_Offset(home_iter, 0);
+                  end if;      
+                  -- and tip home_iter over the previous end (so that we delete
+                  -- the whole line)
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: home_iter is now at line" & Get_Line(home_iter)'Wide_Image & ", column" & Get_Line_Offset(home_iter)'Wide_Image & ", tipping home_iter over the previous end...");
+                  Backward_Char(home_iter, result);
+                  -- and delete it
+                  Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: doing Delete(buffer, home_iter, last_iter)...");
+                  Delete(buffer, home_iter, last_iter);
+               end if;
                -- Restore the starting_from iter
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Restoring the starting_from iter...");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Restoring the starting_from iter...");
                Get_Iter_At_Mark(buffer, starting_from, cursor_mk);
                -- And clean up the marks
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: And cleaning up the marks...");
+               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: And cleaning up the marks...");
                Delete_Mark(buffer, cursor_mk);
                Delete_Mark(buffer, end_mark);
             end if;
@@ -3169,3 +3184,4 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
+
