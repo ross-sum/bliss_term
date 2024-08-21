@@ -46,6 +46,7 @@ separate (Gtk.Terminal)
    use Gtk.Text_Iter, Gtk.Text_Mark;
    use Ada.Strings.Maps;
    use Gtk.Terminal.CInterface;
+   use Gtk.Terminal.Colour;
    Tab_length : constant natural := 8;
    subtype Tab_range is natural range 0..Tab_length;
    CR_str  : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.CR);
@@ -1178,8 +1179,11 @@ separate (Gtk.Terminal)
                               count := count + 1;
                               if param(count) = 5 then  -- colour chart colour
                                  count := count + 1;
-                                 null;
-                                 count := count + 1;
+                                 Append_To_Markup(on_buffer.markup, span, 
+                                                  foreground, "",
+                                                  RGB(for_colour =>  
+                                                       colour_palette_number
+                                                              (param(count))));
                               elsif param(count) = 2 then -- RGB
                                  count := count + 1;
                                  Append_To_Markup(on_buffer.markup, span, 
@@ -1212,7 +1216,12 @@ separate (Gtk.Terminal)
                            when 48 =>  -- Set background colour to number
                               count := count + 1;
                               if param(count) = 5 then  -- colour chart colour
-                                 null;
+                                 count := count + 1;
+                                 Append_To_Markup(on_buffer.markup, span, 
+                                                  background, "",
+                                                  RGB(for_colour =>  
+                                                       colour_palette_number
+                                                              (param(count))));
                               elsif param(count) = 2 then -- RGB
                                  count := count + 1;
                                  Append_To_Markup(on_buffer.markup, span, 

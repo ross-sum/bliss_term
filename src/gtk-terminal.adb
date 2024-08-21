@@ -88,6 +88,7 @@ with Gtk.Text_Tag;
 with Gtk.Arguments;              use Gtk.Arguments;
 with Gtk.CSS_Provider, Gtk.Style_Context, Gtk.Style_Provider;
 with Gtk.Terminal.CInterface;
+with Gtk.Terminal.Colour;
 with GtkAda.Bindings;            use GtkAda.Bindings;
 with Error_Log;  ----------------------------*********DELETE ME*********----------------------------
 
