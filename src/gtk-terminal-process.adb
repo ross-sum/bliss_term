@@ -79,7 +79,7 @@ separate (Gtk.Terminal)
      --                                           virtual-terminal-sequences.md
      -- This stuff is also available here:
      --    http://xtermjs.org/docs/api/vtfeatures/
-     --    https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+     --    https://invisible-island.net/xterm/ctlseqs/ctlseqs.html :- good info
      --    man 4 console_codes
      --    msn 1 xterm
       use Gtk.Enums, Gdk.Color, Gdk.RGBA;
@@ -179,7 +179,10 @@ separate (Gtk.Terminal)
                   case the_sequence(chr_pos) is
                      when 'c' =>  -- Send device attributes (Secondary DA)
                         Write(fd => on_buffer.master_fd, 
-                              Buffer => Esc_str & "[>1;10;1c");
+                              Buffer => Esc_str & "[>0;" & 
+                                        As_String(version(1)*10000 + 
+                                                  version(2)*100+version(3)) &
+                                        ";1c");
                                 -- also tried 1;10;1,1;10;0,2,0,19,24,41,64,65
                      when 'm' => null;  -- key modifier options XTMODKEYS
                         case param(1) is
@@ -481,6 +484,14 @@ separate (Gtk.Terminal)
                                  the_term : Gtk_Terminal := 
                                     Gtk_Terminal(Get_Parent(on_buffer.parent));
                               begin
+                                 -- Check for brain dead Emacs leaving 
+                                 -- unfinished business lying around
+                                 if not Is_Empty(on_buffer.markup)
+                                 then  -- a string to dump
+                                    Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1049' - Closing off mark-up.");
+                                 -- close off, and the closure is permanent
+                                    Finish(on_markup => on_buffer.markup);
+                                 end if;
                                  if for_sequence(chr_pos) = 'h'
                                  then  -- switch to the alternate screen buffer
                                     -- Set the flags to indicate which buffer
@@ -1061,6 +1072,19 @@ separate (Gtk.Terminal)
                                                "'.");
                      end case;
                   when 'm' =>   -- set or reset font colouring and styles
+                      -- It can be, particularly with Emacs, that it thinks
+                      -- that just resetting the foreground and background
+                      -- colours (in that order) resets the mark-up (more or
+                      -- less), so it doesn't bother to issue <esc> [ 0 m when
+                      -- it should.  Safest is to assume that a finish is what
+                      -- is meant.
+                     if pnum - count >= 1 and then
+                        (param(count) = 39 and param(count + 1) = 49)
+                     then  -- treat this combination as a request to finish
+                        Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : resetting mark-up -  count =" &  count'Wide_Image & ", pnum =" & pnum'Wide_Image & ").");
+                        Finish(on_markup => on_buffer.markup);
+                        count := count + 2;
+                     end if;
                      while count <= pnum loop
                         case param(count) is
                            when 0 =>   -- reset to normal
@@ -1069,7 +1093,7 @@ separate (Gtk.Terminal)
                               Append_To_Markup(on_buffer.markup, bold);
                            when 2 =>   -- dim/faint
                               Append_To_Markup(on_buffer.markup, span, 
-                                               "weight=""light"" ");
+                                               weight, """light"" ");
                            when 3 =>   -- italic
                               Append_To_Markup(on_buffer.markup, italic);
                            when 4 =>   -- underline
@@ -1077,14 +1101,14 @@ separate (Gtk.Terminal)
                            when 5 => null;  -- show blink
                            when 6 => null;  -- rapid blink
                            when 7 =>   -- reverse video
-                              Append_To_Markup(on_buffer.markup, span, "foreground=", 
-                                               on_buffer.background_colour);
-                              Append_To_Markup(on_buffer.markup, span, "background=", 
-                                               on_buffer.text_colour);
+                              Append_To_Markup(on_buffer.markup, span, foreground, 
+                                               "", on_buffer.background_colour);
+                              Append_To_Markup(on_buffer.markup, span, background, 
+                                               "", on_buffer.text_colour);
                            when 8 =>   -- conceal or hide
                               -- by setting foreground to background colour
-                              Append_To_Markup(on_buffer.markup, span, "foreground=", 
-                                               on_buffer.background_colour);
+                              Append_To_Markup(on_buffer.markup, span, foreground, 
+                                               "", on_buffer.background_colour);
                            when 9 =>   -- crossed out or strike-through
                               Append_To_Markup(on_buffer.markup, strikethrough);
                            when 10 => null;  -- primary font
@@ -1092,7 +1116,7 @@ separate (Gtk.Terminal)
                            when 20 => null; -- Fraktur (Gothic)
                            when 21 =>  -- Doubly underlined
                               Append_To_Markup(on_buffer.markup, span, 
-                                               "underline=""double"" ");
+                                               underline, """double"" ");
                            when 22 =>  -- Normal intensity
                               if Is_Set(the_markup=>on_buffer.markup, to=>bold)
                               then
@@ -1115,41 +1139,41 @@ separate (Gtk.Terminal)
                                  Finish(on_buffer.markup, mono);
                               end if;
                            when 27 =>  -- Not reversed
-                              if Count_Of_Span(attribute => "foreground", 
+                              if Count_Of_Span(attribute => foreground, 
                                                for_markup=> on_buffer.markup)>0
                               then
                                  Finish(on_buffer.markup, span);
                               else  -- define the Not reversed state
-                                 Append_To_Markup(on_buffer.markup,span,"foreground=",
-                                                  on_buffer.text_colour);
-                                 Append_To_Markup(on_buffer.markup,span,"background=",
-                                                  on_buffer.background_colour);
+                                 Append_To_Markup(on_buffer.markup,span,foreground,
+                                                  "", on_buffer.text_colour);
+                                 Append_To_Markup(on_buffer.markup,span,background,
+                                                  "", on_buffer.background_colour);
                               end if;
                            when 28 =>  -- Reveal (not invisible)
                               -- by setting foreground to foreground colour
-                              Append_To_Markup(on_buffer.markup, span, "foreground=", 
-                                               on_buffer.text_colour);
+                              Append_To_Markup(on_buffer.markup, span, foreground, 
+                                               "", on_buffer.text_colour);
                            when 29 =>  -- Not crossed out
                               if Is_Set(the_markup=>on_buffer.markup, to=>strikethrough)
                               then
                                  Finish(on_buffer.markup, strikethrough);
                               end if;
                            when 30 | 90 =>  -- Set foreground colour to black
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""black""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """black""");
                            when 31 | 91 =>  -- Set foreground colour to red
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""red""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """red""");
                            when 32 | 92 =>  -- Set foreground colour to green
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""green""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """green""");
                            when 33 | 93 =>  -- Set foreground colour to yellow
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""yellow""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """yellow""");
                            when 34 | 94 =>  -- Set foreground colour to blue
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""blue""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """blue""");
                            when 35 | 95 =>  -- Set foreground colour to magenta
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""magenta""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """magenta""");
                            when 36 | 96  =>  -- Set foreground colour to cyan
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""cyan""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """cyan""");
                            when 37 | 97 =>  -- Set foreground colour to white
-                              Append_To_Markup(on_buffer.markup, span, "foreground=""white""");
+                              Append_To_Markup(on_buffer.markup, span, foreground, """white""");
                            when 38 =>  -- Set foreground colour to number
                               count := count + 1;
                               if param(count) = 5 then  -- colour chart colour
@@ -1158,7 +1182,8 @@ separate (Gtk.Terminal)
                                  count := count + 1;
                               elsif param(count) = 2 then -- RGB
                                  count := count + 1;
-                                 Append_To_Markup(on_buffer.markup, span, "foreground=",
+                                 Append_To_Markup(on_buffer.markup, span, 
+                                                  foreground, "",
                                                   (GDouble(param(count))/255.0,
                                                    GDouble(param(count+1))/255.0,
                                                    GDouble(param(count+2))/255.0,
@@ -1166,31 +1191,32 @@ separate (Gtk.Terminal)
                                  count := count + 2;
                               end if;
                            when 39 =>  -- Default foreground colour
-                              Append_To_Markup(on_buffer.markup, span, "foreground=",
-                                               on_buffer.text_colour);
+                              Append_To_Markup(on_buffer.markup, span, foreground,
+                                               "", on_buffer.text_colour);
                            when 40 | 100 =>  -- Set background colour to black
-                              Append_To_Markup(on_buffer.markup, span, "background=""black""");
+                              Append_To_Markup(on_buffer.markup, span, background, """black""");
                            when 41 | 101 =>  -- Set background colour to red
-                              Append_To_Markup(on_buffer.markup, span, "background=""red""");
+                              Append_To_Markup(on_buffer.markup, span, background, """red""");
                            when 42 | 102 =>  -- Set background colour to green
-                              Append_To_Markup(on_buffer.markup, span, "background=""green""");
+                              Append_To_Markup(on_buffer.markup, span, background, """green""");
                            when 43 | 103 =>  -- Set background colour to yellow
-                              Append_To_Markup(on_buffer.markup, span, "background=""yellow""");
+                              Append_To_Markup(on_buffer.markup, span, background, """yellow""");
                            when 44 | 104 =>  -- Set background colour to blue
-                              Append_To_Markup(on_buffer.markup, span, "background=""blue""");
+                              Append_To_Markup(on_buffer.markup, span, background, """blue""");
                            when 45 | 105 =>  -- Set background colour to magenta
-                              Append_To_Markup(on_buffer.markup, span, "background=""magenta""");
+                              Append_To_Markup(on_buffer.markup, span, background, """magenta""");
                            when 46 | 106 =>  -- Set background colour to cyan
-                              Append_To_Markup(on_buffer.markup, span, "background=""cyan""");
+                              Append_To_Markup(on_buffer.markup, span, background, """cyan""");
                            when 47 | 107 =>  -- Set background colour to white
-                              Append_To_Markup(on_buffer.markup, span, "background=""white""");
+                              Append_To_Markup(on_buffer.markup, span, background, """white""");
                            when 48 =>  -- Set background colour to number
                               count := count + 1;
                               if param(count) = 5 then  -- colour chart colour
                                  null;
                               elsif param(count) = 2 then -- RGB
                                  count := count + 1;
-                                 Append_To_Markup(on_buffer.markup, span, "background=", 
+                                 Append_To_Markup(on_buffer.markup, span, 
+                                                  background, "",
                                                   (GDouble(param(count))/255.0,
                                                    GDouble(param(count+1))/255.0,
                                                    GDouble(param(count+2))/255.0,
@@ -1198,8 +1224,8 @@ separate (Gtk.Terminal)
                                  count := count + 2;
                               end if;
                            when 49 =>  -- Default background colour
-                              Append_To_Markup(on_buffer.markup, span,"background=",
-                                               on_buffer.background_colour);
+                              Append_To_Markup(on_buffer.markup, span,background,
+                                               "", on_buffer.background_colour);
                            when 50 =>  -- Disable proportional spacing
                               Append_To_Markup(on_buffer.markup, mono);
                            when others => null;  -- style or colour not recognised
@@ -1793,8 +1819,15 @@ begin  -- Process
          Save(the_markup => for_buffer.markup);
          -- (close off, but the closure is temporary)
          Finish(on_markup => for_buffer.markup);
-      end if;  
-      Process_Escape(for_sequence => esc_str & "[D", on_buffer => for_buffer);
+      end if;
+      -- don't backspace if in alternative screen buffer and at start of line
+      Get_Iter_At_Mark(the_buf, start_iter, Get_Insert(the_buf));
+      if (not for_buffer.alternative_screen_buffer) or else
+         (for_buffer.alternative_screen_buffer and 
+          Get_Line_Index(start_iter) > 0)
+      then  -- okay to backspace (move cursor back one character)
+         Process_Escape(for_sequence => esc_str & "[D", on_buffer => for_buffer);
+      end if;
       if Saved_Markup_Exists(for_markup => for_buffer.markup)
       then  -- mark-up to restore, do a complete restore
          Error_Log.Debug_Data(at_level => 9, with_details => "Process : BS - Restoring mark-up.");

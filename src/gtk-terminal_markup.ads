@@ -70,6 +70,7 @@ package Gtk.Terminal_Markup is
    -- font should be presented.
    type font_modifier is (none, normal, bold, italic, underline, 
                            strikethrough, mono, span);
+   type span_types is (none, foreground, background, weight, underline);
    type markup_management is private;
    -- Usage: with the consuming record, e.g. Gtk_Terminal_Buffer_Record, insert
    --        something like the following entry:
@@ -110,13 +111,14 @@ package Gtk.Terminal_Markup is
                   for_markup : in markup_management) return natural;
        -- returns the number of the specified modifier in the currently loaded
        -- mark-up text (0 if there is none).
-   function Count_Of_Span(attribute : in UTF8_String; 
+   function Count_Of_Span(attribute : in span_types; -- UTF8_String; 
                           for_markup : in markup_management) return natural;
        -- Count the number of speicified attribute entries in a span tag
 
    procedure Append_To_Markup(in_markup    : in out markup_management;
                               for_modifier : in font_modifier := none;
-                              the_value    : in UTF8_String := ""; 
+                              span_type    : in span_types := none;
+                              the_value    : in UTF8_String := "";
                               or_rgb_colour: Gdk.RGBA.Gdk_RGBA := null_rgba);
       -- If the markup string is empty, initiate it, otherwise just append the
       -- supplied text.
@@ -140,16 +142,40 @@ private
    procedure Log_Data(at_level : in natural; with_details : in wide_string);
        -- For the logging display, if the_log_handler is assigned, then call
        -- that function with the two parameters, otherwise ignore the message.
+       
+   type A_UTF8_String is access UTF8_String;
+   function "+" (s : UTF8_String) return A_UTF8_String;
+      -- Returns an access UTF8_String for the specified UTF8_string.
+   function "-" (s : A_UTF8_String) return UTF8_String;
+      -- Returns the string for the specified Access UTF8_String
+   procedure Clear (the_string : in out A_UTF8_String);
+   type span_type_array is array (span_types'range) of A_UTF8_String;
+   -- Because the body of "+" must be seen prior to its use, the following is
+   -- actually located within the body of this package.
+   -- span_word: constant span_type_array :=
+   --            (+"", +"foreground=", +"background=", +"weight=", +"underline=");
+   function "-" (s : span_types) return UTF8_String;
+      -- Returns the string for the specified span type
 
    type linked_list;
    type linked_list_ptr is access linked_list;
+   -- type linked_list(mod_type : font_modifier := none) is record
    type linked_list is record
          item : natural;
+         insertion_point : natural := 0;  -- 0 = none
          next : linked_list_ptr;
+         mod_type : font_modifier := none;
+         -- case mod_type is
+            -- when span =>
+         span_type : span_types := none;
+         value     : A_UTF8_String;
+            -- when others =>
+            --     null;
+         -- end case;
       end record;
-   type font_modifier_detail is record
+   type font_modifier_detail is record -- (mod_type : font_modifier := none) is record
          n : natural := 0;  -- number of modifiers in the list 'o'
-         o : linked_list_ptr;
+         o : linked_list_ptr; --(mod_type);
       end record;
    type font_modifier_array is array (font_modifier) of font_modifier_detail;
    type markup_management is record

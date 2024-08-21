@@ -171,10 +171,13 @@ follows:
   file to the screen, it does it correctly, without inserting the spaces.  It
   is the second time that the space characters get inserted.
   The issue looked like being the teminal type, but most were tried out.
-* Nano appears to be okay.  There are, however, currently a few meta (alt)
-  characters that have yet to be implemented and therefore not available to
-  Nano.  It works with Blissymbolics characters.
-* Emacs has yet to be tested against Bliss_Term.
+* Nano appears to be okay.  There may be still some meta (alt) characters
+  that have yet to be tested and therefore may not available to Nano. It works
+  with Blissymbolics characters. However, there is an issue with using the
+  mouse with Blissymbolics as the mouse location does not account for combining
+  characters taking no space but do occupy a character position.
+* Emacs has yet to be tested against Bliss_Term, although an initial power-up
+  does not successfully load a file.  (NB: command should be emacs -nw <file>.
 
 There are probably numerous other errors that I have yet to discover.  I am
 actively using this terminal emulator whenever it is safe for me to do so, so I

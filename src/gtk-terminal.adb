@@ -1344,6 +1344,8 @@ package body Gtk.Terminal is
       -- "at_iter": a position in the buffer
       -- "the_text": text in UTF-8 format
       use Gtk.Text_Iter, Ada.Strings.Fixed;
+      function Wide_String_For(the_text : UTF8_String) return Wide_String
+         renames Ada.Strings.UTF_Encoding.Wide_Strings.Decode;
       LF_str : constant UTF8_String(1..1) := (1 => Ada.Characters.Latin_1.LF);
       InsRet : constant UTF8_String(1..1) := (1 => Insert_Return);
         -- this is an inserting CR/line feed (including when in overwrite)
@@ -1379,14 +1381,14 @@ package body Gtk.Terminal is
          end if;
          delete_ch := at_iter;  -- starting point to work forward from
          Forward_Chars(delete_ch, the_text'Length, result);
-         if Compare(delete_ch, end_iter) < 0
+         if result and Compare(delete_ch, end_iter) < 0
          then  -- more than enough characters to delete
             Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite - setting end_iter := delete_ch...");
             end_iter := delete_ch;
          end if;  -- (otherwise delete as many as possible)
          if not Equal(at_iter, end_iter)
          then  -- there is something to be deleted (i.e. not at end of line)
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : In Overwrite - at_iter line number in buffer =" & Get_Line(at_iter)'Wide_Image & ", Deleting '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Get_Text(buffer, at_iter, end_iter)) & "' with at_iter line =" & Get_Line(at_iter)'Wide_Image & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
+            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : In Overwrite - at_iter line number in buffer =" & Get_Line(at_iter)'Wide_Image & ", Deleting '" & Wide_String_For(the_text=>Get_Text(buffer, at_iter, end_iter)) & "' with at_iter line =" & natural'Wide_Image(natural(Get_Line(at_iter))+1) & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
             Delete(buffer, at_iter, end_iter);
          end if;
       end if;

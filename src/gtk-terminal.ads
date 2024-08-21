@@ -66,6 +66,8 @@ with Gtkada.Types;            use Gtkada.Types;
 with Gtk.Terminal_Markup;
 
 package Gtk.Terminal is
+   
+   version : constant array(1..3) of integer := (1,0,0);
 
    Encoding_Error : exception;
    Terminal_Creation_Error : exception;

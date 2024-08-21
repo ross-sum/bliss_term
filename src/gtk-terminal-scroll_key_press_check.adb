@@ -455,9 +455,9 @@ begin
          the_key(2) := '[';  -- always CSI
          Apply_Modifier(to => the_key, of_length => key_length,
                         for_keytype => 24, with_key => '~');
-      when GDK_parenleft | GDK_parenright | GDK_slash | GDK_less..GDK_greater |
-           GDK_bracketleft .. GDK_bracketright | GDK_LC_a .. GDK_LC_z | 
-           GDK_braceleft .. GDK_braceright =>
+      when GDK_parenleft | GDK_parenright | GDK_slash | 
+           GDK_colon..GDK_greater | GDK_bracketleft .. GDK_bracketright |
+           GDK_LC_a .. GDK_LC_z | GDK_braceleft .. GDK_braceright =>
          if (Gdk_Modifier_Type(key_state) and Control_Mask) > 0 and then
             (for_event.keyval >= GDK_LC_a and for_event.keyval <= GDK_LC_z)
          then  -- Control-A - Control-Z

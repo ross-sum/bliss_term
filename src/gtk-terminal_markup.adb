@@ -114,6 +114,39 @@ package body Gtk.Terminal_Markup is
       end if;
    end Log_Data;
    
+   ------------------------------------------
+   -- UTF8_String and Span Type Management --
+   ------------------------------------------
+   
+   -- type A_UTF8_String is access UTF8_String;
+   function "+" (s : UTF8_String) return A_UTF8_String is
+      -- Returns an access UTF8_String for the specified UTF8_string.
+   begin
+      return new UTF8_String'(s);
+   end "+";
+   
+   function "-" (s : A_UTF8_String) return UTF8_String is
+      -- Returns the string for the specified Access UTF8_String
+   begin
+      return s.all;
+   end "-";
+   
+   procedure Clear (the_string : in out A_UTF8_String) is
+      -- Ensures the string is empty
+   begin
+      the_string := null;
+   end Clear;
+   
+   -- type span_type_array is array (span_types'range) of A_UTF8_String;
+   span_word: constant span_type_array :=
+              (+"", +"foreground=", +"background=", +"weight=", +"underline=");
+   
+   function "-" (s : span_types) return UTF8_String is
+      -- Returns the string for the specified span type
+   begin
+      return span_word(s).all;
+   end "-";
+   
    ------------------------
    -- Mark-up Management --
    ------------------------
@@ -145,7 +178,8 @@ package body Gtk.Terminal_Markup is
    function Is_Empty(the_markup : in markup_management) return boolean is
       -- Indicates whether the mark-up text is empty or not
    begin
-      return the_markup.markup_text = Null_Ptr;
+      return the_markup.markup_text = Null_Ptr or else
+             Value(the_markup.markup_text)'Length = 0;
    end Is_Empty;
 
    function Count(of_modifier : in font_modifier;
@@ -165,7 +199,7 @@ package body Gtk.Terminal_Markup is
                    Count(underline, for_markup) = 0 and
                    Count(strikethrough, for_markup) = 0 and
                    Count(mono, for_markup) = 0
-                   then   -- normal really means none of most others
+               then   -- normal really means none of most others
                   return 1;
                else
                   return 0;
@@ -194,7 +228,7 @@ package body Gtk.Terminal_Markup is
       end if;
    end Count;
     
-   function Count_Of_Span(attribute : in UTF8_String; 
+   function Count_Of_Span(attribute : in span_types; -- UTF8_String; 
                            for_markup : in markup_management) return natural is
        -- Count the number of speicified attribute entries in a span tag
       use Ada.Strings.Fixed;
@@ -202,7 +236,7 @@ package body Gtk.Terminal_Markup is
       if for_markup.markup_text /= Null_Ptr and then
          Count(Value(for_markup.markup_text),"<span") > 0
        then  -- '<span' exists, so see if it holds the specified attribute
-         return Count(Value(for_markup.markup_text),attribute);
+         return Count(Value(for_markup.markup_text), -attribute);
       else
          return 0;
       end if;
@@ -210,19 +244,27 @@ package body Gtk.Terminal_Markup is
 
    procedure Append_To_Markup(in_markup    : in out markup_management;
                               for_modifier : in font_modifier := none;
+                              span_type    : in span_types := none;
                               the_value    : in UTF8_String := ""; 
                               or_rgb_colour: Gdk.RGBA.Gdk_RGBA := null_rgba) is
       -- If the markup string is empty, initiate it, otherwise just append the
       -- supplied text.
       procedure Set_Max(of_modifier_array : in out font_modifier_array; 
                         for_modifier : in font_modifier) is
-         procedure Insert(the_number : in positive; 
+         procedure Insert(the_number : in positive;
                           into : in out linked_list_ptr) is
          begin
             if into = null
             then
                into := new linked_list;
-               into.item := the_number;
+               if for_modifier = span
+               then  -- do a complete record assignment including span_type
+                  into.all := (mod_type=>span, item=>the_number, 
+                               insertion_point=>0, next=>null, 
+                               span_type=>span_type, value=>+the_value);
+               else
+                  into.item := the_number;
+               end if;
                -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: executing Set_Max(Insert) at value" & into.item'Wide_Image & "...");
             else
                Insert(the_number, into.next);
@@ -249,9 +291,9 @@ package body Gtk.Terminal_Markup is
             -- go down to the linked list to create a new item
             current_item := current_item.next;
          end loop;
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: executing Set_Max for_modifier '" & for_modifier'Wide_Image & "' with the_number =" & positive'Wide_Image(max_modifier + 1) & " and span_type = " & span_type'Wide_Image & ".");
          Insert(the_number => max_modifier + 1,
                 into => modifier_array(for_modifier).o);
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: executed Set_Max for_modifier '" & for_modifier'Wide_Image & "'.");
       end Set_Max;
       function To_RGB_String(for_rgb : Gdk.RGBA.Gdk_RGBA) return string is
          subtype Hex_Size is positive range 1..2;
@@ -348,15 +390,26 @@ package body Gtk.Terminal_Markup is
             Ada.Strings.Fixed.Count(Value(in_markup.markup_text),"<span") = 1
             and then Ada.Strings.Fixed.Count(Value(mkTxt),"</span>") = 0
             and then Ada.Strings.Fixed.Tail(Value(mkTxt),1) = ">"
-            and then Ada.Strings.Fixed.Count(Value(mkTxt),the_value) = 0
+            and then Ada.Strings.Fixed.Count(Value(mkTxt), -span_type) = 0
          then  -- insert this text just prior to the '>' on "<span ...>"
             -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Inserting into existing markup_text with <" & for_modifier'Wide_Image & ">: '" & Ada.Characters.Conversions.To_Wide_String(Value(mkTxt)(Value(mkTxt)'First..Value(mkTxt)'Last-1) &the_value & To_RGB_String(or_rgb_colour)&" >") & "'.");
             temp_markup:= 
                      New_String(Value(mkTxt)
                                     (Value(mkTxt)'First..Value(mkTxt)'Last-1) &
-                                the_value & To_RGB_String(or_rgb_colour)&" >");
+                                (-span_type) & the_value & 
+                                To_RGB_String(or_rgb_colour)&" >");
             Free(in_markup.markup_text);
             in_markup.markup_text := temp_markup;
+         elsif in_markup.markup_text /= Null_Ptr and then
+            Ada.Strings.Fixed.Count(Value(in_markup.markup_text),"<span") = 1
+            and then Ada.Strings.Fixed.Count(Value(mkTxt),"</span>") = 0
+            and then Ada.Strings.Fixed.Tail(Value(mkTxt),1) = ">"
+            and then Ada.Strings.Fixed.Count(Value(mkTxt), -span_type) = 1
+            and then the_value'Length > 0
+            and then Ada.Strings.Fixed.Count(Value(mkTxt), 
+                                             (-span_type) & the_value) = 1
+         then  -- this is a duplicate
+            null;  -- ignore it as it causes trouble
          else  -- treat as a new entry for <span ...>
             in_markup.modifier_array(span).n := 
                                           in_markup.modifier_array(span).n + 1;
@@ -364,7 +417,7 @@ package body Gtk.Terminal_Markup is
                     for_modifier => span);
             -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Inserting new markup via Insert_The_Markup with the_text=>'<span " & Ada.Characters.Conversions.To_Wide_String(the_value & To_RGB_String(or_rgb_colour)) & " >'.");
             Insert_The_Markup(for_markup=>in_markup,
-                              the_text=>"<span " & the_value &
+                              the_text=>"<span " & (-span_type) & the_value &
                                           To_RGB_String(or_rgb_colour) & " >");
          end if;
       else -- this is not setting up mark-up text for a span, just append
@@ -372,11 +425,11 @@ package body Gtk.Terminal_Markup is
                                  in_markup.modifier_array(for_modifier).n + 1;
          Set_Max(of_modifier_array => in_markup.modifier_array,
                  for_modifier => for_modifier);
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Appending markup text via Insert_The_Markup with the_text=>'" & Ada.Characters.Conversions.To_Wide_String(The_Mod(in_markup.modifier_array, at_pos => for_modifier) & the_value) & "'.");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Appending markup text via Insert_The_Markup with the_text=>'" & Ada.Characters.Conversions.To_Wide_String(The_Mod(in_markup.modifier_array, at_pos => for_modifier) & (-span_type) & the_value) & "'.");
          Insert_The_Markup(for_markup=>in_markup, 
                            the_text => The_Mod(in_markup.modifier_array, 
                                                at_pos => for_modifier) & 
-                                       the_value);
+                                       (-span_type) & the_value);
       end if;
    end Append_To_Markup;
    
@@ -413,22 +466,25 @@ package body Gtk.Terminal_Markup is
       end The_Mod;
       procedure Clear_Last(from_modifier_array : in out font_modifier_array; 
                            for_modifier : in font_modifier) is
-         procedure Delete(from : in out linked_list_ptr) is
+         procedure Delete_Last(from : in out linked_list_ptr) is
          begin
             if from.next = null
-            then
+            then  -- it is the last
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: executing Clear_Last(Delete_Last) at modifier '" & for_modifier'Wide_Image & "' which has value " & from.item'Wide_Image & ".");
+               if from.mod_type = span then  -- clear it's value
+                  Clear(from.value);
+               end if;
                from := null;  -- clear it out
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: executed Clear_Last(Delete) at modifier '" & for_modifier'Wide_Image & "'.");
             else
-               Delete(from.next);
+               Delete_Last(from.next);
             end if;
-         end Delete;
+         end Delete_Last;
          modifier_array : font_modifier_array renames from_modifier_array;
-      begin  -- calculate the order of the modifier being set
+      begin  -- Clear out the last modifier number in the list
          -- Now set the maximum + 1 to the requested modifier
          if  modifier_array(for_modifier).o /= null
          then  -- some processing to do (otherwise nothing to process)
-            Delete(from => modifier_array(for_modifier).o);
+            Delete_Last(from => modifier_array(for_modifier).o);
          end if;
       end Clear_Last;
       function Maximum(from_modifier_array : in font_modifier_array) 
@@ -454,7 +510,14 @@ package body Gtk.Terminal_Markup is
       modifier    : font_modifier;
       loop_counter : natural := 0;
    begin  -- Finish
-      if for_modifier /= none
+      if on_markup.markup_text = Null_Ptr
+      then
+         null;  -- nothing to do here!
+      elsif Value(on_markup.markup_text)'Length = 0
+      then  -- Nothing to mark up.  Make sure markup_text is null (empty)
+         Free(on_markup.markup_text);
+         on_markup.markup_text := Null_Ptr;
+      elsif for_modifier /= none
       then  -- Just close off that modifier
          Insert_The_Markup(for_markup=>on_markup, 
                           the_text=>The_Mod(for_mods=>on_markup.modifier_array,
@@ -513,27 +576,51 @@ package body Gtk.Terminal_Markup is
    procedure Copy(from : in font_modifier_array; to : out font_modifier_array)
    is
       -- Do a deep copy of 'from' to 'to'
-      procedure Insert(the_number : in positive; into : in out linked_list_ptr)
-      is
+      procedure Insert(the_number : in positive; into : in out linked_list_ptr;
+                       for_modifier  : in font_modifier;
+                       at_insertion  : in natural;
+                       and_span_type : in span_types := none;
+                       with_value    : in UTF8_String := "") is
       begin
          if into = null
          then
             into := new linked_list;
-            into.item := the_number;
+            if for_modifier = span 
+            then  -- do a complete record assignment including span_type
+               into.all :=  (mod_type=>span, item=>the_number,
+                             insertion_point=> 0, next=>null, 
+                             span_type=>and_span_type, value =>+with_value);
+            else
+               into.item := the_number;
+            end if;
          else
-            Insert(the_number, into.next);
+            Insert(the_number, into.next, for_modifier, at_insertion,
+                    and_span_type, with_value);
          end if;
       end Insert;
       current_item : linked_list_ptr;
    begin
       for item in font_modifier loop
+         -- Make doubly sure that the result is empty to start with
+         to(item).o := null;             ---------------------------------------------------CHECK FOR MEMORY LEAK HERE - MAY NEED TO CLEAR CHILDREN-------
          -- Load the modifier count (number)
          -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Copy: setting to(" & item'Wide_Image & ") := " & from(item).n'Wide_Image & ".");
          to(item).n := from(item).n;
          -- Load the modifier's sequence number(s) into to(item).o
          current_item := from(item).o;
          while current_item /= null loop  -- walk the list
-            Insert(current_item.item, into => to(item).o);
+            if item = span
+            then  -- include the span type
+               Insert(current_item.item, into=> to(item).o, 
+                      for_modifier=>item, 
+                      at_insertion => current_item.insertion_point,
+                      and_span_type=> current_item.span_type,
+                      with_value   => -current_item.value);
+            else  -- span type is not required
+               Insert(current_item.item, into=>to(item).o, 
+                      at_insertion=>current_item.insertion_point, 
+                      for_modifier=>item);
+            end if;
             -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Copy: Inserted" & current_item.item'Wide_Image & " into to(" & item'Wide_Image & ").o.");
             current_item := current_item.next;
          end loop;
@@ -549,7 +636,7 @@ package body Gtk.Terminal_Markup is
          first_char : natural := starting_at;
          last_char  : natural := starting_at;
       begin
-         if in_string'Length > starting_at
+         if in_string'Last >= starting_at
          then  -- sanity check
             while first_char < in_string'Length and then 
                   in_string(first_char) /= '<' loop
@@ -563,7 +650,7 @@ package body Gtk.Terminal_Markup is
             if first_char < last_char
             then
                return in_string(first_char .. last_char) & 
-                      Find_Markup(in_string(last_char..in_string'Last), 
+                      Find_Markup(in_string, --(last_char..in_string'Last), 
                                   starting_at => last_char + 1);
             else
                return "";
@@ -588,6 +675,7 @@ package body Gtk.Terminal_Markup is
    begin
       Free(the_markup.saved_markup);
       the_markup.saved_markup:=Regenerate_Markup(from=>the_markup.markup_text);
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Save(the_markup) - the_markup.saved_markup = '" & Ada.Characters.Conversions.To_Wide_String(Value(the_markup.saved_markup)) & "' from the_markup.markup_text = '" & Ada.Characters.Conversions.To_Wide_String(Value(the_markup.markup_text)) & "'.");
       -- Save a copy of the modifier array
       Copy(from=> the_markup.modifier_array, to=> the_markup.saved_modifiers);
    end Save;
@@ -598,6 +686,7 @@ package body Gtk.Terminal_Markup is
    begin
       Free(the_markup.markup_text);
       the_markup.markup_text := New_String(Value(the_markup.saved_markup));
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Restore(the_markup) - the_markup.markup_text = '" & Ada.Characters.Conversions.To_Wide_String(Value(the_markup.markup_text)) & "'.");
       Copy(from=> the_markup.saved_modifiers, to=> the_markup.modifier_array);
       Free(the_markup.saved_markup);
       the_markup.saved_markup := Null_Ptr;
@@ -613,12 +702,11 @@ package body Gtk.Terminal_Markup is
        -- Clear the saved markup
       procedure Delete(from : in out linked_list_ptr) is
       begin
-         if from.next = null
-         then
-            from := null;  -- clear it out
-         else
+         if from.next /= null
+         then  -- Clear out the end of the list first
             Delete(from.next);
          end if;
+         from := null;  -- at end now so clear it out
       end Delete;
    begin
       Free(markup.saved_markup);
@@ -651,7 +739,7 @@ package body Gtk.Terminal_Markup is
    function Length(of_markup_text : Gtkada.Types.Chars_Ptr) return Gint is
       -- Return the length of the mark-up text less the modifiers
       -- (i.e. less tags)
-      function At_a_Modifier(for_markup : in UTF8_String) return natural is
+      function At_a_Modifier(for_markup : in Wide_String) return natural is
        -- returns whether the next characters in the mark-up text are a
        -- modifier, by specifying it's length (0 = no modifier).
       begin
@@ -690,7 +778,8 @@ package body Gtk.Terminal_Markup is
          end if;
       end At_a_Modifier;
       the_length : Gint := 0;
-      the_markup : UTF8_String := Value(of_markup_text);
+      the_markup : Wide_String := 
+           Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(of_markup_text));
       in_tag     : boolean := false;
       item       : integer := the_markup'First;
       mod_count  : natural;
@@ -765,13 +854,13 @@ package body Gtk.Terminal_Markup is
          end if;
          -- Then output the mark-up text
          Insert_Markup(for_markup.buffer, cursor_iter, 
-                          Value(for_markup.markup_text), -1);
+                       Value(for_markup.markup_text), -1);
          Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: executing Insert_Markup on '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(for_markup.markup_text)) & "'.");
          -- Then clean up
          Free(for_markup.markup_text);
          for_markup.markup_text := Null_Ptr;
          if the_text'Length > 0
-            then  -- need to output that as well
+         then  -- need to output that as well
             Insert(for_markup.buffer, cursor_iter, the_text);
          end if;
       else  -- there is a modifier being specified in the mark-up
@@ -787,7 +876,6 @@ package body Gtk.Terminal_Markup is
             else  -- new text
                Free(for_markup.markup_text);
                for_markup.markup_text := New_String(the_text);
-                  -- for_markup.in_markup := true;
             end if;
             -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: Added mark-up to markup_text so it is now '" & Ada.Characters.Conversions.To_Wide_String(Value(for_markup.markup_text)) & "'.");
          end;
