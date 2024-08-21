@@ -30,7 +30,7 @@
 --                                                                   --
 -----------------------------------------------------------------------
 
-with Gdk.RGBA;                use Gdk.RGBA;
+-- with Gdk.RGBA;                use Gdk.RGBA;
 package body Gtk.Terminal.Colour is
 
    -- type colour_palette_number is new integer range 0..255;
