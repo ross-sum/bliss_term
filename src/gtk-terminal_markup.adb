@@ -392,7 +392,7 @@ package body Gtk.Terminal_Markup is
             and then Ada.Strings.Fixed.Tail(Value(mkTxt),1) = ">"
             and then Ada.Strings.Fixed.Count(Value(mkTxt), -span_type) = 0
          then  -- insert this text just prior to the '>' on "<span ...>"
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Inserting into existing markup_text with <" & for_modifier'Wide_Image & ">: '" & Ada.Characters.Conversions.To_Wide_String(Value(mkTxt)(Value(mkTxt)'First..Value(mkTxt)'Last-1) &the_value & To_RGB_String(or_rgb_colour)&" >") & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Inserting into existing markup_text with <" & for_modifier'Wide_Image & ">: '" & Ada.Characters.Conversions.To_Wide_String(Value(mkTxt)(Value(mkTxt)'First..Value(mkTxt)'Last-1) & (-span_type) & the_value & To_RGB_String(or_rgb_colour)&" >") & "'.");
             temp_markup:= 
                      New_String(Value(mkTxt)
                                     (Value(mkTxt)'First..Value(mkTxt)'Last-1) &
