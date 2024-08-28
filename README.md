@@ -177,7 +177,9 @@ follows:
   mouse with Blissymbolics as the mouse location does not account for combining
   characters taking no space but do occupy a character position.
 * Emacs has yet to be tested against Bliss_Term, although an initial power-up
-  does not successfully load a file.  (NB: command should be emacs -nw <file>.
+  does not successfully load a file.  It instead gets to the point where it
+  loads the scratch area and mysteriously stops there without doing the file
+  load.  (NB: command should be emacs -nw <file>).
 
 There are probably numerous other errors that I have yet to discover.  I am
 actively using this terminal emulator whenever it is safe for me to do so, so I
