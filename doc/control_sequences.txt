@@ -3,7 +3,7 @@ Command		Meaning
 <esc>(A		Set the G0 character set to UK
 <esc>(B		Set the G0 character set to USA ASCII
 <esc>(C		Set the G0 character set to Finnish
-<esc>[>c		Send device attributes (Secondary DA) [currently sends back "<esc>[>1;10;1c"]
+<esc>[><P1>c	Send device attributes (Secondary DA) [currently sends back "<esc>[>1;10000;1c" irrespective of whether <P!>=0 or anything else]
 <esc>[><P1>;<P2>m	key modifier options XTMODKEYS (while these are recorded, not much is implemented yet)
 <esc>[>n		Disable key modifier options (not implemented, with a log message at level 9 saying so)
 <esc>[=c		Send Device Attributes (Tertiary DA) [currently sends back "<esc>P!|00000000<esc>\"]
@@ -76,7 +76,8 @@ Command		Meaning
 <esc>]0<P1><esc>\	Operating system command: Title: <P1>=title
 <esc>]8<P1><esc>\	Operating system command: Hyperlink <P1>=hyperlink
 <esc>]10?		Operating system command: Query foreground colour [sends back "<esc>]10;<red>;<grn>;<blu><BEL>"]
-<esc>]11?		Operating system command: Query background colour [sends back "<esc>]10;<red>;<grn>;<blu><BEL>"]
+<esc>]11?		Operating system command: Query background colour [sends back "<esc>]11;<red>;<grn>;<blu><BEL>"]
+<esc>]11?<esc>\	Operating system command: Query background colour [sends back "<esc>]11;<red>;<grn>;<blu><esc>\"]
 <esc>]<P1>P		change the Linux Console's palette with palette of the form 'RRGGBB' (not implemented, with a log message at level 9 saying so)
 <esc>^		Privacy Message (not implemented, with a log message at level 9 saying so)
 <esc>_		Application Program Command (not implemented, with a log message at level 9 saying so)
@@ -144,7 +145,7 @@ Parameter	Meaning
 35|95	set foreground colour to magenta
 36|96	set foreground colour to cyan
 37|97	set foreground colour to white
-38	set foreground colour to number: <P2>=5: colour chart colour (not implmeented, just ignored), <P2>=2, RGB (implemented as '<RR>;<GG>;<BB>' with RR, GG and BB being the red, green and blue numbers)
+38	set foreground colour to number: <P2>=5: colour chart colour, <P2>=2, RGB (implemented as '<RR>;<GG>;<BB>' with RR, GG and BB being the red, green and blue numbers)
 39	default foreground colour
 40|100	set background colour to black
 41|101	set background colour to red
@@ -154,7 +155,7 @@ Parameter	Meaning
 45|105	set background colour to magenta
 46|106	set background colour to cyan
 47|107	set background colour to white
-48	set background colour to number: <P2>=5: colour chart colour (not implmeented, just ignored), <P2>=2, RGB (implemented as '<RR>;<GG>;<BB>' with RR, GG and BB being the red, green and blue numbers)
+48	set background colour to number: <P2>=5: colour chart colour, <P2>=2, RGB (implemented as '<RR>;<GG>;<BB>' with RR, GG and BB being the red, green and blue numbers)
 49	default background colour
 50	disable proportional spacing
 
