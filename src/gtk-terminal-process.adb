@@ -180,7 +180,7 @@ separate (Gtk.Terminal)
                   case the_sequence(chr_pos) is
                      when 'c' =>  -- Send device attributes (Secondary DA)
                         Write(fd => on_buffer.master_fd, 
-                              Buffer => Esc_str & "[>0;" & 
+                              Buffer => Esc_str & "[>1;" & 
                                         As_String(version(1)*10000 + 
                                                   version(2)*100+version(3)) &
                                         ";1c");
