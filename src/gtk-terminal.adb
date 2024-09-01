@@ -89,7 +89,7 @@ with Gtk.CSS_Provider, Gtk.Style_Context, Gtk.Style_Provider;
 with Gtk.Terminal.CInterface;
 with Gtk.Terminal.Colour;
 with GtkAda.Bindings;            use GtkAda.Bindings;
-with Error_Log;  ----------------------------*********DELETE ME*********----------------------------
+-- with Error_Log;  ----------------------------*********DELETE ME*********----------------------------
 
 package body Gtk.Terminal is
 
@@ -228,7 +228,7 @@ package body Gtk.Terminal is
    function Gtk_Terminal_New return Gtk_Terminal is
       the_terminal : Gtk_Terminal;
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_Terminal_New: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_Terminal_New: Start.");
       Gtk.Terminal.Gtk_New(the_terminal);
       return the_terminal;
    end Gtk_Terminal_New;
@@ -241,7 +241,7 @@ package body Gtk.Terminal is
       --  contains the previous session's data to be preset as the history.
       the_terminal : Gtk_Terminal;
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_Terminal_New_With_Buffer: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_Terminal_New_With_Buffer: Start.");
       Gtk.Terminal.Gtk_New_With_Buffer (the_terminal, buffer);
       return the_terminal;
    end Gtk_Terminal_New_With_Buffer;
@@ -249,7 +249,7 @@ package body Gtk.Terminal is
    procedure Gtk_New (the_terminal : out Gtk_Terminal) is
       --  Create a new terminal.
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_New: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_New: Start.");
       Gtk_New_With_Buffer(the_terminal, "");
    end Gtk_New;
 
@@ -257,7 +257,7 @@ package body Gtk.Terminal is
                                   buffer    : UTF8_String) is
       ip_source : GLib.Main.G_Source_ID;
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_New_With_Buffer: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_New_With_Buffer: Start.");
       the_terminal := new Gtk_Terminal_Record;
       Gtk.Terminal.Initialise_With_Buffer (the_terminal, buffer);
       if not service_initialised
@@ -282,7 +282,7 @@ package body Gtk.Terminal is
       --  Initialise does nothing if the object was already created with another
       --  call to Initialise* or G_New.
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Initialize: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Initialize: Start.");
       if not the_terminal.Is_Created
       then  -- create the terminal, its buffer and initialise
          -- First up, call the inherited initialise operation
@@ -336,7 +336,7 @@ package body Gtk.Terminal is
       cr_char : constant character := Ada.Characters.Latin_1.CR;
       lf_char : constant character := Ada.Characters.Latin_1.LF;
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Initialise_With_Buffer: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Initialise_With_Buffer: Start.");
       Initialise(the_terminal);
       -- Set the terminal up with the specified buffer as its history.
       if buffer'Length > 1 or else 
@@ -368,7 +368,7 @@ package body Gtk.Terminal is
                       table : Gtk.Text_Tag_Table.Gtk_Text_Tag_Table := null) is
       --  Create a new terminal text buffer.
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_New (the_buffer): Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk_New (the_buffer): Start.");
       -- Create the buffer itself
       the_buffer := new Gtk_Terminal_Buffer_Record;
       -- Now create the alternative buffer (as per xterm)
@@ -388,7 +388,7 @@ package body Gtk.Terminal is
       --  call to Initialise* or G_New.
       --  "table": a tag table, or null to create a new one
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Initialize (the_buffer): Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Initialize (the_buffer): Start.");
       if not the_buffer.Is_Created
       then  -- create the terminal text buffer and initialise
          -- First up, call the inherited initialise operation
@@ -409,7 +409,7 @@ package body Gtk.Terminal is
    procedure Finalize(the_terminal : access Gtk_Terminal_Record'Class) is
    begin
       -- Clean up the terminal first
-      Error_Log.Debug_Data(at_level => 9, with_details => "Finalize: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Finalize: Start.");
       Free(the_terminal.buffer.child_name);
       Finalise(the_markup => the_terminal.buffer.markup);
       Free(the_terminal.title);
@@ -936,7 +936,7 @@ package body Gtk.Terminal is
          Get_Iter_At_Mark(buffer, end_iter, Get_Insert(buffer));
          mouse_details.pre_sel_row := natural(Get_Line(end_iter)) + 1;
          mouse_details.pre_sel_col := natural(Get_Line_Offset(end_iter)) + 1;
-         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: -Left button Cursor was at (row" & mouse_details.pre_sel_row'Wide_Image & ", col" & mouse_details.pre_sel_col'Wide_Image & "), bracketed_paste_mode =" & the_terminal.buffer.bracketed_paste_mode'Wide_Image & ", the_terminal.buffer.entering_command=" & the_terminal.buffer.entering_command'Wide_Image & ", the_terminal.buffer.use_buffer_editing=" & the_terminal.buffer.use_buffer_editing'Wide_Image & ".");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: -Left button Cursor was at (row" & mouse_details.pre_sel_row'Wide_Image & ", col" & mouse_details.pre_sel_col'Wide_Image & "), bracketed_paste_mode =" & the_terminal.buffer.bracketed_paste_mode'Wide_Image & ", the_terminal.buffer.entering_command=" & the_terminal.buffer.entering_command'Wide_Image & ", the_terminal.buffer.use_buffer_editing=" & the_terminal.buffer.use_buffer_editing'Wide_Image & ".");
          -- Then signal that we are selecting text
          mouse_details.in_select := true;
          -- Do mouse management for this button
@@ -947,7 +947,7 @@ package body Gtk.Terminal is
          -- Note that a paste operation has commenced
          mouse_details.in_paste := true;
          -- Ensure cursor is correctly located
-         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - Middle button event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row =" & mouse_details.row'Wide_Image & ", mouse_details.col =" & mouse_details.col'Wide_Image & ", entering_command = " & the_terminal.buffer.entering_command'Wide_Image & ", Get_Overwrite = " & Get_Overwrite(the_terminal.terminal)'Wide_Image & ".");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - Middle button event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row =" & mouse_details.row'Wide_Image & ", mouse_details.col =" & mouse_details.col'Wide_Image & ", entering_command = " & the_terminal.buffer.entering_command'Wide_Image & ", Get_Overwrite = " & Get_Overwrite(the_terminal.terminal)'Wide_Image & ".");
             -- restore the cursor to the correct location, but only if
             -- the copy took place within the current virtual terminal (tab)
          if mouse_details.pre_sel_row > 0 or mouse_details.pre_sel_col > 0
@@ -968,7 +968,7 @@ package body Gtk.Terminal is
             end loop;
          end if;
          Place_Cursor(buffer, where => end_iter);
-         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - middle button Cursor is at (row" & Get_Line(end_iter)'Wide_Image & ", col" & Get_Line_Offset(end_iter)'Wide_Image & "), bracketed_paste_mode =" & the_terminal.buffer.bracketed_paste_mode'Wide_Image & ", the_terminal.buffer.entering_command=" & the_terminal.buffer.entering_command'Wide_Image & ", the_terminal.buffer.use_buffer_editing=" & the_terminal.buffer.use_buffer_editing'Wide_Image & ".");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: - middle button Cursor is at (row" & Get_Line(end_iter)'Wide_Image & ", col" & Get_Line_Offset(end_iter)'Wide_Image & "), bracketed_paste_mode =" & the_terminal.buffer.bracketed_paste_mode'Wide_Image & ", the_terminal.buffer.entering_command=" & the_terminal.buffer.entering_command'Wide_Image & ", the_terminal.buffer.use_buffer_editing=" & the_terminal.buffer.use_buffer_editing'Wide_Image & ".");
          -- If (and only if) in insert mode, paste into the buffer
          if the_terminal.buffer.use_buffer_editing and
             the_terminal.buffer.entering_command and
@@ -995,13 +995,14 @@ package body Gtk.Terminal is
          Report_Mouse_Position(at_terminal => the_terminal, 
                                for_button => natural(event.button));
       else  -- which button??
-         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: button =" & event.Button'Wide_Image & ".");
+         null;
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: button =" & event.Button'Wide_Image & ".");
       end if;
       -- For button 2, don't allow further processing, for button 1 and 3,
       -- potentially allow for further processing of this event, but
       -- only if NOT doing a 'Cell Motion Mouse Tracking' type of mouse
       -- reporting (when not, 'true'=don't allow, otherwise 'false'=allow).
-      Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: finishing up - ((x10_mouse=" & mouse_details.x10_mouse'Wide_Image & " OR x11_mouse=" & mouse_details.x11_mouse'Wide_Image & ") AND NOT Cell Motion Mouse Tracking (btn_event) =" & mouse_details.btn_event'Wide_Image & ") and event.Button=" & event.Button'Wide_Image & ".");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Press_CB: finishing up - ((x10_mouse=" & mouse_details.x10_mouse'Wide_Image & " OR x11_mouse=" & mouse_details.x11_mouse'Wide_Image & ") AND NOT Cell Motion Mouse Tracking (btn_event) =" & mouse_details.btn_event'Wide_Image & ") and event.Button=" & event.Button'Wide_Image & ".");
       return (((mouse_details.x10_mouse or mouse_details.x11_mouse) and
                not mouse_details.btn_event) and 
               (event.Button = 3)) or (event.Button =2);
@@ -1029,7 +1030,7 @@ package body Gtk.Terminal is
    begin
       if event.Button = 1 and mouse_details.in_select
       then  -- Button 1 release: finish the selection highlight process
-         Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row=" & mouse_details.row'Wide_Image & ", mouse_details.col=" & mouse_details.col'Wide_Image & ", mouse_details.in_select=" & mouse_details.in_select'Wide_Image & ".");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: event.the_Type= '" & event.the_Type'Wide_Image & "' (" & Gdk_Event_Type'Pos(event.the_Type)'Wide_Image & "), event.Send_Event =" & event.Send_Event'Wide_Image & ", event.Button =" & event.Button'Wide_Image & ", mouse_details.row=" & mouse_details.row'Wide_Image & ", mouse_details.col=" & mouse_details.col'Wide_Image & ", mouse_details.in_select=" & mouse_details.in_select'Wide_Image & ".");
          if the_terminal.buffer.alternative_screen_buffer
          then  -- using the alternative buffer for display
             buffer := the_terminal.buffer.alt_buffer;
@@ -1039,7 +1040,7 @@ package body Gtk.Terminal is
          -- Get the selection and load into the clipboard
          Get_Selection_Bounds(buffer, start_iter, end_iter, result);
          if result then  -- some text was selected to paste
-            Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: Loading clipboard with '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, start_iter, end_iter)) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: Loading clipboard with '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, start_iter, end_iter)) & "'.");
             Set_Text(the_clipboard, Get_Text(buffer, start_iter, end_iter));
          end if;
          -- Reset the note that text is being selected
@@ -1059,7 +1060,7 @@ package body Gtk.Terminal is
       -- potentially allow for further processing of this event, pending it
       -- being an X10 or VT200 X11 type of mouse reporting (when not, 'true'=
       -- don't allow further processing, otherwise 'false'=allow it).
-      Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: finishing up - (x10_mouse=" & mouse_details.x10_mouse'Wide_Image & " OR x11_mouse=" & mouse_details.x11_mouse'Wide_Image & ") [Cell Motion Mouse Tracking (btn_event) =" & mouse_details.btn_event'Wide_Image & "] AND event.Button=" & event.Button'Wide_Image & ".");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Button_Release_CB: finishing up - (x10_mouse=" & mouse_details.x10_mouse'Wide_Image & " OR x11_mouse=" & mouse_details.x11_mouse'Wide_Image & ") [Cell Motion Mouse Tracking (btn_event) =" & mouse_details.btn_event'Wide_Image & "] AND event.Button=" & event.Button'Wide_Image & ".");
       return ((mouse_details.x10_mouse or mouse_details.x11_mouse) and
               (event.Button = 1 or event.Button = 3)) or (event.Button =2);
    end Button_Release_CB;
@@ -1078,7 +1079,7 @@ package body Gtk.Terminal is
                                               the_terminal.buffer.mouse_config;
       direction : Gdk.Event.Gdk_Scroll_Direction;
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Mouse_Scroll_CB: (mouse_details.alt_scroll=" & mouse_details.alt_scroll'Wide_Image & " AND alternative_screen_buffer=" & the_terminal.buffer.alternative_screen_buffer'Wide_Image & ") AND THEN event.Direction = " & event.Direction'Wide_Image & ". event.The_Type = " & event.The_Type'Wide_Image & ", event.State = " & event.State'Wide_Image & ", event.Delta_X =" & event.Delta_X'Wide_Image & ", event.Delta_Y =" & event.Delta_Y'Wide_Image & ", event.X =" & event.X'Wide_Image & ", event.Y =" & event.Y'Wide_Image & ".");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Mouse_Scroll_CB: (mouse_details.alt_scroll=" & mouse_details.alt_scroll'Wide_Image & " AND alternative_screen_buffer=" & the_terminal.buffer.alternative_screen_buffer'Wide_Image & ") AND THEN event.Direction = " & event.Direction'Wide_Image & ". event.The_Type = " & event.The_Type'Wide_Image & ", event.State = " & event.State'Wide_Image & ", event.Delta_X =" & event.Delta_X'Wide_Image & ", event.Delta_Y =" & event.Delta_Y'Wide_Image & ", event.X =" & event.X'Wide_Image & ", event.Y =" & event.Y'Wide_Image & ".");
       if (mouse_details.alt_scroll and 
           the_terminal.buffer.alternative_screen_buffer) and then
          (event.Direction = scroll_up or event.Direction = scroll_down or
@@ -1362,7 +1363,7 @@ package body Gtk.Terminal is
       else  -- using the main buffer for display
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(into);
       end if;
-      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(into.parent) or into.alternative_screen_buffer) & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & " with iter_line =" & iter_line'Wide_Image & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(into.parent) or into.alternative_screen_buffer) & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & " with iter_line =" & iter_line'Wide_Image & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
       if (Get_Overwrite(into.parent) or into.alternative_screen_buffer)
          and then  -- i.e. if in 'overwrite' mode
             ((Count(source=>the_text, pattern=>InsRet) = 0) and
@@ -1372,53 +1373,53 @@ package body Gtk.Terminal is
          -- line.  If in overwrite, you are at the end of the line and you keep
          -- typing, then it does not go to the next line, but inserts beyond the
          -- end of the line.
-         Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite - checking and deleting if necessary any characters that this will overwrite (if not already at end of line)...");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite - checking and deleting if necessary any characters that this will overwrite (if not already at end of line)...");
          end_iter := at_iter;
          if not Ends_Line(end_iter)
          then  -- Not at end, so set up the end_iter to be the end of the line
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite and not a Insert_Return character operation, Executing Forward_To_Line_End(end_iter, result)...");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite and not a Insert_Return character operation, Executing Forward_To_Line_End(end_iter, result)...");
             Forward_To_Line_End(end_iter, result);
          end if;
          delete_ch := at_iter;  -- starting point to work forward from
          Forward_Chars(delete_ch, the_text'Length, result);
          if result and Compare(delete_ch, end_iter) < 0
          then  -- more than enough characters to delete
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite - setting end_iter := delete_ch...");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert: In Overwrite - setting end_iter := delete_ch...");
             end_iter := delete_ch;
          end if;  -- (otherwise delete as many as possible)
          if not Equal(at_iter, end_iter)
          then  -- there is something to be deleted (i.e. not at end of line)
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : In Overwrite - at_iter line number in buffer =" & Get_Line(at_iter)'Wide_Image & ", Deleting '" & Wide_String_For(the_text=>Get_Text(buffer, at_iter, end_iter)) & "' with at_iter line =" & natural'Wide_Image(natural(Get_Line(at_iter))+1) & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : In Overwrite - at_iter line number in buffer =" & Get_Line(at_iter)'Wide_Image & ", Deleting '" & Wide_String_For(the_text=>Get_Text(buffer, at_iter, end_iter)) & "' with at_iter line =" & natural'Wide_Image(natural(Get_Line(at_iter))+1) & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
             Delete(buffer, at_iter, end_iter);
          end if;
       end if;
       -- Now call the inherited Insert operation as appropriate
       -- this is ordinary, un-marked-up text, so just display it as is
       Get_End_Iter(buffer, end_iter);  -- get end (for comparison)
-      Error_Log.Debug_Data(at_level => 9, with_details => "Insert: Working out if we need to deal with a line feed - into.scroll_region_top =" &into.scroll_region_top'Wide_Image & ", into.scroll_region_bottom =" & into.scroll_region_bottom'Wide_Image  & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & ".");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert: Working out if we need to deal with a line feed - into.scroll_region_top =" &into.scroll_region_top'Wide_Image & ", into.scroll_region_bottom =" & into.scroll_region_bottom'Wide_Image  & " and Count(source=>the_text, pattern=>InsRet) =" & Count(source=>the_text, pattern=>InsRet)'Wide_Image & " and Count(source=>the_text, pattern=>Lf_str) =" & Count(source=>the_text, pattern=>Lf_str)'Wide_Image & ".");
       if (into.scroll_region_top > 0 and into.scroll_region_bottom > 0) and
          then (Count(source=>the_text, pattern=>InsRet) > 0)
       then  -- An Inserting LF exists, need to ensure scrolling within region
          num_lf := Count(source=>the_text, pattern=>InsRet);
          if Index(the_text, InsRet) > 1
          then  -- Inserting CR/LF is part way through the_text
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, InsRet)-the_text'First)) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, InsRet)-the_text'First)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(the_text'First..
                                             Index(the_text, InsRet)-
                                                               the_text'First));
             Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
                             starting_from => at_iter);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, InsRet)-the_text'First+num_lf..the_text'Last)) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, InsRet)-the_text'First+num_lf..the_text'Last)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(Index(the_text, InsRet)-
                                         the_text'First+num_lf..the_text'Last));
          else  -- Inserting CR/LF must be at the start
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') <= 1, Inserting" & num_lf'Wide_Image & " line feeds at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') <= 1, Inserting" & num_lf'Wide_Image & " line feeds at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
             Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
                             starting_from => at_iter);
             if the_text'Length > 1 then
-               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(InsRet) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                the_text(the_text'First+num_lf..the_text'Last));
             end if;
@@ -1433,7 +1434,7 @@ package body Gtk.Terminal is
          num_lf := Count(source=>the_text, pattern=>LF_str);
          if Index(the_text, LF_str) > 1
          then  -- CR/LF is part way through the_text
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, LF_str)-the_text'First)) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, LF_str)-the_text'First)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(the_text'First..
                                             Index(the_text, LF_str)-
@@ -1443,20 +1444,20 @@ package body Gtk.Terminal is
             then  -- Successfully gone one line forward
                Place_Cursor(buffer, where => at_iter);
             end if;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, LF_str)-the_text'First+num_lf..the_text'Last)) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, LF_str)-the_text'First+num_lf..the_text'Last)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(Index(the_text, LF_str)-
                                         the_text'First+num_lf..the_text'Last));
          else  -- CR/LF must be at the start
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & " - going forward " & num_lf'Wide_Image & " line.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & " - going forward " & num_lf'Wide_Image & " line.");
             Forward_Lines(at_iter, Glib.Gint(num_lf), result);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : attempted to move forward" & num_lf'Wide_Image & " line with result of " & result'Wide_Image & ", now at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : attempted to move forward" & num_lf'Wide_Image & " line with result of " & result'Wide_Image & ", now at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
             if result
             then  -- Successfully gone one line forward
                Place_Cursor(buffer, where => at_iter);
             end if;
             if the_text'Length > 1 then
-               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting the text '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index(the_text, LF_str) > 1 and Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(LF_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting the text '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                the_text(the_text'First+num_lf..the_text'Last));
             end if;
@@ -1469,23 +1470,23 @@ package body Gtk.Terminal is
          num_lf := Count(source=>the_text, pattern=>LF_str);
          if Index(the_text, Lf_str) > 1
          then  -- LF is part way through the_text
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, Lf_str)-the_text'First)) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting part 1 '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First..Index(the_text, Lf_str)-the_text'First)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(the_text'First..
                                             Index(the_text, Lf_str)-
                                                               the_text'First));
             Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
                             starting_from => at_iter);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, Lf_str)-the_text'First+num_lf..the_text'Last)) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') > 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", now inserting part 2 '" & Ada.Characters.Conversions.To_Wide_String(the_text(Index(the_text, Lf_str)-the_text'First+num_lf..the_text'Last)) & "'.");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                    the_text(Index(the_text, Lf_str)-
                                         the_text'First+num_lf..the_text'Last));
          else  -- LF must be at the start
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') <= 1, scrolling for " & num_lf'Wide_Image & " Lf_str lines at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') <= 1, scrolling for " & num_lf'Wide_Image & " Lf_str lines at buffer line number =" & Get_Line(at_iter)'Wide_Image & ".");
             Scrolled_Insert(number_of_lines => num_lf, for_buffer=> into, 
                             starting_from => at_iter);
             if the_text'Length > 1 then
-               Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting after Lf_str '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : Index('" & Ada.Characters.Conversions.To_Wide_String(the_text) & "', '" & Ada.Characters.Conversions.To_Wide_String(Lf_str) & "') <= 1, at buffer line number =" & Get_Line(at_iter)'Wide_Image & ", Inserting after Lf_str '" & Ada.Characters.Conversions.To_Wide_String(the_text(the_text'First+num_lf..the_text'Last)) & "'.");
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, 
                                the_text(the_text'First+num_lf..the_text'Last));
             end if;
@@ -1494,11 +1495,11 @@ package body Gtk.Terminal is
          if Count(source=>the_text, pattern=>InsRet) > 0
          then  -- in case there is more than one, do Count worth of them
             for item in 1 .. Count(source=>the_text, pattern=>LF_str) loop
-               Error_Log.Debug_Data(at_level => 9, with_details => "Insert: inserting a LF_str at iter's line number " & Get_Line(at_iter)'Wide_Image & "...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert: inserting a LF_str at iter's line number " & Get_Line(at_iter)'Wide_Image & "...");
                Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),at_iter, LF_str);
             end loop;
          else
-            Error_Log.Debug_Data(at_level => 9, with_details => "Insert : doing regular insert of '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(the_text) & "' at_iter line ID in buffer =" & Get_Line(at_iter)'Wide_Image  & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert : doing regular insert of '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(the_text) & "' at_iter line ID in buffer =" & Get_Line(at_iter)'Wide_Image  & " and at_iter index =" & Get_Line_Index(at_iter)'Wide_Image & " (column" & Get_Line_Offset(at_iter)'Wide_Image & ").");
             Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer), at_iter, the_text);
          end if;
       end if;
@@ -1560,16 +1561,16 @@ package body Gtk.Terminal is
             home_iter := Home_Iterator(for_terminal => the_terminal);
             -- Set last_iter to the last character on the last line
             last_iter := home_iter;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
             Forward_Lines(last_iter, 
                           Glib.Gint(for_buffer.scroll_region_bottom-1),
                           result);
             if not Ends_Line(last_iter)
             then  -- Not at end, set up the last_iter to be the end of the line
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
                Forward_To_Line_End(last_iter, result);
             end if;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: last_iter now = line" & Get_Line(last_iter)'Wide_Image & ".");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: last_iter now = line" & Get_Line(last_iter)'Wide_Image & ".");
             Get_End_Iter(buffer, end_iter);
             if Natural(Get_Line(last_iter))>= for_buffer.scroll_region_bottom-1
                and then Compare(last_iter, end_iter) <= 0
@@ -1583,7 +1584,7 @@ package body Gtk.Terminal is
                   -- We need to delete from the top line, set home_iter to that
                   if for_buffer.scroll_region_top > 1
                   then  -- the window starts some way down from the top line
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_Lines(home_iter, " & integer'Wide_Image((for_buffer.scroll_region_top-1)) & ", result)...");
+                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_Lines(home_iter, " & integer'Wide_Image((for_buffer.scroll_region_top-1)) & ", result)...");
                      Forward_Lines(home_iter, 
                                    Glib.Gint(for_buffer.scroll_region_top-1),
                                    result);
@@ -1592,7 +1593,7 @@ package body Gtk.Terminal is
                   end_iter := home_iter;
                   if not Ends_Line(end_iter)
                   then  -- Not at end, so set to the end of the line
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_To_Line_End(end_iter (= line " & Get_Line(end_iter)'Wide_Image & "), result)...");
+                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: Executing Forward_To_Line_End(end_iter (= line " & Get_Line(end_iter)'Wide_Image & "), result)...");
                      Forward_To_Line_End(end_iter, result);
                   end if;
                   -- and tip it over the end (so we delete the whole line)
@@ -1611,7 +1612,7 @@ package body Gtk.Terminal is
                   insert_mk := Create_Mark(buffer, "InsertPt", starting_from);
                end if;
                -- Delete the line at the top of the scrolled region
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert : home_iter line number in buffer =" & Get_Line(home_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, home_iter, end_iter)) & "'.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert : home_iter line number in buffer =" & Get_Line(home_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, home_iter, end_iter)) & "'.");
                Delete(buffer, home_iter, end_iter);
                -- Now can do the insert at the specified location:
                -- Restore the starting_from iter
@@ -1621,7 +1622,7 @@ package body Gtk.Terminal is
             end if;
          end if;
          -- Now insert the CR/LF at starting_from
-         Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: inserting a LF_str at iter's line number " & Get_Line(starting_from)'Wide_Image & "...");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Insert: inserting a LF_str at iter's line number " & Get_Line(starting_from)'Wide_Image & "...");
          Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),starting_from, LF_str);
       end loop;
    end Scrolled_Insert;
@@ -1666,16 +1667,16 @@ package body Gtk.Terminal is
             -- scrolled region.  A blank line gets inserted after this to
             -- replace the line that gets deleted at starting_from.
             last_iter := home_iter;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
             Forward_Lines(last_iter, 
                           Glib.Gint(for_buffer.scroll_region_bottom-1),
                           result);
             if not Ends_Line(last_iter)
             then  -- Not at end, set up the last_iter to be the end of the line
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
                Forward_To_Line_End(last_iter, result);
             end if;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: last_iter now = line" & Get_Line(last_iter)'Wide_Image & ".");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: last_iter now = line" & Get_Line(last_iter)'Wide_Image & ".");
             Get_End_Iter(buffer, end_iter);
             if Natural(Get_Line(last_iter))>= for_buffer.scroll_region_bottom-1
                and then Compare(last_iter, end_iter) <= 0
@@ -1696,7 +1697,7 @@ package body Gtk.Terminal is
                else  -- delete by removing the line at starting_from
                   -- First up, insert the line at the bottom first up by
                   -- inserting a LF there
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: inserting a LF_str at last_iter's line number " & Get_Line(last_iter)'Wide_Image & "...");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: inserting a LF_str at last_iter's line number " & Get_Line(last_iter)'Wide_Image & "...");
                   Gtk.Text_Buffer.Insert(Gtk_Text_Buffer(buffer),
                                          last_iter, LF_str);
                   -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete: inserted LF_str at last_iter's line, which now has number " & Get_Line(last_iter)'Wide_Image & " (should be 1 more than previously).");
@@ -1718,7 +1719,7 @@ package body Gtk.Terminal is
                   Forward_Char(end_iter, result);
                end if;
                -- Delete the line at the top of the scrolled region
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete : home_iter line number in buffer =" & Get_Line(home_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, home_iter, end_iter)) & "'.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scrolled_Delete : home_iter line number in buffer =" & Get_Line(home_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(buffer, home_iter, end_iter)) & "'.");
                Delete(buffer, home_iter, end_iter);
                -- Restore the starting_from iter
                Get_Iter_At_Mark(buffer, starting_from, delete_mk);
@@ -1769,13 +1770,13 @@ package body Gtk.Terminal is
             -- scrolled region.  A blank line gets inserted after this to
             -- replace the line that gets deleted at home_iter.
             last_iter := home_iter;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
             Forward_Lines(last_iter, 
                           Glib.Gint(for_buffer.scroll_region_bottom-1),
                           result);
             if not Ends_Line(last_iter)
             then  -- Not at end, set up the last_iter to be the end of the line
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Down: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
                Forward_To_Line_End(last_iter, result);
             end if;
             -- Now set home_iter to be at the scroll_region_top
@@ -1881,7 +1882,7 @@ package body Gtk.Terminal is
       else  -- using the main buffer for display
          buffer := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
       end if;
-      Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(for_buffer.parent) or for_buffer.alternative_screen_buffer) & " and starting_from index =" & Get_Line_Index(starting_from)'Wide_Image & " (column" & Get_Line_Offset(starting_from)'Wide_Image & ").");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: In Overwrite? : " & boolean'Wide_Image(Get_Overwrite(for_buffer.parent) or for_buffer.alternative_screen_buffer) & " and starting_from index =" & Get_Line_Index(starting_from)'Wide_Image & " (column" & Get_Line_Offset(starting_from)'Wide_Image & ").");
       for line in 1 .. number_of_lines loop
          if (for_buffer.scroll_region_top > 0 and 
              for_buffer.scroll_region_bottom > 0) and then
@@ -1895,14 +1896,14 @@ package body Gtk.Terminal is
             -- scrolled region.  This line gets deleted, being replaced by the
             -- line that gets inserted at home_iter.
             last_iter := home_iter;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 0 and for_buffer.scroll_region_bottom > 0, setting last_iter (=home_iter, at line " & Get_Line(last_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_bottom-1)'Wide_Image & " lines...");
             Forward_Lines(last_iter, 
                           Glib.Gint(for_buffer.scroll_region_bottom-1),
                           result);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: last_iter =(" & Get_Line(last_iter)'Wide_Image & ", column" & Get_Line_Offset(last_iter)'Wide_Image & "),  checking for Ends_Line(last_iter) (=" & Ends_Line(last_iter)'Wide_Image & ").");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: last_iter =(" & Get_Line(last_iter)'Wide_Image & ", column" & Get_Line_Offset(last_iter)'Wide_Image & "),  checking for Ends_Line(last_iter) (=" & Ends_Line(last_iter)'Wide_Image & ").");
             if not Ends_Line(last_iter)
             then  -- Not at end, set up the last_iter to be the end of the line
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Executing Forward_To_Line_End(last_iter (= line " & Get_Line(last_iter)'Wide_Image & "), result)...");
                Forward_To_Line_End(last_iter, result);
             end if;
             -- and preserve that location
@@ -1910,7 +1911,7 @@ package body Gtk.Terminal is
             -- Now set home_iter to be at the scroll_region_top
             if for_buffer.scroll_region_top > 1
             then  -- Not at the top of the scroll region - go there
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 1, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_top-1)'Wide_Image & " lines...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: for_buffer.scroll_region_top > 1, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") forward by " & Glib.Gint(for_buffer. scroll_region_top-1)'Wide_Image & " lines...");
                Forward_Lines(home_iter, 
                              Glib.Gint(for_buffer.scroll_region_top-1),
                              result);
@@ -1919,13 +1920,13 @@ package body Gtk.Terminal is
             if Get_Line(starting_from) <= 
                                       Glib.Gint(for_buffer.scroll_region_top-1)
             then  -- already at the top, need to scroll the screen
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line(starting_from) (=" & Get_Line(starting_from)'Wide_Image & ") <= Glib.Gint(for_buffer.scroll_region_top-1) (=" & Glib.Gint(for_buffer.scroll_region_top-1)'Wide_Image & ").");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line(starting_from) (=" & Get_Line(starting_from)'Wide_Image & ") <= Glib.Gint(for_buffer.scroll_region_top-1) (=" & Glib.Gint(for_buffer.scroll_region_top-1)'Wide_Image & ").");
                -- Preserve starting_from into a mark
                cursor_mk := Create_Mark(buffer, "CursorPt", starting_from);
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Preserved starting_from into a mark.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Preserved starting_from into a mark.");
                -- Insert a line at the top
                Insert(buffer, iter=>home_iter, text=>LF_str);
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Inserted new line at home_iter.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Inserted new line at home_iter.");
                -- Restore the last_iter (as it has been destroyed by 'Insert')
                Get_Iter_At_Mark(buffer, last_iter, end_mark);
                -- Check that the last_iter is actually at the end of the screen
@@ -1935,25 +1936,25 @@ package body Gtk.Terminal is
                then  -- Okay - there is a line at the bottom to delete
                   -- Set home_iter to be the start of the last line
                   home_iter := last_iter;
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: set home_iter := last_iter.");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: set home_iter := last_iter.");
                   if Get_Line_Offset(home_iter) > 0
                   then  -- not at the start of the line
-                     Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line_Offset(home_iter) > 0, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") to column 0...");
+                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Get_Line_Offset(home_iter) > 0, setting home_iter (at line " & Get_Line(home_iter)'Wide_Image & ") to column 0...");
                      Set_Line_Offset(home_iter, 0);
                   end if;      
                   -- and tip home_iter over the previous end (so that we delete
                   -- the whole line)
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: home_iter is now at line" & Get_Line(home_iter)'Wide_Image & ", column" & Get_Line_Offset(home_iter)'Wide_Image & ", tipping home_iter over the previous end...");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: home_iter is now at line" & Get_Line(home_iter)'Wide_Image & ", column" & Get_Line_Offset(home_iter)'Wide_Image & ", tipping home_iter over the previous end...");
                   Backward_Char(home_iter, result);
                   -- and delete it
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: doing Delete(buffer, home_iter, last_iter)...");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: doing Delete(buffer, home_iter, last_iter)...");
                   Delete(buffer, home_iter, last_iter);
                end if;
                -- Restore the starting_from iter
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Restoring the starting_from iter...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: Restoring the starting_from iter...");
                Get_Iter_At_Mark(buffer, starting_from, cursor_mk);
                -- And clean up the marks
-               Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: And cleaning up the marks...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Up: And cleaning up the marks...");
                Delete_Mark(buffer, cursor_mk);
                Delete_Mark(buffer, end_mark);
             end if;
@@ -2149,7 +2150,7 @@ package body Gtk.Terminal is
          raise Terminal_IO_Error;
       end if;
    
-      Error_Log.Debug_Data(at_level => 9, with_details => "Write: sending to system's VT '" & Ada.Characters.Conversions.To_Wide_String(Buffer) & "'.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Write: sending to system's VT '" & Ada.Characters.Conversions.To_Wide_String(Buffer) & "'.");
       res := C_Write(fd => fd, data => out_buffer, len => Interfaces.C.int(len));
       Free (out_buffer);
    
@@ -2183,7 +2184,7 @@ package body Gtk.Terminal is
       accept Start(with_fd : Interfaces.C.int;
                    with_terminal_buffer : Gtk_Terminal_Buffer) do
          master_fd := with_fd;
-         Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: Start - master_fd = " & master_fd'wide_image & ".");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: Start - master_fd = " & master_fd'wide_image & ".");
          the_buffer := with_terminal_buffer;
       end Start;
       -- Set up the monitor value
@@ -2202,11 +2203,11 @@ package body Gtk.Terminal is
             if res > 0 and then the_fds.revents = POLLIN
             then  -- There is key presses waiting to be read
                Read(master_fd, input, read_len);
-               Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input (from terminal client (system's virtual terminal)) = '" & Ada.Characters.Conversions.To_Wide_String(input) & "'.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input (from terminal client (system's virtual terminal)) = '" & Ada.Characters.Conversions.To_Wide_String(input) & "'.");
             elsif res > 0 and then the_fds.revents = POLLHUP
             then  -- Been commanded to exit the terminal
                read_len := natural'Last;  -- simulate 2 characters
-               Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input Got POLLHUP.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Terminal_Input_Handling: input Got POLLHUP.");
                input2 := Ada.Characters.Latin_1.Esc & '<';
             else
                read_len := 0;  -- simulate no character yet
@@ -2259,7 +2260,7 @@ package body Gtk.Terminal is
       begin
          if for_buffer.alternative_screen_buffer
          then  -- using the alternative buffer for display
-            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys SWITCHED TO ALTERNATIVE SCREEN BUFFER!!!**************************************.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys SWITCHED TO ALTERNATIVE SCREEN BUFFER!!!**************************************.");
             the_buf := for_buffer.alt_buffer;
          else  -- using the main buffer for display
             the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
@@ -2281,7 +2282,7 @@ package body Gtk.Terminal is
          then  -- Return/Enter key has been pressed + not cmd line continuation
                -- or otherwise not using the buffer's editing or is in an app
             -- Reset the history processing indicator value
-            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys processing '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "' after a line terminator.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys processing '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "' after a line terminator.");
             if for_string(for_string'Last) = Ada.Characters.Latin_1.LF then
                for_buffer.history_review := false;
                Switch_The_Light(for_buffer, 2, false);
@@ -2296,7 +2297,7 @@ package body Gtk.Terminal is
                end if;
                for_buffer.entering_command := false;  -- command now entered
                Switch_The_Light(for_buffer, 6, false);
-               Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed - Process_Keys (on '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "') : Set for_buffer.history_review to false and Set_Overwrite(for_buffer.parent) to false and sending to client (i.e. system VT).");
             end if;
             -- Process the keys through to the terminal
             the_fds := new Gtk.Terminal.CInterface.poll_fd;
@@ -2324,7 +2325,7 @@ package body Gtk.Terminal is
                begin
                   Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
                   res := Backspace(the_buf, cursor_iter, false, true);
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
                end;
                -- Now output that enter key
                Write(fd => for_buffer.master_fd, Buffer => enter_text);
@@ -2332,7 +2333,7 @@ package body Gtk.Terminal is
                -- Delete the text from the buffer so that the terminal may write
                -- it back and then write that deleted text out to the termnal
                Delete(the_buf, over_range_start, and_end);  -------------******************FIX: causes a subsequent Gtk-WARNING **: 21:48:00.652: Invalid text buffer iterator: either the iterator is uninitialized... 
-               Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done Delete.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done Delete.");
                Write(fd => for_buffer.master_fd, Buffer => for_string);
             end if;
             -- Check that the buffer length is not exceeded (remove line if so)
@@ -2356,7 +2357,7 @@ package body Gtk.Terminal is
             ( (history_text and for_buffer.use_buffer_editing) or
               for_buffer.alternative_screen_buffer )
          then  -- some other key pressed to modify a history line
-            Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys processing '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "' after some other key pressed.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys processing '" & Ada.Characters.Conversions.To_Wide_String(for_string) & "' after some other key pressed.");
             -- Process the key(s) through to the terminal
             the_fds := new Gtk.Terminal.CInterface.poll_fd;
             the_fds.fd      := for_buffer.master_fd;
@@ -2380,7 +2381,7 @@ package body Gtk.Terminal is
                Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
                -- get rid of the character just typed from the terminal
                res := Backspace(the_buf, cursor_iter, false, true);
-               Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys done backspace.");
                if Get_Overwrite(for_buffer.parent)
                then  -- replace character under cursor with original
                   Gtk.Text_Buffer.
@@ -2388,7 +2389,7 @@ package body Gtk.Terminal is
                             Ada.Strings.UTF_Encoding.Wide_Strings.Encode(
                                                 for_buffer.old_key_at_cursor));
                   Gtk.Text_Iter.Backward_Chars(cursor_iter, 1, res);
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys inserted original character and backed up one character's distance with a result of " & res'Wide_Image & ".");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Key_Pressed  - Process_Keys inserted original character and backed up one character's distance with a result of " & res'Wide_Image & ".");
                   Place_Cursor(the_buf, where => cursor_iter);
                end if;
             end;
@@ -2561,7 +2562,7 @@ package body Gtk.Terminal is
             argv0St : integer := argvLst;
             res     : int;
          begin
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Start.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Start.");
             -- load up the full command path and the argv(0) with the command
             cmd := New_String(args(args'First).all);
             while argv0St >= args(args'First).all'First and then
@@ -2572,17 +2573,17 @@ package body Gtk.Terminal is
                argv0St := argv0St + 1;
             end if;
             argv(0) := New_String(args(args'First).all(argv0St..argvLst));
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: argv(0) = '" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(argv(0))) & "'.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: argv(0) = '" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(argv(0))) & "'.");
             -- load up the arrays and add a null pointer to the end
             if args'Length > 1
             then
                for item in args'First+1..args'Last loop  -- arguments
                   argv(size_t(item-args'First)) := New_String(args(item).all);
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: argv(" & item'Wide_Image & ") = '" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(argv(size_t(item-args'First)))) & "'.");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: argv(" & item'Wide_Image & ") = '" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(argv(size_t(item-args'First)))) & "'.");
                end loop;
             end if;
             argv(size_t(args'Length)) := Null_Ptr;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Got argv items as pointer strings.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Got argv items as pointer strings.");
             if envs'Length > 0 then
                for item in envs'Range loop  -- environment variables
                   envc:=New_String(envs(item).all(envs(item).all'First..
@@ -2590,26 +2591,26 @@ package body Gtk.Terminal is
                   envp:=New_String(envs(item).all(Index(envs(item).all,"=")+1..
                                                          envs(item).all'Last));
                   res := Set_Environment(variable=>envc,to=>envp,overwrite=>1);
-                  Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Set '" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(envc))  & "'='" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(envp))  & "'.");
+                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Set '" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(envc))  & "'='" & Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(envp))  & "'.");
                end loop;
             end if;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Got envp items and set them.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Got envp items and set them.");
             -- do it
             res := Execvp(cmd, argv);
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Execvp(cmd, argv).");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Execvp(cmd, argv).");
             -- Clean up what we can
             for item in args'First..args'Last+1 loop
-               Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Freed argv item number" & item'Wide_Image & "...");
+               -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Freed argv item number" & item'Wide_Image & "...");
                Free(argv(size_t(item)));
             end loop;
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Freed argv items.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process Launch_Process: Freed argv items.");
             return (res /= Failure);
          end Launch_Process;
          success : boolean;
          res     : Interfaces.C.int;
          the_environment: GNAT.Strings.String_List := Glib.Spawn.Get_Environ;
       begin  -- Execute
-         Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Execute: Start.");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Execute: Start.");
          -- Set up the standard environment
          res := Unset_Environment(New_String("COLUMNS"));
          res := Unset_Environment(New_String("LINES"));
@@ -2619,12 +2620,13 @@ package body Gtk.Terminal is
          if envs'Length > 0 then
             success := Launch_Process(Convert_To_Array(args),
                                       Convert_To_Array(envs));
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Execute: Launched process with environment variables.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Execute: Launched process with environment variables.");
          else
             success := Launch_Process(Convert_To_Array(args), null_arg_array);
          end if;
          if not success then
-            Error_Log.Debug_Data(at_level => 1, with_details => "Spawn_Shell : Execute: Launch failed.");
+            Log_Data(at_level => 1, 
+                     with_details => "Spawn_Shell : Execute: Launch failed.");
          end if;
       end Execute;
       procedure Set_Cursor_Shape
@@ -2634,7 +2636,7 @@ package body Gtk.Terminal is
          provider  : Gtk.CSS_Provider.Gtk_CSS_Provider;
          context   : Gtk.Style_Context.Gtk_Style_Context;
       begin
-         Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Set_Cursor_Shape: Start.");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Set_Cursor_Shape: Start.");
          Gtk_New(provider);
          if Load_From_Data(provider, 
                            "textview* {" &
@@ -2648,7 +2650,7 @@ package body Gtk.Terminal is
                                      "}",
                               the_error'access)
          then  -- successful load
-            Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Load_From_Data(provider) successful.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell : Load_From_Data(provider) successful.");
             context := Get_Style_Context(for_terminal);
             Gtk.Style_Context.Add_Provider(context, +provider,
                                            Priority_Application);
@@ -2669,19 +2671,19 @@ package body Gtk.Terminal is
                                  Interfaces.C.unsigned_short(0), 
                                  Interfaces.C.unsigned_short(0));
    begin  -- Spawn_Shell
-      Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Start.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Start.");
       -- First, set up the call-back pointers
       terminal.closed_callback := callback;
       terminal.title_callback  := title_callback;
       terminal.buffer.use_buffer_editing := use_buffer_for_editing;
       terminal.buffer.switch_light_cb := switch_light;
-      Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Set up callbacks done.  terminal.master_fd initialised at" & terminal.master_fd'Wide_Image & ".");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Set up callbacks done.  terminal.master_fd initialised at" & terminal.master_fd'Wide_Image & ".");
       -- Get the file descriptors and spawn the child
       child_pid := Fork_Pseudo_Terminal(with_fd  => terminal.master_fd'Address,
                                         with_name=> terminal.buffer.child_name,
                                         with_attribs  => null,
                                         with_win_size => window_size'access);
-      Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Did fork.");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell: Did fork.");
       if child_pid = -1
       then -- failed to fork
          Handle_The_Error(the_error  => 15, 
@@ -2690,7 +2692,7 @@ package body Gtk.Terminal is
          raise Terminal_Creation_Error;
       elsif child_pid = 0
       then  -- we are the child - Load shell and then go to the top
-         Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process: doing Execute for command.");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Child process: doing Execute for command.");
          -- As we are the child, close the master file descriptor here
          res := Close_Device(for_fd => terminal.master_fd);
          -- Load the requested shell (or other command)
@@ -2707,11 +2709,11 @@ package body Gtk.Terminal is
          -- Go to the top
          Terminate_Process(with_status => 0);  -- Kill ourself if we get here
       else  -- we are the parent - Continue on
-         Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Parent process: Setting up PIDs and the like. Master_fd=" & terminal.master_fd'Wide_Image & ".");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Parent process: Setting up PIDs and the like. Master_fd=" & terminal.master_fd'Wide_Image & ".");
          terminal.buffer.child_pid  := child_pid;
-         Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Parent process: Got Child PID (" & child_pid'Wide_Image & ").");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell Parent process: Got Child PID (" & child_pid'Wide_Image & ").");
          terminal.buffer.child_name := TTY_Name(for_fd => terminal.master_fd);
-         Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell :  Terminal child name is '" &  Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(terminal.buffer.child_name)) & "'.");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Spawn_Shell :  Terminal child name is '" &  Ada.Characters.Conversions.To_Wide_String(Gtkada.Types.Value(terminal.buffer.child_name)) & "'.");
          terminal.buffer.master_fd := terminal.master_fd;
       end if;
       -- Only the parent should be executing the below.
@@ -2838,7 +2840,7 @@ package body Gtk.Terminal is
       row_size : Glib.Gint := Glib.Gint(float(rows) * vertical_scale);
       term_size: aliased win_size := (0, 0, 0, 0);
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Set_Size :  Font size =" &  Get_Size(terminal.current_font)'Wide_Image & ", Font Stretch =" & Get_Stretch(terminal.current_font)'Wide_Image & ", vertical_scale =" & vertical_scale'Wide_Image & " and row size =" & row_size'Wide_Image & ".");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Set_Size :  Font size =" &  Get_Size(terminal.current_font)'Wide_Image & ", Font Stretch =" & Get_Stretch(terminal.current_font)'Wide_Image & ", vertical_scale =" & vertical_scale'Wide_Image & " and row size =" & row_size'Wide_Image & ".");
       if natural(row_size) < rows
       then  -- it could be that the font has yet to be set
          row_size := Glib.Gint(rows * default_vert_size);
@@ -2975,7 +2977,7 @@ package body Gtk.Terminal is
          provider  : Gtk.CSS_Provider.Gtk_CSS_Provider;
          context   : Gtk.Style_Context.Gtk_Style_Context;
       begin
-         Error_Log.Debug_Data(at_level => 9, with_details => "Set_Colour_Highlight : highlight - sending '" & "textview* { .view text selection { background-color: "& Ada.Characters.Conversions.To_Wide_String(highlight) & ";  color: " & Ada.Characters.Conversions.To_Wide_String(background) & ";} text selection { background-color: " & Ada.Characters.Conversions.To_Wide_String(highlight) & ";  color: " & Ada.Characters.Conversions.To_Wide_String(background) & ";} }" & "'.");
+         -- Error_Log.Debug_Data(at_level => 9, with_details => "Set_Colour_Highlight : highlight - sending '" & "textview* { .view text selection { background-color: "& Ada.Characters.Conversions.To_Wide_String(highlight) & ";  color: " & Ada.Characters.Conversions.To_Wide_String(background) & ";} text selection { background-color: " & Ada.Characters.Conversions.To_Wide_String(highlight) & ";  color: " & Ada.Characters.Conversions.To_Wide_String(background) & ";} }" & "'.");
          Gtk_New(provider);
          if Load_From_Data(provider, 
                            "textview* {" &
@@ -2986,7 +2988,7 @@ package body Gtk.Terminal is
                                       "}",
                               the_error'access)
          then  -- successful load
-            Error_Log.Debug_Data(at_level => 9, with_details => "Set_Colour_Highlight : Load_From_Data(provider) successful.");
+            -- Error_Log.Debug_Data(at_level => 9, with_details => "Set_Colour_Highlight : Load_From_Data(provider) successful.");
             context := Get_Style_Context(terminal);
             Gtk.Style_Context.Add_Provider(context, +provider,
                                            Priority_Application);
@@ -3155,7 +3157,7 @@ package body Gtk.Terminal is
             end;
          end if;
       end if;
-      Error_Log.Debug_Data(at_level => 9, with_details => "Home_Iterator: cursor_line =" & cursor_line'Wide_Image & ", homed_iter line =" & Get_Line(homed_iter)'Wide_Image & ", total_lines =" & total_lines'Wide_Image & ", screen_length =" & screen_length'Wide_Image & " and res = " & res'Wide_Image & ".");
+      -- Error_Log.Debug_Data(at_level => 9, with_details => "Home_Iterator: cursor_line =" & cursor_line'Wide_Image & ", homed_iter line =" & Get_Line(homed_iter)'Wide_Image & ", total_lines =" & total_lines'Wide_Image & ", screen_length =" & screen_length'Wide_Image & " and res = " & res'Wide_Image & ".");
       return homed_iter;
    end Home_Iterator;
     
