@@ -137,7 +137,7 @@ package body Setup is
       use Gtk.Window;
       main_window : Gtk.Window.Gtk_Window;
    begin
-      Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Start." & " Title ='" & Ada.Characters.Conversions.To_Wide_String(title) & "'.");
+      Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Start.");
       main_window:= Gtk.Window.Gtk_Window(
                          Get_Object(Gtkada_Builder(the_builder),"bliss_term"));
       Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Got main window.");
