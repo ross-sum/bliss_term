@@ -206,8 +206,7 @@ package body Gtk.Terminal_Markup is
             empty := false;
          end if;
       end loop;
-      return empty; --the_markup.markup_text = Null_Ptr or else
-             --Value(the_markup.markup_text)'Length = 0;
+      return empty;
    end Is_Empty;
 
    function Count(of_modifier : in font_modifier;
@@ -235,7 +234,6 @@ package body Gtk.Terminal_Markup is
    function Count_Of_Span(attribute : in span_types;
                           for_markup : in markup_management) return natural is
        -- Count the number of speicified attribute entries in a span tag
-      -- use Ada.Strings.Fixed;
       result       : natural := 0;
       current_item : linked_list_ptr;
    begin
@@ -396,8 +394,6 @@ package body Gtk.Terminal_Markup is
             return """#" & red & green & blue & """";
          end if;
       end To_RGB_String;
-      -- temp_markup : Gtkada.Types.Chars_Ptr;
-      -- mkTxt : Gtkada.Types.Chars_Ptr renames in_markup.markup_text;
    begin  -- Append_To_Markup
       if for_modifier = none and or_rgb_colour = null_rgba and 
          the_value'Length > 0
@@ -939,7 +935,6 @@ package body Gtk.Terminal_Markup is
        -- a clean mark-up text ready to have mark-up added.
    begin
       Free(the_markup.markup_text);
-      -- the_markup.markup_text := New_String(Value(the_markup.saved_markup));
       the_markup.markup_text := Null_Ptr;
       -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Restore(the_markup) - the_markup.markup_text = '" & Ada.Characters.Conversions.To_Wide_String(Value(the_markup.markup_text)) & "'.");
       Copy(from=> the_markup.saved_modifiers, to=> the_markup.modifier_array,
