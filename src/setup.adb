@@ -140,7 +140,6 @@ package body Setup is
       Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Start.");
       main_window:= Gtk.Window.Gtk_Window(
                          Get_Object(Gtkada_Builder(the_builder),"bliss_term"));
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Got main window.");
       if main_window /= null then
          if title'Length > 0 then
             Gtk.Window.Set_Title(main_window, title);
@@ -149,7 +148,6 @@ package body Setup is
             Gtk.Window.Set_Wmclass(main_window, icon_name, icon_name);
          end if;
       end if;
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Title_Changed: Finish.");
    end Title_Changed;
 
    procedure Child_Closed(terminal: Gtk.Terminal.Gtk_Terminal) is
@@ -167,14 +165,12 @@ package body Setup is
       the_notebook := Gtk.Notebook.gtk_notebook(
                   Get_Object(Gtkada_Builder(the_builder),"notebook_terminal"));
       -- Issue shutdown command to this terminal's task(s)
-      -- Error_Log.Debug_Data(at_level=> 9, with_details=> "Child_Closed: Issuing Gtk.Terminal.Shut_Down command for the terminal");
       Gtk.Terminal.Shut_Down(the_terminal => terminal);
       -- If required, save the terminal data for this terminal
       if Read_Parameter(config_data, in_section => "TERMINAL", 
                                         with_id => "SaveTerminals")
       then  -- history should be kept, so update it for this terminal
          term_num := Gtk.Terminal.Get_ID(for_terminal => terminal);
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Child_Closed: Saving terminal's buffer at terminal number" & term_num'Wide_Image & ".");
          the_buffer := Value(Encode(Gtk.Terminal.Get_Text(terminal)));
          Put(parameter => the_buffer, 
              into => config_data, in_section => "TABS", 
@@ -187,14 +183,12 @@ package body Setup is
                                     To_Wide_String(term_num'Image
                                                   (2..term_num'Image'Length)));
       end if;
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Child_Closed: Gtk.Notebook.Get_N_Pages(the_notebook)" & Gtk.Notebook.Get_N_Pages(the_notebook)'Wide_Image & ".");
       if Gtk.Notebook.Get_N_Pages(the_notebook) = 1
       then  -- Last tab - execute the quit applicaton operation
           -- First, save the configuration details to file if necessary
          if Read_Parameter(config_data, in_section => "TERMINAL", 
                                         with_id => "SaveTerminals")
          then  -- history should be kept, so save it to the configuration file
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Child_Closed: Save(the_configuration_details}.");
             Save(the_configuration_details => config_data);
          end if;
          -- Now exit the application
@@ -425,8 +419,6 @@ package body Setup is
       -- Terminal Configuration
       -- Get the current directory (as the default starting point)
       current_dir := Value(Ada.Directories.Current_Directory);
-      -- Error_Log.Debug_Data(at_level => 9, 
-         --                   with_details => "Load_Data_From: current directory = '" & current_dir & "'.");
       -- Get the number of tabs to load (default is 1 if none are specified)
       if Read_Parameter(config_data, 
                         in_section => "TABS", with_id => "TabCount") > 0
@@ -439,8 +431,6 @@ package body Setup is
                                                          "notebook_terminal"));
       -- load the set-up configuration data to each terminal on each tab
       for term_num in 1 .. num_tabs loop
-         -- Error_Log.Debug_Data(at_level => 9, 
-         --                   with_details => "Load_Data_From: Setting up terminal at tab '" & "label_term" & Value(term_num'Image(2..term_num'Image'Length)) & "'.");
          if ((not initially_setup) or else
                 (term_num > positive(Gtk.Notebook.Get_N_Pages(the_notebook))))
          then  -- need to create the tab and the terminal
@@ -476,7 +466,6 @@ package body Setup is
          end if;
          -- Start the new shell
          if not with_initially_setup then
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Load_Data_From: Gtk.Terminal.Spawn_Shell with path='" & current_dir & " '.");
             Help_About.Switch_The_Light(the_terminal, 1, true);
             Help_About.Switch_The_Light(the_terminal, 5, true);
             Gtk.Terminal.Spawn_Shell(terminal => the_terminal,
@@ -491,7 +480,6 @@ package body Setup is
                                 callback => Child_Closed'Access,
                                 switch_light => Help_About.Switch_The_Light'Access);
             initially_setup := true;
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Load_Data_From: Gtk.Terminal.Spawn_Shell done.");
          end if;
          Gtk.Terminal.Set_ID(for_terminal => the_terminal, to => term_num);
          -- Load the setup for the tab's window
@@ -654,7 +642,6 @@ package body Setup is
       -- Terminal CSS (may be overwritten by the below set-up)
       Set_CSS_View(for_terminal=>the_terminal, to=>CSS_Management.Load'access);
       -- Terminal font (needs to be dnoe before setting terminal size)
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Load_Setup: setting terminal font to " & Value(Setup.The_Font_Name) & "...");
       Gtk.Terminal.Set_Font(for_terminal => the_terminal,
                             to_font_desc => Setup.The_Font_Description);
       if Setup.The_Font_Name = "Blissymbolics"
@@ -678,7 +665,6 @@ package body Setup is
       spin_entry := 
          gtk_spin_button(Get_Object(the_builder, "setup_dimension_rows"));
       row  := Natural(Get_Value_As_Int(spin_entry));
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Load_Setup: setting terminal size to " & cols'Wide_Image & " columns by " & row'Wide_Image & " rows...");
       Gtk.Terminal.Set_Size(terminal=>the_terminal, columns=>cols, rows=>row);
       -- Terminal colours
       colour_btn := 
@@ -902,7 +888,6 @@ package body Setup is
       if Read_Parameter(config_data, in_section => "TERMINAL", 
                                      with_id => "SaveTerminals")
       then
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Set_Tab_Count: Saving tab count of" & to'Wide_Image & ".");
          Put(parameter => to, 
              into => config_data, in_section => "TABS", with_id => "TabCount");
       end if;

@@ -174,10 +174,8 @@ separate (Gtk.Terminal)
                                                        "'.");
                end case; -- the_sequence(chr_pos) for the_sequence(ist+1) = '('
             when '[' =>  -- it is a Control Sequence Introducer (CSI) sequence
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI sequence - there are" & pnum'Wide_Image & " parameters, being " & param(1)'Wide_Image & "," & param(2)'Wide_Image & "," & param(3)'Wide_Image & " and next sequence is the_sequence(" & chr_pos'wide_image & ")= '" & Ada.Characters.Conversions.To_Wide_String(the_sequence(chr_pos..chr_pos)) & "'.");
                if the_sequence(ist+2) = '>'
                then  -- It is an evil variation for xterm
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[>...x' - evil sequence.");
                   case the_sequence(chr_pos) is
                      when 'c' =>  -- Send device attributes (Secondary DA)
                         Write(fd => on_buffer.master_fd, 
@@ -286,7 +284,6 @@ separate (Gtk.Terminal)
                   the_sequence(chr_pos) := '!';  -- Dummy to exit further ops
                elsif the_sequence(ist+2) = '='
                then  -- It is an evil variation for xterm
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[=...x' - evil sequence.");
                   case the_sequence(chr_pos) is
                      when 'c' =>  -- Send Device Attributes (Tertiary DA)
                         Write(fd => on_buffer.master_fd, 
@@ -296,7 +293,6 @@ separate (Gtk.Terminal)
                   end case;
                elsif the_sequence(ist+2) = '?'
                then  -- It is an evil variation for xterm
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[?...x' - evil sequence.");
                   case the_sequence(chr_pos) is
                      when 'm' =>   -- query key modifier options XTQMODKEYS
                         declare
@@ -368,16 +364,13 @@ separate (Gtk.Terminal)
                         the_sequence(chr_pos) := '!';  -- Dummy to exit further ops
                      when others => -- processed below, so
                         chr_pos := ist + 2;  -- reset back for furthur processing
-                        -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[?...x' - evil sequence resetting chr_pos to the_sequence(" & chr_pos'wide_image & ")= '" & Ada.Characters.Conversions.To_Wide_String(the_sequence(chr_pos..chr_pos)) & "'.");
                   end case;
                   null;  -- Not yet implemented
                end if;
                case the_sequence(chr_pos) is
                   when '!' => null;  -- Ignore (to exit further operations)
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '[>/?...x' - evil sequence bail signal given.");
                   when '?' => -- private sequences
                      if param(1) = 0 then
-                        -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?...' - Private sequence extracting param(1).");
                         -- extract the number, if any
                         chr_pos := ist + 3;
                         while for_sequence'Length > chr_pos + ist - 1 and then
@@ -390,7 +383,6 @@ separate (Gtk.Terminal)
                      elsif chr_pos + ist - 1 < for_sequence'Length
                      then  -- advance to the end character
                         chr_pos := for_sequence'Length - ist + 1;
-                        -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?...' - Private sequence chr_pos set to" & chr_pos'wide_image & ".");
                      end if;
                      for param_num in 1..num_params loop
                         case param(param_num) is
@@ -463,7 +455,6 @@ separate (Gtk.Terminal)
                               on_buffer.mouse_config.btn_event := 
                                                    for_sequence(chr_pos) = 'h';
                            when 1004 =>  -- reporting focus enable/disable
-                              -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1004' - Setting on_buffer.reporting_focus_enabled.");
                               on_buffer.reporting_focus_enabled := 
                                                    for_sequence(chr_pos) = 'h';
                            when 1006 =>   -- SGR Mouse Mode enable/disable
@@ -490,7 +481,6 @@ separate (Gtk.Terminal)
                                  -- unfinished business lying around
                                  if not Is_Empty(on_buffer.markup)
                                  then  -- a string to dump
-                                    -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1049' - Closing off mark-up.");
                                  -- close off, and the closure is permanent
                                     Finish(on_markup => on_buffer.markup);
                                  end if;
@@ -519,7 +509,6 @@ separate (Gtk.Terminal)
                                     Set_The_Buffer(to => on_buffer.alt_buffer,
                                                  for_markup=>on_buffer.markup);
                                     Switch_The_Light(on_buffer, 1, false);
-                                    -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1049' - Switched to Alternative Screen Buffer.");
                                  elsif for_sequence(chr_pos) = 'l'
                                  then  -- switch back to the regular buffer
                                     -- Set the flags to indicate which buffer
@@ -538,7 +527,6 @@ separate (Gtk.Terminal)
                                                     Gtk_Text_Buffer(on_buffer),
                                                  for_markup=>on_buffer.markup);
                                     Switch_The_Light(on_buffer, 1, true);
-                                    -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?1049' - Switched to Normal Screen Buffer.");
                                  end if;
                               end;
                            when 2004 =>  -- bracketed paste mode, text pasted in
@@ -556,7 +544,6 @@ separate (Gtk.Terminal)
                                                    cursor_iter);
                                  Switch_The_Light(on_buffer, 3, false);
                               end if;
-                              -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI '?2004' - Setting on_buffer.bracketed_paste_mode to " & on_buffer.bracketed_paste_mode'Wide_Image & ".");
                            when others =>  -- not valid and not interpreted
                               Handle_The_Error(the_error => 4, 
                                       error_intro=> "Process_Escape: " & 
@@ -591,7 +578,6 @@ separate (Gtk.Terminal)
                      end if;
                      -- Get the column number (to preserve it)
                      column := natural(Get_Line_Index(cursor_iter)) + 1;
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape [ A : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going up by" & param(1)'Wide_Image & " lines.  Current column =" & column'Wide_Image & ".");
                      -- Move the cursor up
                      for line_num in 1 .. param(1) loop
                         Backward_Line(cursor_iter, res);
@@ -624,7 +610,6 @@ separate (Gtk.Terminal)
                      -- Get the column number (to preserve it)
                      column := UTF8_Length(Get_Line_From_Start(on_buffer, 
                                                                cursor_iter));
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going down by" & param(1)'Wide_Image & " lines.  Current column =" & column'Wide_Image & ".");
                      -- Move the cursor down
                      for line_num in 1 .. param(1) loop
                         if Forward_Display_Line(on_buffer.parent, cursor_iter)
@@ -656,14 +641,12 @@ separate (Gtk.Terminal)
                      then
                         param(1) := 1;
                      end if;
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : [" & param(1)'Wide_Image & "C - Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going forward by" & param(1)'Wide_Image & " characters.  Line Length =" & Get_Chars_In_Line(cursor_iter)'Wide_Image & ", current column =" & UTF8_Length(Get_Line_From_Start(on_buffer, cursor_iter))'Wide_Image & ".");
                      res := true;  -- Initial value
                      for col in 1 .. param(1) loop
                         Get_End_Iter(the_buf, dest_iter);
                         if Equal(cursor_iter, dest_iter) or not res
                         then  -- already at the end of the line
                               -- Pad out with a space character
-                           -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : [" & param(1)'Wide_Image & "C: Either NOT Res (" & res'Wide_Image & ") or cursor_iter = End of Line.");
                            Insert(on_buffer, at_iter=>cursor_iter,
                                   the_text=>" ");
                            Backward_Char(cursor_iter, res);
@@ -681,7 +664,6 @@ separate (Gtk.Terminal)
                      then
                         param(1) := 1;
                      end if;
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Old cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", going backward by" & param(1)'Wide_Image & " characters.  Line Length =" & Get_Chars_In_Line(cursor_iter)'Wide_Image & ", current column =" & UTF8_Length(Get_Line_From_Start(on_buffer, cursor_iter))'Wide_Image & ".");
                      Backward_Chars(cursor_iter, Glib.Gint(param(1)), res);
                      if res then
                         Place_Cursor(the_buf, where => cursor_iter);
@@ -721,7 +703,6 @@ separate (Gtk.Terminal)
                         line_num := natural(Get_Line(dest_iter) - 
                                             Get_Line(cursor_iter)) + 1;
                         -- Call ourselves, executing an <esc> [ H
-                        -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'G' - Moving to line" & line_num'Wide_Image  & " and column" & param(1)'Wide_Image & ".");
                         Process_Escape(for_sequence=>Esc_Str & '[' & 
                                                     As_String(line_num) & ';' &
                                                     As_String(param(1)) & "H",
@@ -740,7 +721,6 @@ separate (Gtk.Terminal)
                         -- relocation of the cursor.
                         if not Is_Empty(on_buffer.markup)
                         then  -- a string to dump
-                           -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - Saving mark-up.");
                            -- Rebuild the mark-up (but not text) from modifier
                            -- array
                            Save(the_markup => on_buffer.markup);
@@ -757,7 +737,6 @@ separate (Gtk.Terminal)
                            -- if needs be
                            if param(1) > on_buffer.scroll_region_bottom
                            then
-                              -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moving from top LH param(1) =" & param(1)'Wide_Image & ", on_buffer.scroll_region_bottom =" & on_buffer.scroll_region_bottom'Wide_Image & ", setting param(1) =" & Integer'Wide_Image(on_buffer.scroll_region_bottom mod param(1)) & ".");
                               param(1) := on_buffer.scroll_region_bottom mod
                                           param(1);
                            end if;
@@ -773,7 +752,6 @@ separate (Gtk.Terminal)
                            Set_Line_Offset(dest_iter, 0);
                         end if;
                      -- now move to the offset from the top left corner
-                        -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moving from top LH corner (col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ", row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ") to (row,col) position (" & param(1)'Wide_Image & "," & param(2)'Wide_Image & ").  Cursor is at (row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ", col" & GInt'Wide_Image(Get_Line_Index(cursor_iter)+1) & ").");
                         if param(1) > 1 then
                            Set_Line_Offset(cursor_iter, 0);  -- to be sure to be sure
                            for line in 2 .. param(1) loop
@@ -783,7 +761,6 @@ separate (Gtk.Terminal)
                                  Get_Line(cursor_iter) - home_line_num + 1 <
                                                             Glib.Gint(param(1))
                               then -- no more lines + need one, so add one in
-                                 -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - No more lines, adding one in...");
                                  Gtk.Text_Buffer.Insert(the_buf, 
                                                          cursor_iter, LF_str);
                                  Get_End_Iter(the_buf, dest_iter);
@@ -797,7 +774,6 @@ separate (Gtk.Terminal)
                                  Forward_Char(cursor_iter, res);
                               else  -- line not long enough
                               -- Pad out with a space character
-                                 -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - At end of line, appending ' '...");
                                  Insert(on_buffer, at_iter=>cursor_iter,
                                      the_text=>" ");
                               end if;
@@ -817,12 +793,10 @@ separate (Gtk.Terminal)
                                          Get_Insert(the_buf));
                         if Saved_Markup_Exists(for_markup => on_buffer.markup)
                         then  -- mark-up to restore, do a complete restore
-                           -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - Restoring mark-up.");
                            Restore(the_markup => on_buffer.markup);
                            Clear_Saved(markup => on_buffer.markup);
                         end if;
                      end;
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'H' - moved to (row" & GInt'Wide_Image(Get_Line(cursor_iter)+1) & ", col" & GInt'Wide_Image(Get_Line_Offset(cursor_iter)+1) & ").");
                   when 'I' => null;  -- Cursor Horizontal (Forward) Tab
                      -- Advance the cursor to the next column (in the same row)
                      -- with a tab stop. If there are no more tab stops, move
@@ -837,7 +811,6 @@ separate (Gtk.Terminal)
                      Window_To_Buffer_Coords(on_buffer.parent, 
                                              Gtk.Enums.Text_Window_Text, 
                                              0, 0, buf_x, buf_y);
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - top LH corner = (" & buf_x'Wide_Image & "," & buf_y'Wide_Image & ").");
                      Get_Iter_At_Mark(the_buf,cursor_iter,Get_Insert(the_buf));
                      case param(1) is
                         when 0 =>   -- Clear from cursor to end of screen
@@ -863,12 +836,10 @@ separate (Gtk.Terminal)
                                          Home_Iterator(for_terminal=>the_term);
                               end if;
                               Get_End_Iter(the_buf, cursor_iter);
-                              -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - deleting from (i.e. line-1) " & Get_Line(dest_iter)'Wide_Image & " to (i.e. line-1) " & Get_Line(cursor_iter)'Wide_Image & ".");
                               Delete(the_buf, dest_iter, cursor_iter);
                            -- Now scroll the cursor to the top
                               Get_Iter_At_Mark(the_buf, cursor_iter,
                                             Get_Insert(the_buf));
-                              -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 'J' - cursor pos (i.e. line-1) =" & Get_Line(cursor_iter)'Wide_Image & ", Scrolling to ensure the screen is clear.");
                             -- Put the cursor position at the top of the screen
                               -- NO METHOD SEEMS TO WORK IF SCREEN NOT COMPLETELY CLEAR
                               Set_Line_Offset(cursor_iter, 0);  -- move to start of line
@@ -892,7 +863,6 @@ separate (Gtk.Terminal)
                                              Get_Line(cursor_iter), 20000);
                      case param(1) is
                         when 0 =>   -- Clear from cursor to end of line
-                           -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI 0 'K' - cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting from cursor to end of line '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(the_buf, cursor_iter, dest_iter)) & "'.");
                            Delete(the_buf, cursor_iter, dest_iter);
                         when 1 =>   -- Clear from cursor to beginning of line
                            Get_Iter_At_Line_Offset(the_buf, dest_iter,
@@ -933,7 +903,6 @@ separate (Gtk.Terminal)
                      Forward_Chars(dest_iter, Glib.Gint(param(1)), res);
                      -- N.B. res=false if dest_iter is at end iterator
                      -- Delete requested number of characters
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : CSI " & param(1)'Wide_Image & " 'P' - cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & ", Deleting '" & Ada.Characters.Conversions.To_Wide_String(Get_Text(the_buf, cursor_iter, dest_iter)) & "'.");
                      Delete(the_buf, cursor_iter, dest_iter);
                   when 'S' =>   -- Scroll Up <param> lines
                         -- Get the top left hand corner of the screen
@@ -1083,7 +1052,6 @@ separate (Gtk.Terminal)
                      if pnum - count >= 1 and then
                         (param(count) = 39 and param(count + 1) = 49)
                      then  -- treat this combination as a request to finish
-                        -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : resetting mark-up -  count =" &  count'Wide_Image & ", pnum =" & pnum'Wide_Image & ").");
                         Finish(on_markup => on_buffer.markup);
                         count := count + 2;
                      end if;
@@ -1302,7 +1270,6 @@ separate (Gtk.Terminal)
                      on_buffer.saved_cursor_pos := Get_Insert(the_buf);
                      Get_Iter_At_Mark(the_buf, cursor_iter, 
                                       on_buffer.saved_cursor_pos);
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : Saving cursor_iter for (row=" &  Get_Line(cursor_iter)'Wide_Image & ", col=" & Get_Line_Offset(cursor_iter)'Wide_Image & ").");
                   when 't' => null;  -- Window manipulation (XTWINOPS)
                      -- format is <Esc>[nn;a;0t (e.g. nn=22 or nn=23)
                      -- nn=20;0 : Report terminal's icon name (aka icon title)
@@ -1380,7 +1347,6 @@ separate (Gtk.Terminal)
                      Get_Iter_At_Mark(the_buf, cursor_iter, 
                                       on_buffer.saved_cursor_pos);
                      Place_Cursor(the_buf, where => cursor_iter);
-                     -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape : restoring cursor_iter to (row=" &  Get_Line(cursor_iter)'Wide_Image & ", col=" & Get_Line_Offset(cursor_iter)'Wide_Image & ").");
                   when '~' =>  -- Non-standard, but used for going to end (VT)
                      case param(1) is
                         when 2 => -- VT sequence for Insert/Overwrite [non-standard]
@@ -1484,21 +1450,18 @@ separate (Gtk.Terminal)
                -- Scroll buffer if necessary
                Scroll_Mark_Onscreen(on_buffer.parent, Get_Insert(the_buf));
                Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape D : Done. Cursor cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), current column =" & Get_Line_Index(cursor_iter)'Wide_Image & ".");
             when 'M' =>   -- Reverse Index
                -- perform the reverse operation of "\n" (line feed), move the
                -- cursor up one line, maintaining horizontal position,
                -- scrolling the buffer if necessary
                Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
                -- Do a scrolling region type of cursor movement
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : Calling Scroll_Up as line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), going up by 1 line.  on_buffer.scroll_region_top =" & on_buffer.scroll_region_top'Wide_Image & " and on_buffer.scroll_region_bottom =" & on_buffer.scroll_region_bottom'Wide_Image & ".");
                Scroll_Up (number_of_lines => 1, for_buffer => on_buffer, 
                              starting_from => cursor_iter);
                Place_Cursor(the_buf, where => cursor_iter);
                -- Scroll buffer if necessary
                Scroll_Mark_Onscreen(on_buffer.parent, Get_Insert(the_buf));
                Get_Iter_At_Mark(the_buf, cursor_iter, Get_Insert(the_buf));
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Process_Escape M : Done. Cursor cursor line number in buffer =" & Get_Line(cursor_iter)'Wide_Image & " (line='" & Ada.Characters.Conversions.To_Wide_String(Get_Whole_Line(on_buffer,cursor_iter)) & "'), current column =" & Get_Line_Index(cursor_iter)'Wide_Image & ".");
             when 'N' => null;  -- Single Shift Two
                Log_Data(at_level => 9, 
                         with_details=> "Process_Escape (SSTwo) : Escape '" & 
@@ -1667,7 +1630,6 @@ begin  -- Process
       the_buf := Gtk.Text_Buffer.Gtk_Text_Buffer(for_buffer);
    end if;
    Get_End_Iter(the_buf, end_iter);
-   -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : '" & Ada.Characters.Conversions.To_Wide_String(the_input) & ''');
    for_buffer.cmd_prompt_check.Check(the_character => the_input(ist));
    if for_buffer.escape_sequence(escape_str_range'First) = Esc_str(1) and then
       the_input /= LF_str
@@ -1689,7 +1651,6 @@ begin  -- Process
          or else (for_buffer.escape_position = 2 and then 
                   (the_input(ist) = '7' or the_input(ist) = '8'))
       then  -- escape sequence is complete - process it
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : Escape sequence finished with '" & Ada.Characters.Conversions.To_Wide_String(for_buffer.escape_sequence(1..for_buffer.escape_position)) & "'; Set_Overwrite(for_buffer.parent) to true");
          -- Make sure that terminal is in overwrite mode as the escape sequence
          -- is from the system's virtual terminal and it assumes that it is
          -- always in some form of overwrite mode
@@ -1764,12 +1725,10 @@ begin  -- Process
       if not Equal(start_iter, end_iter) and
          not for_buffer.alternative_screen_buffer
       then  -- not at last line already
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : CR - cursor going forward one line");
          Forward_Line(start_iter, res);
       end if;
       if not Is_Empty(for_buffer.markup)
       then  -- a string to dump
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : CR - Saving mark-up.");
          -- Rebuild the mark-up (but not text) from modifier array
          Save(the_markup => for_buffer.markup);
          -- (close off, but the closure is temporary)
@@ -1778,7 +1737,6 @@ begin  -- Process
       Place_Cursor(the_buf, where => start_iter);
       if Saved_Markup_Exists(for_markup => for_buffer.markup)
       then  -- mark-up to restore, do a complete restore
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : CR - Restoring mark-up.");
          Restore(the_markup => for_buffer.markup);
          Clear_Saved(markup => for_buffer.markup);
       end if;
@@ -1808,7 +1766,6 @@ begin  -- Process
          else  -- otherwise not alternative buffer, always do LF
             res := true;  --  end_iter is alread set at buffer end
          end if;
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : LF - res = " & res'Wide_Image & " (if TRUE, calling the Insert internal operation), alternative_screen_buffer = " & for_buffer.alternative_screen_buffer'Wide_Image & ", Get_Line_Count =" & Get_Line_Count(the_buf)'Wide_Image & ", scroll_region_bottom =" & for_buffer.scroll_region_bottom'Wide_Image & ", scroll_region_top =" & for_buffer.scroll_region_top'Wide_Image & ".");
          if res  then  -- only do if allowed
             Place_Cursor(the_buf, where => end_iter);
             Insert(for_buffer, at_iter=>end_iter, the_text=>the_input);
@@ -1833,7 +1790,6 @@ begin  -- Process
       tab_stop := Tab_length - 
                    (UTF8_Length(Get_Text(the_buf, start_iter, end_iter)) rem
                                                                Tab_length);
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : Tab - line length =" & Natural'Wide_Image(UTF8_Length(Get_Text(for_buffer, start_iter, end_iter))) & ", tab stop =" & Natural'Wide_Image(tab_stop) & ".");
       if for_buffer.alternative_screen_buffer
        then  -- insert the  tab stop by moving cursor right (for Emacs)
          Process_Escape(for_sequence=> esc_str & "["& As_String(tab_stop)&"C",
@@ -1847,7 +1803,6 @@ begin  -- Process
       -- doesn't for some very strange reason).
       if not Is_Empty(for_buffer.markup)
       then  -- a string to dump
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : BS - Saving mark-up.");
          -- Rebuild the mark-up (but not text) from modifier array
          Save(the_markup => for_buffer.markup);
          -- (close off, but the closure is temporary)
@@ -1863,7 +1818,6 @@ begin  -- Process
       end if;
       if Saved_Markup_Exists(for_markup => for_buffer.markup)
       then  -- mark-up to restore, do a complete restore
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : BS - Restoring mark-up.");
          Restore(the_markup => for_buffer.markup);
          Clear_Saved(markup => for_buffer.markup);
       end if;
@@ -1901,7 +1855,6 @@ begin  -- Process
                                   Character'Val(for_buffer.last_key_pressed +
                                                 Character'Pos('A') - 1)))
          then  -- this is input just keyed, so output it with any saved mark-up
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : output character - Saving mark-up.");
             -- Rebuild the mark-up (but not text) from modifier array
             Save(the_markup => for_buffer.markup);
             -- (close off, but the closure is temporary)
@@ -1909,7 +1862,6 @@ begin  -- Process
             -- Now restore the mark-up instructions (not the text)
             if Saved_Markup_Exists(for_markup => for_buffer.markup)
             then  -- mark-up to restore, do a complete restore
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : output character - Restoring mark-up.");
                Restore(the_markup => for_buffer.markup);
                Clear_Saved(markup => for_buffer.markup);
             end if;
@@ -1929,7 +1881,6 @@ begin  -- Process
    for_buffer.anchor_point:= -- natural(Get_Line_Offset(end_iter));
             UTF8_Length(Get_Line_From_Start(for_buffer, up_to_iter=>end_iter));
    Switch_The_Light(for_buffer, 10, false, for_buffer.anchor_point'Image);
-   -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    if for_buffer.alternative_screen_buffer and
       then  -- am in the alternative screen bufer
            for_buffer.cmd_prompt_check.Is_Looking
@@ -1940,7 +1891,6 @@ begin  -- Process
    if for_buffer.cmd_prompt_check.Is_Looking and then
       for_buffer.cmd_prompt_check.Found_Prompt_End
    then  -- at command prompt end (and not in alternative buffer)
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Process : for_buffer.cmd_prompt_check.Is_Looking AND for_buffer.cmd_prompt_check.Found_Prompt_End. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
       declare
          unedit_mark : Gtk.Text_Mark.Gtk_Text_Mark;  -- End of uneditable zone
          unedit_iter : Gtk.Text_Iter.Gtk_Text_Iter;

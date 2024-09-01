@@ -161,7 +161,6 @@ return boolean is
    key_length    : natural range 0..esc_str_length := 0;  -- 0 = no key
    the_character : wide_string(1..1);
 begin
-   -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: key = " & for_event.keyval'Wide_Image & ", last_key_pressed=" & the_terminal.buffer.last_key_pressed'Wide_Image & ".");
    Translate_Modifiers(for_keymap => key_map, for_state => key_state);
    if the_terminal.buffer.cursor_keys_in_app_mode
    then  -- substitute the '[' for a 'O'
@@ -224,7 +223,6 @@ begin
             key_length := 1;
          end if;
       when GDK_Tab =>  --16#FF09# / 10#65289#
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: tab key = pressed.");
          if (Gdk_Modifier_Type(key_state) and Shift_Mask) > 0
          then  -- Shift-Tab
             case the_terminal.buffer.modifiers.modify_other_keys is
@@ -528,7 +526,6 @@ begin
    -- Operate on any key interpretations where required
    if the_terminal.buffer.bracketed_paste_mode and then key_length > 0
    then  -- at command prompt: we have set it to pass to the write routine
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: at cmd prompt and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.  Set the_terminal.buffer.history_review to true and Set_Overwrite(the_terminal.terminal) to true.");
       Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..key_length));
       if for_event.keyval = GDK_Up or for_event.keyval = GDK_Down
       then  -- these keys are about starting/continuing history review
@@ -540,7 +537,6 @@ begin
       return true;
    elsif (not the_terminal.buffer.bracketed_paste_mode) and then key_length > 0
    then  -- in an app: we have set it to pass to the write routine
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Scroll_Key_Press_Check: in app and sending '" & Ada.Characters.Conversions.To_Wide_String(the_key) & "'.");
       Write(fd => the_terminal.buffer.master_fd, Buffer=> the_key(1..key_length));
       return true;
    elsif the_terminal.buffer.alternative_screen_buffer and then

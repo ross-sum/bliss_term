@@ -51,7 +51,6 @@ with Ada.Strings.Fixed;
 with Ada.Strings.UTF_Encoding.Wide_Strings;
 with Glib.Convert;
 with Gtk.Text_Iter;
--- with Error_Log;  -----------------------------------------*********DELETE ME*********----------------------------
 
 package body Gtk.Terminal_Markup is
       
@@ -247,7 +246,6 @@ package body Gtk.Terminal_Markup is
             current_item := current_item.next;
          end loop;
       end if;
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Count_Of_Span: result =" & result'Wide_Image & ".");
       return result;
    end Count_Of_Span;
    
@@ -297,11 +295,9 @@ package body Gtk.Terminal_Markup is
                then  -- some text, so insertion point isn't at the start
                   insertion_point:= Ada.Strings.UTF_Encoding.Wide_Strings.
                                    Decode(Value(in_markup.markup_text))'Length;
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: executing Set_Max(Insert) to do the insert for <" & for_modifier'Wide_Image & "> at value" & the_number'Wide_Image & " with insertion_point =" & insertion_point'Wide_Image & " on string '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(in_markup.markup_text)) & "'.");
                end if;
                if for_modifier = span
                then  -- do a complete record assignment including span_type
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: executing Set_Max(Insert) appending <span " & span_type'Wide_Image & "> at item" & the_number'Wide_Image & " with value '" & Ada.Characters.Conversions.To_Wide_String(with_value) & "'...");
                   into.all := (mod_type=>span, item=>the_number, 
                                insertion_point=>insertion_point,
                                finish_point=> 0,
@@ -313,7 +309,6 @@ package body Gtk.Terminal_Markup is
                   into.mod_type := for_modifier;
                   into.insertion_point := insertion_point;
                end if;
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: executed Set_Max(Insert) <" & for_modifier'Wide_Image & "> at value" & into.item'Wide_Image & " with insertion_point =" & insertion_point'Wide_Image & ".");
             else
                Insert(the_number, for_modifier, with_value, into.next);
             end if;
@@ -339,7 +334,6 @@ package body Gtk.Terminal_Markup is
             -- go down to the linked list to create a new item
             current_item := current_item.next;
          end loop;
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: executing Set_Max for_modifier '" & for_modifier'Wide_Image & "' with the_number =" & positive'Wide_Image(max_modifier + 1) & " and span_type = " & span_type'Wide_Image & ".");
          Insert(the_number => max_modifier + 1, for_modifier => for_modifier,
                  with_value => with_value,
                 into => modifier_array(for_modifier).o);
@@ -416,7 +410,6 @@ package body Gtk.Terminal_Markup is
          if or_rgb_colour /= null_rgba and the_value'Length > 0
          then  --there is also text to append to the string to be marked up
             Add(the_text => the_value, to => in_markup.markup_text);
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Append_To_Markup: Appending markup text so that in_markup.markup_text = '" & Ada.Characters.Conversions.To_Wide_String(Value(in_markup.markup_text)) & "'.");
          end if;
       end if;
    end Append_To_Markup;
@@ -477,10 +470,6 @@ package body Gtk.Terminal_Markup is
          begin
             if from.next = null or else from.next.finish_point > 0
             then  -- it is the last that is not finished
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: executing Finish_Last(Find_Last) at modifier '" & for_modifier'Wide_Image & "' which has value " & from.item'Wide_Image & ".");
-               -- if from.mod_type = span then  -- clear it's value
-                  -- Clear(from.value);
-               -- end if;
                from.finish_point := at_position;  -- set it to finished
             else
                Find_Last(from.next);
@@ -502,12 +491,10 @@ package body Gtk.Terminal_Markup is
             if from.next /=null and then 
                (from.next.next = null and from.next.loaded_to_markup)
             then  -- This should no longer be here, clear it out too
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: executing Clear_Last(Delete_Last) at modifier '" & for_modifier'Wide_Image & "' to clear out child's child, which has from.next.loaded_to_markup=TRUE.");
                Delete_Last(from.next);
             end if;
             if from.next = null
             then  -- it is the last
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: executing Clear_Last(Delete_Last) at modifier '" & for_modifier'Wide_Image & "' which has value " & from.item'Wide_Image & ".");
                if from.mod_type = span then  -- clear it's value
                   Clear(from.value);
                end if;
@@ -546,7 +533,6 @@ package body Gtk.Terminal_Markup is
                    (not current_item.loaded_to_markup) and then
                    current_item.item > max_modifier)
                then
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish (Maximum (" & that_is'Wide_Image & ")): at modifier " & current_item.mod_type'Wide_Image & " with item =" & current_item.item'Wide_Image & ".");
                   max_modifier := current_item.item;
                   result := current_item;
                end if;
@@ -625,11 +611,9 @@ package body Gtk.Terminal_Markup is
                                           Value(on_markup.markup_text))'Length;
          Finish_Last(from_modifier_array => on_markup.modifier_array,
                      for_modifier=> for_modifier, at_position=> markup_length);
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: exited from Finish_Last on for_modifier '" & for_modifier'Wide_Image & "'.");
          if Maximum(from_modifier_array=>on_markup.modifier_array,
                     that_is => open) = null
          then  -- mark-up has ended, flush the mark-up text buffer
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: Maximum(from_modifier_array=>on_markup.modifier_array) = null, doing Finish(on_markup=>on_markup)....");
             Finish(on_markup=>on_markup);
          end if;
       else  -- Finish up on all modifiers and therefore the entire mark-up
@@ -637,7 +621,6 @@ package body Gtk.Terminal_Markup is
                                           Value(on_markup.markup_text))'Length;
          -- First, open up all modifiers before the those marked for closure at
          -- their closure points, closing off as required
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: Finish up on all modifiers and therefore the entire mark-up with markup_length=" & markup_length'Wide_Image & ".");
          declare
             char_pos     : natural := 0;
             last_item    : natural := 0;
@@ -649,11 +632,9 @@ package body Gtk.Terminal_Markup is
          begin
             -- Work through the list, ensuring those items that are closed off
             -- have their closure points inserted in the correct location
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: markup_string = '" & markup_string & "'.");
             current_item := Minimum(from_modifier_array => on_markup.modifier_array,
                                     greater_than => last_item);
             while current_item /= null loop
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: at modifier " & current_item.mod_type'Wide_Image & " of" & on_markup.modifier_array(current_item.mod_type).n'Wide_Image & " modifiers.");
                closed_item := Closed_point(from_modifier_array => 
                                                       on_markup.modifier_array,
                                            starting_from => closed_pos);
@@ -678,12 +659,10 @@ package body Gtk.Terminal_Markup is
                                                      markup_string'First-1))), 
                          to => markup_text);
                   end if;
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: closing off at current_item.insertion_point =" & current_item.insertion_point'Wide_Image & ", markup_text = '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
                   -- Add in the closure for the mark-up modifier
                   Add(the_text => The_Mod(for_mods => closed_item,
                                           closed_off => true),
                       to => markup_text);
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: closed off with markup_text now = '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
                   -- Clear closed-off modifier out, so it isn't dealt with twice
                   closed_item.loaded_to_markup := true;            
                   -- And adjust the char_pos and the total open counter
@@ -692,7 +671,6 @@ package body Gtk.Terminal_Markup is
                          on_markup.modifier_array(current_item.mod_type).n - 1;
                end if;
                -- Now deal first with the preceeding mark-up text, if any
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: checking if current_item.insertion_point (" & current_item.insertion_point'Wide_Image & ") > char_pos (" & char_pos'Wide_Image & ") [NB markup_string'First = " & markup_string'First'Wide_Image & ", closed_pos =" & closed_pos'Wide_Image & ", markup_length =" & markup_length'Wide_Image & "].");
                if current_item.insertion_point > char_pos
                then  -- need to add that text in to the mix, converting it as we go
                   if markup_text /= Null_Ptr and then 
@@ -714,7 +692,6 @@ package body Gtk.Terminal_Markup is
                                                      markup_string'First-1))),
                          to => markup_text);
                   end if;
-                  -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: dealt with any preceeding markup_text ('" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "').");
                end if;
                -- Now add in the mark-up modifiers
                if markup_text /= Null_Ptr and then Value(markup_text)'Length >0
@@ -727,7 +704,6 @@ package body Gtk.Terminal_Markup is
                   markup_text:= New_String(The_Mod(for_mods => current_item,
                                                    closed_off => false));
                end if;
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: after adding in the mark-up modifiers, markup_text = '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
                -- Update pointers and advance to the next mark-up text modifier
                last_item := current_item.item;
                char_pos := current_item.insertion_point;
@@ -737,21 +713,18 @@ package body Gtk.Terminal_Markup is
             -- Second, load any remaining text to be marked up
             if markup_length > char_pos
             then
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: loading any remaining text to be marked up, markup_text = '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
                Add(the_text => 
                             Glib.Convert.Escape_Text(Ada.Strings.UTF_Encoding.
                                Wide_Strings.Encode(markup_string
                                      (char_pos+markup_string'First..
                                                         markup_string'Last))),
                    to => markup_text);
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: loaded all remaining text to be marked up, markup_text now = '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
             end if;
          end;
          -- Third, close all remaining modifiers.  This needs to be done in
          -- reverse order for the modifier order number (in its linked list)
          current_item:= Maximum(from_modifier_array=>on_markup.modifier_array,
                                  that_is => closed_and_open);
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: working with modifier </" & current_item.mod_type'Wide_Image & ">, to apply to markup_text ('" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
          while current_item /= null and then current_item.mod_type /= none loop
             -- if on_markup.modifier_array(modifier).n > 0
             if on_markup.modifier_array(current_item.mod_type).n > 0
@@ -759,10 +732,8 @@ package body Gtk.Terminal_Markup is
                Add(the_text => The_Mod(for_mods => current_item,
                                        closed_off => true), 
                    to => markup_text);
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: at modifier " & current_item.mod_type'Wide_Image & " of" & on_markup.modifier_array(current_item.mod_type).n'Wide_Image & " modifiers, set markup_text to '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
                Clear_Last(from_modifier_array => on_markup.modifier_array,
                           for_modifier => current_item.mod_type);
-               -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: exited from Clear_Last on for_modifier = '" & current_item.mod_type'Wide_Image & "'.");
                on_markup.modifier_array(current_item.mod_type).n := 
                          on_markup.modifier_array(current_item.mod_type).n - 1;
             else  -- Something is out of wack!
@@ -783,7 +754,6 @@ package body Gtk.Terminal_Markup is
                   exit;  -- quit the loop
                end if;
             end if;
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Finish: markup_text = '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "', getting next maximum...");
             current_item := Maximum(from_modifier_array=>on_markup.modifier_array,
                                     that_is => closed_and_open);
          end loop;
@@ -796,7 +766,6 @@ package body Gtk.Terminal_Markup is
          end_iter := cursor_iter;
          if not Ends_Line(end_iter)
          then  -- Not at end, so set up the end_iter to be the end of the line
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: Executing Forward_To_Line_End(end_iter, result)...");
             Forward_To_Line_End(end_iter, result);
          end if;
          -- Fifth, delete the length of the mark-up text if in overwrite
@@ -815,7 +784,6 @@ package body Gtk.Terminal_Markup is
          end if;
          -- Sixth, output the mark-up text
          Insert_Markup(on_markup.buffer, cursor_iter, Value(markup_text), -1);
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Insert_The_Markup: executing Insert_Markup on '" & Ada.Strings.UTF_Encoding.Wide_Strings.Decode(Value(markup_text)) & "'.");
          -- Insert_The_Markup(for_markup=>on_markup, the_text => "");
          -- Finally, clear the text that has just been marked-up
          Free(on_markup.markup_text);
@@ -859,9 +827,8 @@ package body Gtk.Terminal_Markup is
    begin
       for item in font_modifier loop
          -- Make doubly sure that the result is empty to start with
-         to(item).o := null;             ---------------------------------------------------CHECK FOR MEMORY LEAK HERE - MAY NEED TO CLEAR CHILDREN-------
+         to(item).o := null;
          -- Load the modifier count (number)
-         -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Copy: setting to(" & item'Wide_Image & ") := " & from(item).n'Wide_Image & ".");
          to(item).n := from(item).n;
          -- Load the modifier's sequence number(s) into to(item).o
          current_item := from(item).o;
@@ -886,7 +853,6 @@ package body Gtk.Terminal_Markup is
                       at_insertion => insertion_pt, 
                       for_modifier => item);
             end if;
-            -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Copy: Inserted" & current_item.item'Wide_Image & " into to(" & item'Wide_Image & ").o.");
             current_item := current_item.next;
          end loop;
       end loop;
@@ -924,8 +890,6 @@ package body Gtk.Terminal_Markup is
    begin
       Free(the_markup.saved_markup);
       the_markup.saved_markup := Null_Ptr;
-      -- the_markup.saved_markup:=Regenerate_Markup(from=>the_markup.markup_text);
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Save(the_markup) - the_markup.saved_markup = '" & Ada.Characters.Conversions.To_Wide_String(Value(the_markup.saved_markup)) & "' from the_markup.markup_text = '" & Ada.Characters.Conversions.To_Wide_String(Value(the_markup.markup_text)) & "'.");
       -- Save a copy of the modifier array
       Copy(from=> the_markup.modifier_array, to=> the_markup.saved_modifiers);
    end Save;
@@ -936,7 +900,6 @@ package body Gtk.Terminal_Markup is
    begin
       Free(the_markup.markup_text);
       the_markup.markup_text := Null_Ptr;
-      -- Error_Log.Debug_Data(at_level => 9, with_details => "Gtk.Terminal_Markup : Restore(the_markup) - the_markup.markup_text = '" & Ada.Characters.Conversions.To_Wide_String(Value(the_markup.markup_text)) & "'.");
       Copy(from=> the_markup.saved_modifiers, to=> the_markup.modifier_array,
            reset_insertion_point => true);
       Free(the_markup.saved_markup);
