@@ -267,9 +267,10 @@ begin
                   key_length := 8;
             end case;
          -- if in command line, but not history_review, put it in that state
-         elsif (the_terminal.buffer.use_buffer_editing and
-             not the_terminal.buffer.history_review) and then 
-             the_terminal.buffer.entering_command
+         elsif (not the_terminal.buffer.alternative_screen_buffer) and then
+               (the_terminal.buffer.use_buffer_editing and
+                not the_terminal.buffer.history_review) and then 
+               the_terminal.buffer.entering_command
          then  -- should be in command line entry
             -- First, set a flag to flush the buffer
             the_terminal.buffer.flush_buffer := true;
@@ -490,10 +491,11 @@ begin
       when others =>
          null;  -- Don't do anything
    end case;
-   -- For Control, Alt, Super and similar keys, we need to save away  the
-   -- previous key to know, since that could be the Alt, Super, etc. key.
+   -- For being in highlight mode when typing on the keyboard, this terminal
+   -- needs to know what the key was that was pressed in order to knot that it
+   -- has been typed rather than passed on.
    the_terminal.buffer.last_key_pressed := for_event.keyval;
-   -- In the event of there being a history_review key press or in and
+   -- In the event of there being a history_review key press or in an
    -- application in the alternative buffer, need to make sure that an actual
    -- insert takes place
    if Get_Overwrite(the_terminal.terminal)
@@ -545,6 +547,13 @@ begin
          (for_event.keyval>=GDK_space and for_event.keyval<GDK_3270_Duplicate)
    then  -- when in alaternative buffer and not a cursor movement key, pass on
       the_character(1) := wide_character'Val(for_event.keyval);
+      Write(fd=> the_terminal.buffer.master_fd, Buffer=>Encode(the_character));
+      return true;
+   elsif the_terminal.buffer.alternative_screen_buffer and then
+         (for_event.keyval = GDK_Tab)
+   then  -- when in alaternative buffer and a tab key, send it on (for Emacs)
+      the_character(1) := 
+                  Wide_Character'Val(Character'Pos(Ada.Characters.Latin_1.HT));
       Write(fd=> the_terminal.buffer.master_fd, Buffer=>Encode(the_character));
       return true;
    else  -- at command prompt and not a terminal history action key press

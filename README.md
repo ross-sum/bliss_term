@@ -176,10 +176,14 @@ follows:
   with Blissymbolics characters. However, there is an issue with using the
   mouse with Blissymbolics as the mouse location does not account for combining
   characters taking no space but do occupy a character position.
-* Emacs has yet to be tested against Bliss_Term, although an initial power-up
-  does not successfully load a file.  It instead gets to the point where it
+* Emacs is yet to be fully tested against Bliss_Term, although an initial power-
+  up does not successfully load a file.  It instead gets to the point where it
   loads the scratch area and mysteriously stops there without doing the file
-  load.  (NB: command should be emacs -nw <file>).
+  load.  (NB: command should be emacs -nw <file>). You can load a file from
+  within Emacs, but editing is haphazard as the cursor is not always where it
+  appears and what is on screen does not necessarily represent edits made.
+  Emacs' choice of colours for comments is atrocious but it does display
+  Blissymboics symbols correctly...
 
 There are probably numerous other errors that I have yet to discover.  I am
 actively using this terminal emulator whenever it is safe for me to do so, so I

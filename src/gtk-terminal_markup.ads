@@ -114,6 +114,10 @@ package Gtk.Terminal_Markup is
    function Count_Of_Span(attribute : in span_types; -- UTF8_String; 
                           for_markup : in markup_management) return natural;
        -- Count the number of speicified attribute entries in a span tag
+   function Number_of_Modifiers(in_markup : in markup_management) 
+   return natural;
+       -- returns the total number modifiers in the currently loaded mark-up
+       -- text (0 if there is none).
 
    procedure Append_To_Markup(in_markup    : in out markup_management;
                               for_modifier : in font_modifier := none;
@@ -151,7 +155,8 @@ private
    procedure Clear (the_string : in out A_UTF8_String);
    type span_type_array is array (span_types'range) of A_UTF8_String;
    -- Because the body of "+" must be seen prior to its use, the following is
-   -- actually located within the body of this package.
+   -- actually located within the body of this package (provided here as a
+   -- comment for clarity).
    -- span_word: constant span_type_array :=
    --            (+"", +"foreground=", +"background=", +"weight=", +"underline=");
    function "-" (s : span_types) return UTF8_String;
@@ -163,6 +168,8 @@ private
    type linked_list is record
          item : natural;
          insertion_point : natural := 0;  -- 0 = none
+         finish_point    : natural := 0;  -- 0 = none
+         loaded_to_markup: boolean := false;  -- for items with a finish_point
          next : linked_list_ptr;
          mod_type : font_modifier := none;
          -- case mod_type is
@@ -187,24 +194,16 @@ private
          saved_modifiers: font_modifier_array;
       end record;
 
-   function Modifier_In_Markup (for_array: font_modifier_array) return boolean;
-      -- Indicate whether any mark-up exists within the specified modifier
-      -- array.
-   function Length(of_markup_text : Gtkada.Types.Chars_Ptr) return Gint;
-      -- Return the length of the mark-up text less the modifiers
-      -- (i.e. less tags)
-   procedure Copy(from : in font_modifier_array; to : out font_modifier_array);
+   function The_Value_Exists(for_attribute : in span_types; 
+                             of_text : in UTF8_String;
+                             for_markup : in markup_management) return boolean;
+   procedure Copy(from : in font_modifier_array; to : out font_modifier_array;
+                  reset_insertion_point : boolean := false);
       -- Do a deep copy of 'from' to 'to'
-   function Regenerate_Markup(from : in  Gtkada.Types.Chars_Ptr) 
-   return Gtkada.Types.Chars_Ptr;
-      -- Scrub the old line, extracting the mark-up instructions.  We know that
-      -- mark-up is enclosed in '<' and '>'
-   procedure  Insert_The_Markup(for_markup : in out markup_management; 
-                                the_text   : UTF8_String);
-      -- Insert the markup into the currently active text buffer at the current
-      -- cursor point for that buffer.  This procedure assumes that the mark-up
-      -- is all on the one line and does not transgress line ends.  Handling
-      -- mark-up that transgresses line ends needs to be handled externally to
-      -- this procedure.
+   procedure Clear_Modifiers(for_markup : in out markup_management);
+      -- Delete all modifiers in the mark-up
+   procedure Add(the_text : in UTF8_String; to : in out Gtkada.Types.Chars_Ptr);
+      -- Add the_text string to the end of 'to', or if 'to' is a Null_Ptr, then
+      -- set 'to' to the_text.
 
 end Gtk.Terminal_Markup;

@@ -43,8 +43,9 @@
 -----------------------------------------------------------------------
 separate (Gtk.Terminal)
    procedure Process(the_input : in UTF8_String; for_buffer : Gtk_Terminal_Buffer) is
-   use Gtk.Text_Iter, Gtk.Text_Mark;
    use Ada.Strings.Maps;
+   use Gdk.Types, Gdk.Key_Map;
+   use Gtk.Text_Iter, Gtk.Text_Mark;
    use Gtk.Terminal.CInterface;
    use Gtk.Terminal.Colour;
    Tab_length : constant natural := 8;
@@ -1142,8 +1143,13 @@ separate (Gtk.Terminal)
                            when 27 =>  -- Not reversed
                               if Count_Of_Span(attribute => foreground, 
                                                for_markup=> on_buffer.markup)>0
-                              then
+                              then  -- close off each span
                                  Finish(on_buffer.markup, span);
+                                 if Count_Of_Span(attribute => background, 
+                                               for_markup=> on_buffer.markup)>0
+                                 then  -- (backward span as well as forward)
+                                    Finish(on_buffer.markup, span);
+                                 end if;
                               else  -- define the Not reversed state
                                  Append_To_Markup(on_buffer.markup,span,foreground,
                                                   "", on_buffer.text_colour);
@@ -1159,21 +1165,21 @@ separate (Gtk.Terminal)
                               then
                                  Finish(on_buffer.markup, strikethrough);
                               end if;
-                           when 30 | 90 =>  -- Set foreground colour to black
+                           when 30 =>  -- Set foreground colour to black
                               Append_To_Markup(on_buffer.markup, span, foreground, """black""");
-                           when 31 | 91 =>  -- Set foreground colour to red
+                           when 31 =>  -- Set foreground colour to red
                               Append_To_Markup(on_buffer.markup, span, foreground, """red""");
-                           when 32 | 92 =>  -- Set foreground colour to green
+                           when 32 =>  -- Set foreground colour to green
                               Append_To_Markup(on_buffer.markup, span, foreground, """green""");
-                           when 33 | 93 =>  -- Set foreground colour to yellow
+                           when 33 =>  -- Set foreground colour to yellow
                               Append_To_Markup(on_buffer.markup, span, foreground, """yellow""");
-                           when 34 | 94 =>  -- Set foreground colour to blue
+                           when 34 =>  -- Set foreground colour to blue
                               Append_To_Markup(on_buffer.markup, span, foreground, """blue""");
-                           when 35 | 95 =>  -- Set foreground colour to magenta
+                           when 35 =>  -- Set foreground colour to magenta
                               Append_To_Markup(on_buffer.markup, span, foreground, """magenta""");
-                           when 36 | 96  =>  -- Set foreground colour to cyan
+                           when 36  =>  -- Set foreground colour to cyan
                               Append_To_Markup(on_buffer.markup, span, foreground, """cyan""");
-                           when 37 | 97 =>  -- Set foreground colour to white
+                           when 37 =>  -- Set foreground colour to white
                               Append_To_Markup(on_buffer.markup, span, foreground, """white""");
                            when 38 =>  -- Set foreground colour to number
                               count := count + 1;
@@ -1197,21 +1203,21 @@ separate (Gtk.Terminal)
                            when 39 =>  -- Default foreground colour
                               Append_To_Markup(on_buffer.markup, span, foreground,
                                                "", on_buffer.text_colour);
-                           when 40 | 100 =>  -- Set background colour to black
+                           when 40 =>  -- Set background colour to black
                               Append_To_Markup(on_buffer.markup, span, background, """black""");
-                           when 41 | 101 =>  -- Set background colour to red
+                           when 41 =>  -- Set background colour to red
                               Append_To_Markup(on_buffer.markup, span, background, """red""");
-                           when 42 | 102 =>  -- Set background colour to green
+                           when 42 =>  -- Set background colour to green
                               Append_To_Markup(on_buffer.markup, span, background, """green""");
-                           when 43 | 103 =>  -- Set background colour to yellow
+                           when 43 =>  -- Set background colour to yellow
                               Append_To_Markup(on_buffer.markup, span, background, """yellow""");
-                           when 44 | 104 =>  -- Set background colour to blue
+                           when 44 =>  -- Set background colour to blue
                               Append_To_Markup(on_buffer.markup, span, background, """blue""");
-                           when 45 | 105 =>  -- Set background colour to magenta
+                           when 45 =>  -- Set background colour to magenta
                               Append_To_Markup(on_buffer.markup, span, background, """magenta""");
-                           when 46 | 106 =>  -- Set background colour to cyan
+                           when 46 =>  -- Set background colour to cyan
                               Append_To_Markup(on_buffer.markup, span, background, """cyan""");
-                           when 47 | 107 =>  -- Set background colour to white
+                           when 47 =>  -- Set background colour to white
                               Append_To_Markup(on_buffer.markup, span, background, """white""");
                            when 48 =>  -- Set background colour to number
                               count := count + 1;
@@ -1237,7 +1243,19 @@ separate (Gtk.Terminal)
                                                "", on_buffer.background_colour);
                            when 50 =>  -- Disable proportional spacing
                               Append_To_Markup(on_buffer.markup, mono);
-                           when others => null;  -- style or colour not recognised
+                           when 90..97 =>  -- foreground: use colour pallete
+                              Append_To_Markup(on_buffer.markup, span, 
+                                                  foreground, "",
+                                                  RGB(for_colour =>  
+                                                       colour_palette_number
+                                                         (param(count)-90+7)));
+                           when 100..107 =>  -- background: use colour pallete
+                              Append_To_Markup(on_buffer.markup, span, 
+                                                  background, "",
+                                                  RGB(for_colour =>  
+                                                       colour_palette_number
+                                                        (param(count)-100+7)));
+                           when others =>   -- style or colour not recognised
                               Handle_The_Error(the_error => 7, 
                                                error_intro=>"Process_Escape: " &
                                                             "Control string error",
@@ -1632,13 +1650,14 @@ separate (Gtk.Terminal)
          end case;  -- control sequence type
       end if;
    end Process_Escape;
-   tab_stop: Tab_range := Tab_length;
+   tab_stop   : Tab_range := Tab_length;
    start_iter : Gtk.Text_Iter.Gtk_Text_Iter;
    end_iter   : Gtk.Text_Iter.Gtk_Text_Iter;
    cursor_mark: Gtk.Text_Mark.Gtk_Text_Mark;
    ist        : constant integer := the_input'First;
    res        : boolean;
-   the_buf : Gtk.Text_Buffer.Gtk_Text_Buffer;
+   the_buf    : Gtk.Text_Buffer.Gtk_Text_Buffer;
+   key_state  : natural := The_Modifier_State(for_keymap => key_map);
 begin  -- Process
    for_buffer.in_response := true;
    if for_buffer.alternative_screen_buffer
@@ -1814,9 +1833,14 @@ begin  -- Process
       tab_stop := Tab_length - 
                    (UTF8_Length(Get_Text(the_buf, start_iter, end_iter)) rem
                                                                Tab_length);
-      Ada.Wide_Text_IO.Put_Line("Process : Tab - line length =" & Natural'Wide_Image(UTF8_Length(Get_Text(for_buffer, start_iter, end_iter))) & ", tab stop =" & Natural'Wide_Image(tab_stop) & ".");
-       -- insert the tab stop by inserting spaces
-      Insert_At_Cursor(for_buffer, the_text=>Tab_chr(1..tab_stop));
+      Error_Log.Debug_Data(at_level => 9, with_details => "Process : Tab - line length =" & Natural'Wide_Image(UTF8_Length(Get_Text(for_buffer, start_iter, end_iter))) & ", tab stop =" & Natural'Wide_Image(tab_stop) & ".");
+      if for_buffer.alternative_screen_buffer
+       then  -- insert the  tab stop by moving cursor right (for Emacs)
+         Process_Escape(for_sequence=> esc_str & "["& As_String(tab_stop)&"C",
+                        on_buffer => for_buffer);
+      else  -- insert the tab stop by inserting spaces
+         Insert_At_Cursor(for_buffer, the_text=>Tab_chr(1..tab_stop));
+      end if;
    elsif the_input = BS_str then
       -- Move the cursor back one character (without deleting the character)
       -- We use the Process_Escape procedure as that works (but doing it here
@@ -1864,8 +1888,32 @@ begin  -- Process
       else  -- in some kind of mark-up - append it to the mark-up string
          -- Make sure that the mark-up text has any special mark-up characters
          -- escaped on the way through.
-         Append_To_Markup(for_buffer.markup, 
-                          the_value => Glib.Convert.Escape_Text(the_input));
+         Append_To_Markup(for_buffer.markup, the_value => the_input);
+         if for_buffer.alternative_screen_buffer and then
+            (the_input(the_input'First) >= '!' and 
+             the_input(the_input'First) <= '~') and then
+            (Wide_Character'Val(for_buffer.last_key_pressed) >= '!' and
+             Wide_Character'Val(for_buffer.last_key_pressed) <= '~') and then
+            (the_input(the_input'First) = 
+                             Character'Val(for_buffer.last_key_pressed) or else
+             ((Gdk_Modifier_Type(key_state) and Shift_Mask) > 0 and then
+              the_input(the_input'First) = 
+                                  Character'Val(for_buffer.last_key_pressed +
+                                                Character'Pos('A') - 1)))
+         then  -- this is input just keyed, so output it with any saved mark-up
+            Error_Log.Debug_Data(at_level => 9, with_details => "Process : output character - Saving mark-up.");
+            -- Rebuild the mark-up (but not text) from modifier array
+            Save(the_markup => for_buffer.markup);
+            -- (close off, but the closure is temporary)
+            Finish(on_markup => for_buffer.markup);
+            -- Now restore the mark-up instructions (not the text)
+            if Saved_Markup_Exists(for_markup => for_buffer.markup)
+            then  -- mark-up to restore, do a complete restore
+               Error_Log.Debug_Data(at_level => 9, with_details => "Process : output character - Restoring mark-up.");
+               Restore(the_markup => for_buffer.markup);
+               Clear_Saved(markup => for_buffer.markup);
+            end if;
+         end if;  
       end if;
       for_buffer.just_wrapped := false;
       null;
@@ -1878,8 +1926,8 @@ begin  -- Process
    Get_Iter_At_Mark(the_buf, end_iter, Get_Insert(the_buf));
    Get_Iter_At_Line(the_buf, start_iter,
                        Glib.Gint(for_buffer.buf_line_num-1));
-   for_buffer.anchor_point:=
-            UTF8_Length(Get_Line_From_Start(for_buffer, up_to_iter=>end_iter));  -- UTF8_Length(Get_Text(the_buf,start_iter,end_iter));
+   for_buffer.anchor_point:= -- natural(Get_Line_Offset(end_iter));
+            UTF8_Length(Get_Line_From_Start(for_buffer, up_to_iter=>end_iter));
    Switch_The_Light(for_buffer, 10, false, for_buffer.anchor_point'Image);
    Error_Log.Debug_Data(at_level => 9, with_details => "Process : NOT for_buffer.history_review. for_buffer.anchor_point =" & for_buffer.anchor_point'Wide_Image & ".");
    if for_buffer.alternative_screen_buffer and

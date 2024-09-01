@@ -76,7 +76,6 @@ with Ada.Unchecked_Deallocation;
 with GNAT.Strings;
 with Glib.Values;
 with Glib.Properties;
-with Glib.Convert;
 with Gdk.Color;
 with Gdk.Types.Keysyms;
 with Gdk.Rectangle;
@@ -3187,4 +3186,3 @@ package body Gtk.Terminal is
    end Shut_Down;
 
 end Gtk.Terminal;
-
