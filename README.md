@@ -169,7 +169,8 @@ follows:
   Interestingly, vim writes the contents of the file on the screen twice,
   clearing the screen in between those writes.  The first time it writes the
   file to the screen, it does it correctly, without inserting the spaces.  It
-  is the second time that the space characters get inserted.
+  is the second time that the space characters get inserted.  Otherwise vi
+  seems to work well.
   The issue looked like being the teminal type, but most were tried out.
 * Nano appears to be okay.  There may be still some meta (alt) characters
   that have yet to be tested and therefore may not available to Nano. It works
@@ -188,7 +189,7 @@ follows:
 There are probably numerous other errors that I have yet to discover.  I am
 actively using this terminal emulator whenever it is safe for me to do so, so I
 hope to discover most of them myself.  My current challenge is to get it to
-edit a document using vi without any issues.  I have already tested less and it
+edit a document using Emacs without any issues.  I have already tested less and it
 is satisfactory.  I have seen some strange behaviour from time to time when
 scrolling through the history buffer, but have yet to identify exact causes of
 issues.
