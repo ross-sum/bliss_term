@@ -60,15 +60,6 @@ package body Help_About is
       -- Set_Deletable(help_about, false);
       -- set close form operation to hide on delete
       help_about.On_Delete_Event(On_Delete_Request'Access);
-      -- Gtk.Window.
-         -- On_Delete_Event(Gtk_Window(Builder.Get_Object("dialogue_about")),
-         --                 Gtk.Window.Hide_On_Delete'access, 
-         --                 After => false);
-      -- set up: load the Version into label_revision.Label and
-      --         label_revision1.Label
-      -- Error_Log.Debug_Data(at_level => 6, 
-         --                   with_details=>"Initialise_Help_About: version = " &
-         --                                 To_Wide_String(the_version));
       the_revision := Gtk_Label(Builder.Get_Object("label_revision"));
       the_revision.Set_Label(the_version);
       the_revision := Gtk_Label(Builder.Get_Object("label_revision1"));
@@ -102,8 +93,6 @@ package body Help_About is
    procedure Help_About_Close_CB 
                 (Object : access Gtkada_Builder_Record'Class) is
    begin
-      -- Error_Log.Debug_Data(at_level => 5, 
-         --                   with_details => "Help_About_Close_CB: Start");
       Gtk.Widget.Hide(Gtk.Widget.Gtk_Widget 
                         (Gtkada.Builder.Get_Object(Gtkada_Builder(Object),"dialogue_about")));
    end Help_About_Close_CB;
@@ -113,14 +102,8 @@ package body Help_About is
       use Gtk.Widget, Glib.Object;
       result : boolean;
    begin
-      -- Error_Log.Debug_Data(at_level => 5, 
-         --                   with_details => "Help_Hide_On_Delete: Start");
       result := Gtk.Widget.Hide_On_Delete(Gtk_Widget_Record(Object.all)'Access);
-      -- Gtk.Widget.Hide(Gtk.Widget.Gtk_Widget 
-         --             (Gtkada.Builder.Get_Object(Gtkada_Builder(Object),"dialogue_about")));
       return result;
-      -- return Gtk.Widget.Hide_On_Delete(Gtk_Widget_Record( 
-         --               (Gtkada.Builder.Get_Object(Gtkada_Builder(Object),"dialogue_about").all))'Access);
    end Help_Hide_On_Delete;
    
    function On_Delete_Request(Object : access Gtk_Widget_Record'Class;
